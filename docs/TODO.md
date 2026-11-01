@@ -5,6 +5,7 @@
 ## Phase 0 — Foundation
 
 ### Repo & tooling
+
 - [ ] `pnpm-workspace.yaml`, `package.json` gốc, `.nvmrc`/engines (Node LTS), `.gitignore`, `.editorconfig`
 - [ ] ESLint + Prettier + `tsconfig.base.json` (strict)
 - [ ] Vitest cấu hình dùng chung
@@ -14,6 +15,7 @@
 - [ ] `README.md` (cách chạy, yêu cầu: Node, pnpm, Rust, WebView2)
 
 ### Packages
+
 - [ ] `packages/contracts`: Zod schema cho AgentMessage, AgentEvent, AgentTask, AgentCapability, WorkflowState, TaskState
 - [ ] `packages/shared-utils`: id (ULID), clock, result type, redact helper
 - [ ] `packages/agent-core`: `AgentAdapter` interface + registry + `StubAdapter`
@@ -22,12 +24,14 @@
 - [ ] Logging Pino + redaction + test redaction
 
 ### Apps/services
+
 - [ ] `apps/desktop`: Vite + React + Tailwind + shadcn, màn hình health
 - [ ] `apps/desktop/src-tauri`: shell Tauri 2, capabilities tối thiểu, command `system.health`
 - [ ] `services/orchestrator`: skeleton (entry, config, health), chạy StubAdapter end-to-end
 - [ ] Spike sidecar: đóng gói Node + `better-sqlite3` + `node-pty` vào Tauri sidecar trên Windows; ghi kết quả vào ADR-001
 
 ### Docs
+
 - [ ] ARCHITECTURE.md, PROTOCOL.md, DATABASE.md, SECURITY.md
 - [ ] ASSUMPTIONS.md (giả định chưa kiểm chứng), REFERENCES.md (nguồn tham khảo)
 - [ ] PHASE0_REPORT.md (lệnh đã chạy, kết quả, vấn đề tồn đọng)
@@ -60,7 +64,7 @@
 - [ ] Scheduler giới hạn concurrency (mặc định 2, cấu hình)
 - [ ] `git-worktrees`: create/remove/list, branch naming, dirty check, conflict detect, cleanup khi hủy
 - [ ] Workflow engine: Supervisor, Peer Review, Parallel Workers
-- [ ] Message types: task.*, review.*, approval.request, agent.message
+- [ ] Message types: task._, review._, approval.request, agent.message
 - [ ] Workflow mẫu Claude implement → Codex review (e2e thật)
 - [ ] Artifact registry (hash) + Diff Viewer
 - [ ] Approval Center (`approvals.resolve`), expiry

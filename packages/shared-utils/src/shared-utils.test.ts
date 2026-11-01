@@ -47,10 +47,23 @@ describe("createLogger", () => {
   it("never writes secrets to the output", () => {
     const { destination, output } = capture();
     const log = createLogger({ name: "test", destination });
-    log.info({ apiKey: "SUPERSECRET1", headers: { authorization: "Bearer topsecrettoken123" }, env: { X: "envsecret" } }, "login with sk-abcdefghijklmnopqrstuv");
+    log.info(
+      {
+        apiKey: "SUPERSECRET1",
+        headers: { authorization: "Bearer topsecrettoken123" },
+        env: { X: "envsecret" },
+      },
+      "login with sk-abcdefghijklmnopqrstuv",
+    );
     log.warn({ nested: { token: "TOK123SECRET" } });
     const o = output();
-    for (const s of ["SUPERSECRET1", "topsecrettoken123", "envsecret", "sk-abcdefghijklmnopqrstuv", "TOK123SECRET"]) {
+    for (const s of [
+      "SUPERSECRET1",
+      "topsecrettoken123",
+      "envsecret",
+      "sk-abcdefghijklmnopqrstuv",
+      "TOK123SECRET",
+    ]) {
       expect(o).not.toContain(s);
     }
     expect(o).toContain(REDACTED);

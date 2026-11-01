@@ -27,15 +27,21 @@ export class Repo {
     const ts = now();
     this.db
       .insert(tasks)
-      .values({ id, workflowId, agentId: agentId ?? null, state: "queued", createdAt: ts, updatedAt: ts })
+      .values({
+        id,
+        workflowId,
+        agentId: agentId ?? null,
+        state: "queued",
+        createdAt: ts,
+        updatedAt: ts,
+      })
       .run();
     return id;
   }
 
   getTaskState(taskId: string): TaskState | undefined {
     return this.db.select({ s: tasks.state }).from(tasks).where(eq(tasks.id, taskId)).get()?.s as
-      | TaskState
-      | undefined;
+      TaskState | undefined;
   }
 
   /** Atomically changes task state and appends an audit event. */
@@ -83,6 +89,11 @@ export class Repo {
   }
 
   listEvents(aggregateId: string) {
-    return this.db.select().from(events).where(eq(events.aggregateId, aggregateId)).orderBy(asc(events.createdAt)).all();
+    return this.db
+      .select()
+      .from(events)
+      .where(eq(events.aggregateId, aggregateId))
+      .orderBy(asc(events.createdAt))
+      .all();
   }
 }

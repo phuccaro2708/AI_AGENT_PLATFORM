@@ -42,10 +42,20 @@ describe("migrations & pragmas", () => {
     expect(() => runMigrations(db)).not.toThrow();
     expect(() => runMigrations(db)).not.toThrow();
     const tables = db.$client
-      .prepare("select name from sqlite_master where type='table' and name not like 'sqlite_%' and name not like '\\_\\_%' escape '\\'")
+      .prepare(
+        "select name from sqlite_master where type='table' and name not like 'sqlite_%' and name not like '\\_\\_%' escape '\\'",
+      )
       .all()
       .map((r) => (r as { name: string }).name);
-    for (const t of ["projects", "workflows", "tasks", "task_dependencies", "messages", "events", "settings"]) {
+    for (const t of [
+      "projects",
+      "workflows",
+      "tasks",
+      "task_dependencies",
+      "messages",
+      "events",
+      "settings",
+    ]) {
       expect(tables).toContain(t);
     }
   });
@@ -60,7 +70,9 @@ describe("constraints", () => {
   it("rejects invalid task state and self-dependency", () => {
     const { t } = seed();
     expect(() => db.$client.prepare("update tasks set state='bogus' where id=?").run(t)).toThrow();
-    expect(() => db.$client.prepare("insert into task_dependencies values (?,?)").run(t, t)).toThrow();
+    expect(() =>
+      db.$client.prepare("insert into task_dependencies values (?,?)").run(t, t),
+    ).toThrow();
   });
   it("enforces unique (task_id, sequence)", () => {
     const { t } = seed();

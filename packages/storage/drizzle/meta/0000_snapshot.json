@@ -46,10 +46,7 @@
       "indexes": {
         "idx_events_aggregate": {
           "name": "idx_events_aggregate",
-          "columns": [
-            "aggregate_id",
-            "created_at"
-          ],
+          "columns": ["aggregate_id", "created_at"],
           "isUnique": false
         }
       },
@@ -107,18 +104,12 @@
       "indexes": {
         "idx_messages_task": {
           "name": "idx_messages_task",
-          "columns": [
-            "task_id",
-            "sequence"
-          ],
+          "columns": ["task_id", "sequence"],
           "isUnique": false
         },
         "messages_task_sequence_unique": {
           "name": "messages_task_sequence_unique",
-          "columns": [
-            "task_id",
-            "sequence"
-          ],
+          "columns": ["task_id", "sequence"],
           "isUnique": true
         }
       },
@@ -127,12 +118,8 @@
           "name": "messages_task_id_tasks_id_fk",
           "tableFrom": "messages",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -176,9 +163,7 @@
       "indexes": {
         "projects_root_path_unique": {
           "name": "projects_root_path_unique",
-          "columns": [
-            "root_path"
-          ],
+          "columns": ["root_path"],
           "isUnique": true
         }
       },
@@ -235,12 +220,8 @@
           "name": "task_dependencies_task_id_tasks_id_fk",
           "tableFrom": "task_dependencies",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -248,22 +229,15 @@
           "name": "task_dependencies_dependency_id_tasks_id_fk",
           "tableFrom": "task_dependencies",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "dependency_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["dependency_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "task_dependencies_task_id_dependency_id_pk": {
-          "columns": [
-            "task_id",
-            "dependency_id"
-          ],
+          "columns": ["task_id", "dependency_id"],
           "name": "task_dependencies_task_id_dependency_id_pk"
         }
       },
@@ -347,11 +321,7 @@
       "indexes": {
         "idx_tasks_queue": {
           "name": "idx_tasks_queue",
-          "columns": [
-            "state",
-            "\"priority\" DESC",
-            "created_at"
-          ],
+          "columns": ["state", "\"priority\" DESC", "created_at"],
           "isUnique": false
         }
       },
@@ -360,12 +330,8 @@
           "name": "tasks_workflow_id_workflows_id_fk",
           "tableFrom": "tasks",
           "tableTo": "workflows",
-          "columnsFrom": [
-            "workflow_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workflow_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -417,12 +383,8 @@
           "name": "workflows_project_id_projects_id_fk",
           "tableFrom": "workflows",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }

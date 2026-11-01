@@ -48,7 +48,14 @@ describe("AdapterRegistry", () => {
     const r = new AdapterRegistry();
     r.register(new StubAdapter("a"));
     expect(() => r.register(new StubAdapter("a"))).toThrow();
-    r.register({ ...new StubAdapter("b"), id: "b", detect: async () => false, capabilities: async () => [], cancel: async () => {}, execute: () => (async function* () {})() });
+    r.register({
+      ...new StubAdapter("b"),
+      id: "b",
+      detect: async () => false,
+      capabilities: async () => [],
+      cancel: async () => {},
+      execute: () => (async function* () {})(),
+    });
     expect(r.list()).toHaveLength(2);
     expect((await r.detectAvailable()).map((x) => x.id)).toEqual(["a"]);
   });

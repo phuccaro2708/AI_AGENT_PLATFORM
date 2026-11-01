@@ -6,15 +6,15 @@ Nguyên tắc ưu tiên: **Agent Runtime → Message Router → Durable Task Sta
 
 ## Tổng quan
 
-| Phase | Tên | Thời gian | Kết quả chính |
-|---|---|---|---|
-| 0 | Foundation | 3–5 ngày | Monorepo, Tauri shell, SQLite+migrations, contracts, stub adapter, logging, CI |
-| 1 | Single-Agent MVP | 1–2 tuần | Claude + Codex chạy task độc lập, streaming, cancel, session mapping |
-| 2 | Multi-Agent | 1–2 tuần | Message router, task DAG, supervisor, QA handoff, worktrees → **MVP có giá trị** |
-| 3 | Gemini & Local AI | 1–2 tuần | Gemini CLI, Ollama + tool loop, capability routing, resource-aware scheduler |
-| 4 | Security & Reliability | 2–3 tuần | Policy engine, sandbox tests, recovery, observability |
-| 5 | Desktop Beta | 1–2 tuần | UI hoàn chỉnh, settings, installer Windows, beta test |
-| 6 | Production 1.0 | 2–4 tuần | Release engineering, update có chữ ký, MCP gateway tối thiểu, tài liệu vận hành (A2A → v1.1) |
+| Phase | Tên                    | Thời gian | Kết quả chính                                                                                |
+| ----- | ---------------------- | --------- | -------------------------------------------------------------------------------------------- |
+| 0     | Foundation             | 3–5 ngày  | Monorepo, Tauri shell, SQLite+migrations, contracts, stub adapter, logging, CI               |
+| 1     | Single-Agent MVP       | 1–2 tuần  | Claude + Codex chạy task độc lập, streaming, cancel, session mapping                         |
+| 2     | Multi-Agent            | 1–2 tuần  | Message router, task DAG, supervisor, QA handoff, worktrees → **MVP có giá trị**             |
+| 3     | Gemini & Local AI      | 1–2 tuần  | Gemini CLI, Ollama + tool loop, capability routing, resource-aware scheduler                 |
+| 4     | Security & Reliability | 2–3 tuần  | Policy engine, sandbox tests, recovery, observability                                        |
+| 5     | Desktop Beta           | 1–2 tuần  | UI hoàn chỉnh, settings, installer Windows, beta test                                        |
+| 6     | Production 1.0         | 2–4 tuần  | Release engineering, update có chữ ký, MCP gateway tối thiểu, tài liệu vận hành (A2A → v1.1) |
 
 Tổng ≈ 9–18 tuần.
 
@@ -33,6 +33,7 @@ Tổng ≈ 9–18 tuần.
 - Docs: ARCHITECTURE, PROTOCOL, DATABASE, SECURITY, ASSUMPTIONS, REFERENCES, PHASE0_REPORT.
 
 **Acceptance gate**
+
 - [ ] Desktop app mở được.
 - [ ] Migrations chạy từ DB rỗng và idempotent.
 - [ ] Stub agent phát chuỗi AgentEvent đã validate bằng Zod.
@@ -54,6 +55,7 @@ Tổng ≈ 9–18 tuần.
 - Đo baseline: startup time, RAM, event latency → chốt performance budget.
 
 **Acceptance gate**
+
 - [ ] Claude và Codex mỗi bên chạy được 1 task thật độc lập.
 - [ ] Cancel dừng cả process tree (test không còn orphan).
 - [ ] Lỗi CLI (không cài, sai version, exit ≠ 0, JSON hỏng) được báo rõ, không crash.
@@ -71,6 +73,7 @@ Tổng ≈ 9–18 tuần.
 - Approval Center cơ bản (`approvals.resolve`).
 
 **Acceptance gate**
+
 - [ ] Workflow thật "implement → review" chạy không cần copy tay giữa terminal.
 - [ ] Kill app giữa chừng → restart không mất message đã commit; duplicate được xử lý an toàn.
 - [ ] 2 agent song song trên 2 worktree không ghi đè nhau.
@@ -85,6 +88,7 @@ Tổng ≈ 9–18 tuần.
 - UI hiển thị rõ khả năng agent không hỗ trợ (resume/approval…) thay vì giả lập.
 
 **Acceptance gate**
+
 - [ ] 4 adapter qua cùng bộ contract test.
 - [ ] Thêm adapter mới không sửa Orchestrator core.
 - [ ] Hết VRAM/RAM → hệ thống degrade có kiểm soát, không treo máy.
@@ -101,6 +105,7 @@ Tổng ≈ 9–18 tuần.
 - Soak test: 100 workflow liên tục.
 
 **Acceptance gate**
+
 - [ ] Không sửa đổi ngoài phạm vi được cấp trong sandbox tests.
 - [ ] 100 workflow không mất state.
 - [ ] Không còn lỗ hổng Critical/High chưa xử lý.
@@ -113,6 +118,7 @@ Tổng ≈ 9–18 tuần.
 - E2E Playwright; beta test với ≥ 3 dự án thật; thu feedback.
 
 **Acceptance gate**
+
 - [ ] Approval, cancel, retry, diff, logs nhất quán.
 - [ ] Fresh install / upgrade / uninstall pass smoke test.
 
@@ -127,12 +133,12 @@ Tổng ≈ 9–18 tuần.
 
 ## Rủi ro chính
 
-| Rủi ro | Giảm thiểu |
-|---|---|
-| CLI đổi flag/format giữa các phiên bản | Compatibility probe + fixture contract tests + pin phiên bản hỗ trợ |
-| Agent ghi file ngoài phạm vi | Policy engine + Job Object; không dựa vào worktree làm sandbox |
-| Retry gây side effect trùng | `needs_reconciliation`, idempotent handler |
-| Orphan process trên Windows | Job Objects, test cancel |
-| Hết RAM/VRAM (16 GB / 8 GB) | Resource-aware scheduler, concurrency mặc định 2 |
-| Phụ thuộc/nội dung repo công khai không an toàn | Chính sách trong `CLAUDE.md`, ghi `docs/REFERENCES.md` |
-| Scope creep (thêm nhiều LLM, UI sớm) | Chỉ đóng phase khi đạt gate |
+| Rủi ro                                          | Giảm thiểu                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------- |
+| CLI đổi flag/format giữa các phiên bản          | Compatibility probe + fixture contract tests + pin phiên bản hỗ trợ |
+| Agent ghi file ngoài phạm vi                    | Policy engine + Job Object; không dựa vào worktree làm sandbox      |
+| Retry gây side effect trùng                     | `needs_reconciliation`, idempotent handler                          |
+| Orphan process trên Windows                     | Job Objects, test cancel                                            |
+| Hết RAM/VRAM (16 GB / 8 GB)                     | Resource-aware scheduler, concurrency mặc định 2                    |
+| Phụ thuộc/nội dung repo công khai không an toàn | Chính sách trong `CLAUDE.md`, ghi `docs/REFERENCES.md`              |
+| Scope creep (thêm nhiều LLM, UI sớm)            | Chỉ đóng phase khi đạt gate                                         |

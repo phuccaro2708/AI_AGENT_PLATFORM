@@ -20,7 +20,11 @@ export const REDACT_PATHS = [
   "*.authorization",
 ];
 
-export function createLogger(opts: { name: string; level?: string; destination?: DestinationStream }): Logger {
+export function createLogger(opts: {
+  name: string;
+  level?: string;
+  destination?: DestinationStream;
+}): Logger {
   return pino(
     {
       name: opts.name,

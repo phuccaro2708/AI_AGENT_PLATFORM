@@ -2,58 +2,93 @@
 
 Đánh dấu `[x]` khi xong **và đã kiểm chứng**. Ngữ cảnh/acceptance: `docs/ROADMAP.md`.
 
-## Phase 0 — Foundation
+## Trạng thái hiện tại (cập nhật 2026-11-01)
+
+- **Phase 0: PASS (có hạn chế)** — xem `docs/PHASE0_REPORT.md`, `docs/reports/phase0-windows/README.md`. CI xanh trên runner Windows/Ubuntu (run 9, commit `d9cf954`); đã xác minh trên máy Windows vật lý (Legion) bằng bản `tauri dev`.
+- **Phase 1: backlog đã đề xuất, chưa bắt đầu.** Chờ người dùng xác nhận Sprint A và cho biết CLI nào đã cài.
+- Chưa có PR; nhánh làm việc `claude/loving-lovelace-32lh71`.
+
+## Phase 0 — Foundation (HOÀN THÀNH, có hạn chế)
 
 ### Repo & tooling
 
-- [ ] `pnpm-workspace.yaml`, `package.json` gốc, `.nvmrc`/engines (Node LTS), `.gitignore`, `.editorconfig`
-- [ ] ESLint + Prettier + `tsconfig.base.json` (strict)
-- [ ] Vitest cấu hình dùng chung
-- [ ] Scripts gốc: `lint`, `typecheck`, `test`, `build`
-- [ ] GitHub Actions: lint/typecheck/test/build (ubuntu + windows)
-- [ ] Secret scan trong CI (vd. gitleaks — kiểm tra license/version trước khi dùng)
-- [ ] `README.md` (cách chạy, yêu cầu: Node, pnpm, Rust, WebView2)
+- [x] `pnpm-workspace.yaml`, `package.json` gốc, `.nvmrc`, `.gitignore`, `.editorconfig`, `.gitattributes` (LF)
+- [x] ESLint + Prettier + `tsconfig.base.json` (strict)
+- [x] Vitest cấu hình dùng chung
+- [x] Scripts gốc: `lint`, `typecheck`, `test`, `build`, `format`
+- [x] GitHub Actions: ts (ubuntu + windows), tauri (Rust windows), security, desktop-smoke
+- [x] Secret scan trong CI — dùng `detect-secrets` (gitleaks bị proxy chặn khi tải); 7 kết quả lịch sử đã chấp nhận, ghi trong `scripts/secret-scan.py`
+- [x] `README.md`
 
 ### Packages
 
-- [ ] `packages/contracts`: Zod schema cho AgentMessage, AgentEvent, AgentTask, AgentCapability, WorkflowState, TaskState
-- [ ] `packages/shared-utils`: id (ULID), clock, result type, redact helper
-- [ ] `packages/agent-core`: `AgentAdapter` interface + registry + `StubAdapter`
-- [ ] `packages/storage`: Drizzle schema, migrations, WAL pragma, repo layer, test DB in-memory
-- [ ] Bảng Phase 0: projects, workflows, tasks, task_dependencies, messages, events, settings
-- [ ] Logging Pino + redaction + test redaction
+- [x] `packages/contracts`: Zod schema (AgentMessage, AgentEvent, AgentTaskInput, AgentCapability, WorkflowState, TaskState, giao thức sidecar)
+- [~] `packages/shared-utils`: có id (ULID), redact, logger; **chưa có** clock và result type (làm khi cần)
+- [x] `packages/agent-core`: `AgentAdapter` + registry + `StubAdapter`
+- [x] `packages/storage`: Drizzle schema, migration, WAL, repo layer, test
+- [x] Bảng Phase 0: projects, workflows, tasks, task_dependencies, messages, events, settings
+- [x] Logging Pino + redaction + test
 
 ### Apps/services
 
-- [ ] `apps/desktop`: Vite + React + Tailwind + shadcn, màn hình health
-- [ ] `apps/desktop/src-tauri`: shell Tauri 2, capabilities tối thiểu, command `system.health`
-- [ ] `services/orchestrator`: skeleton (entry, config, health), chạy StubAdapter end-to-end
-- [ ] Spike sidecar: đóng gói Node + `better-sqlite3` + `node-pty` vào Tauri sidecar trên Windows; ghi kết quả vào ADR-001
+- [~] `apps/desktop`: Vite + React + màn hình health; **Tailwind/shadcn/Zustand/TanStack Query chưa thêm** (chưa cần)
+- [x] `apps/desktop/src-tauri`: Tauri 2, capabilities tối thiểu, `system_health` (tên thực tế)
+- [x] `services/orchestrator`: chạy StubAdapter end-to-end qua sidecar NDJSON
+- [~] Spike sidecar: Node + `better-sqlite3` đạt trên runner và máy thật; **`node-pty` chưa spike** (cần cho Live Terminal, Phase 5). Kết quả trong `docs/ADR-001.md`
 
 ### Docs
 
-- [ ] ARCHITECTURE.md, PROTOCOL.md, DATABASE.md, SECURITY.md
-- [ ] ASSUMPTIONS.md (giả định chưa kiểm chứng), REFERENCES.md (nguồn tham khảo)
-- [ ] PHASE0_REPORT.md (lệnh đã chạy, kết quả, vấn đề tồn đọng)
+- [x] ARCHITECTURE, PROTOCOL, DATABASE, SECURITY, ASSUMPTIONS, REFERENCES, DECISIONS, ADR-001
+- [x] PHASE0_REPORT.md
 
-## Phase 1 — Single-Agent MVP
+### Việc mang sang các phase sau (từ Phase 0)
 
-- [ ] Process Manager (`spawn`, `shell:false`, stream, timeout, kill tree, Windows shim resolve)
-- [ ] Job Object / tree-kill ở lớp Rust hoặc Node (chọn + ADR), test orphan
-- [ ] Task state machine + transition guard + test
-- [ ] Bảng sessions, execution_runs, artifacts, approvals
-- [ ] CLI detection + probe: Claude Code (version, flags)
-- [ ] CLI detection + probe: Codex (version, `app-server`, `exec --json`)
-- [ ] Ghi fixture output thật của từng CLI vào `tests/contracts/fixtures`
-- [ ] `adapter-claude`: parse stream-json → AgentEvent; session map; cancel; error mapping
-- [ ] `adapter-codex`: app-server client; fallback exec; approval event; cancel
-- [ ] Contract test suite dùng chung cho mọi adapter
-- [ ] IPC commands: agents.detect/list/capabilities, projects.create, workflows.create/start, tasks.cancel, logs.query
-- [ ] Event stream tới UI (Tauri event channel); backpressure
-- [ ] UI: Projects, Agents, New Task, Output stream, Cancel
-- [ ] Crash detection khi khởi động → `needs_reconciliation`
-- [ ] Đo baseline (startup, RAM, latency) → `docs/PERF_BUDGET.md`
-- [ ] PHASE1_REPORT.md
+- [ ] Build installer và đo kích thước (Phase 5)
+- [ ] Chạy lại kiểm tra trên máy Windows vật lý với bản **release**, ghi hash commit đã test
+- [ ] Job Object / dọn process tree (Phase 1 spike A2, hoàn thiện Phase 4)
+- [ ] Ghim GitHub Actions theo SHA; kiểm tra tuổi crate Rust theo quy tắc 14 ngày
+- [ ] Hai cảnh báo `pnpm audit` mức moderate (dev-only) và hai cảnh báo `cargo audit` (transitive)
+- [ ] Spike `node-pty` trên Windows
+
+## Phase 1 — Single-Agent MVP (backlog đã đề xuất, chưa bắt đầu)
+
+Điều kiện cần quyết định trước: CLI nào đã cài/đăng nhập trên Legion; chi phí test thật (ưu tiên fixture); Job Object ở Rust hay `taskkill /T` (ADR-004).
+
+### Sprint A — Nền tảng chạy process (không cần CLI thật)
+
+- [ ] A1. Process Manager (`spawn`, `shell:false`, stream, timeout, cancel, resolve shim Windows)
+- [ ] A2. Spike Job Object / kill tree + test không orphan → ADR-004
+- [ ] A3. Task state machine + transition guard + test
+- [ ] A4. Migration: sessions, execution_runs, artifacts, approvals
+- [ ] A5. Log sink cho stderr của sidecar (hiện `Stdio::null()`)
+
+### Sprint B — Phát hiện CLI và probe
+
+- [ ] B1. Detection + probe Claude Code (version, flags thực tế)
+- [ ] B2. Detection + probe Codex (version, `app-server`, `exec --json`)
+- [ ] B3. Fixture output thật → `tests/contracts/fixtures`; cập nhật ASSUMPTIONS; lưu `agents.capabilities`
+- [ ] B4. Lỗi CLI (chưa cài, sai version, exit ≠ 0, JSON hỏng) báo rõ, không crash
+
+### Sprint C — Adapter
+
+- [ ] C1. Contract test suite dùng chung
+- [ ] C2. `adapter-claude` (stream-json → AgentEvent, session map, cancel, error mapping)
+- [ ] C3. `adapter-codex` (app-server, fallback exec, approval, cancel)
+- [ ] C4. Side effect không xác minh được → `needs_reconciliation`
+
+### Sprint D — IPC và UI
+
+- [ ] D1. IPC: agents.detect/list/capabilities, projects.create, workflows.create/start, tasks.cancel, logs.query
+- [ ] D2. Event stream tới UI (Tauri event channel) + backpressure
+- [ ] D3. UI: Projects, Agents, New Task, Output stream, Cancel
+- [ ] D4. Crash detection khi khởi động → `needs_reconciliation`
+
+### Sprint E — Đóng phase
+
+- [ ] E1. Đo baseline → `docs/PERF_BUDGET.md`
+- [ ] E2. Kiểm tra trên Windows vật lý với bản release (ghi hash commit)
+- [ ] E3. `pnpm lint && typecheck && test && build` và CI xanh
+- [ ] E4. `docs/PHASE1_REPORT.md`
 
 ## Phase 2 — Multi-Agent
 

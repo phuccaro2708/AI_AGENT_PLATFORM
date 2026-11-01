@@ -4,6 +4,14 @@
 
 Nguyên tắc ưu tiên: **Agent Runtime → Message Router → Durable Task State → Permission Engine** trước, UI và số lượng LLM sau.
 
+## Tiến trình (cập nhật 2026-11-01)
+
+| Phase | Trạng thái                                                                                                    |
+| ----- | ------------------------------------------------------------------------------------------------------------- |
+| 0     | **PASS (có hạn chế)** — CI xanh (runner), đã xác minh trên Windows vật lý bằng `tauri dev`; xem PHASE0_REPORT |
+| 1     | Backlog đã đề xuất (Sprint A–E trong TODO.md), chưa bắt đầu                                                   |
+| 2–6   | Chưa bắt đầu                                                                                                  |
+
 ## Tổng quan
 
 | Phase | Tên                    | Thời gian | Kết quả chính                                                                                |
@@ -34,15 +42,19 @@ Tổng ≈ 9–18 tuần.
 
 **Acceptance gate**
 
-- [ ] Desktop app mở được.
-- [ ] Migrations chạy từ DB rỗng và idempotent.
-- [ ] Stub agent phát chuỗi AgentEvent đã validate bằng Zod.
-- [ ] `lint`, `typecheck`, `test`, `build` pass trên CI.
-- [ ] Không có secrets/đường dẫn cá nhân trong repo (secret scan sạch).
-- [ ] Mọi giả định chưa kiểm chứng được ghi trong ASSUMPTIONS.md.
-- [ ] Spike sidecar có kết quả ghi trong ADR-001 (thành công hoặc phương án thay thế).
+- [x] Desktop app mở được (runner + máy Windows vật lý, bản debug).
+- [x] Migrations chạy từ DB rỗng và idempotent.
+- [x] Stub agent phát chuỗi AgentEvent đã validate bằng Zod.
+- [x] `lint`, `typecheck`, `test`, `build` pass trên CI.
+- [x] Không có secrets/đường dẫn cá nhân trong repo (secret scan sạch).
+- [x] Mọi giả định chưa kiểm chứng được ghi trong ASSUMPTIONS.md.
+- [x] Spike sidecar có kết quả ghi trong ADR-001 (thành công hoặc phương án thay thế).
+
+Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/PHASE0_REPORT.md`.
 
 ## Phase 1 — Single-Agent MVP (1–2 tuần)
+
+**Trạng thái:** backlog chia Sprint A (process manager, Job Object spike, state machine, migration) → B (probe CLI) → C (adapter) → D (IPC/UI) → E (đóng phase). Chi tiết: `docs/TODO.md`.
 
 - Process Manager: spawn `shell:false`, resolve shim `.cmd`/`.exe` trên Windows, stream stdout/stderr, timeout, cancel (kill process tree qua Job Object / `taskkill /T`).
 - CLI detection + **compatibility probe** (version, flags thực tế) cho Claude Code và Codex; lưu kết quả vào `agents.capabilities`.

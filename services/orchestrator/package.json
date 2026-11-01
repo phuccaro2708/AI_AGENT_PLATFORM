@@ -19,6 +19,7 @@
     "@agent-studio/agent-core": "workspace:*",
     "@agent-studio/contracts": "workspace:*",
     "@agent-studio/shared-utils": "workspace:*",
-    "@agent-studio/storage": "workspace:*"
+    "@agent-studio/storage": "workspace:*",
+    "zod": "4.6.7"
   }
 }

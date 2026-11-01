@@ -38,3 +38,80 @@ jobs:
         working-directory: apps/desktop/src-tauri
       - run: cargo test --locked
         working-directory: apps/desktop/src-tauri
+
+  security:
+    name: Security (secret scan, pnpm audit, cargo audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # secret scan walks every commit
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: pnpm audit (fail on high or critical)
+        run: pnpm audit --audit-level=high
+      - name: pnpm audit report (all severities, informational)
+        run: pnpm audit --audit-level=low || true
+      - name: Secret scan (detect-secrets, worktree + all commits)
+        run: |
+          python3 -m pip install detect-secrets==1.5.0
+          python3 scripts/secret-scan.py
+      - name: cargo audit
+        run: |
+          cargo install cargo-audit --locked --version 0.22.2
+          cargo audit --file apps/desktop/src-tauri/Cargo.lock
+
+  desktop-smoke:
+    name: Windows desktop + Node sidecar spike (ADR-001)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile
+      - name: Build self-contained sidecar bundle
+        run: node scripts/build-sidecar.mjs
+      - name: Sidecar spike (startup, IPC, StubAdapter, SQLite, cleanup)
+        run: node scripts/sidecar-spike.mjs
+        env:
+          SPIKE_REPORT: ${{ runner.temp }}\spike-report.json
+      - name: Build Tauri app (no installer)
+        run: pnpm --filter @agent-studio/desktop tauri build --no-bundle
+      - name: Launch the real app in selftest mode
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "apps/desktop/src-tauri/target/release/agent-studio.exe").Path
+          Copy-Item -Recurse "services/orchestrator/sidecar-dist" (Join-Path (Split-Path $exe) "sidecar")
+          $out = Join-Path $env:RUNNER_TEMP "selftest.json"
+          $env:AGENT_STUDIO_SELFTEST_OUT = $out
+          $env:AGENT_STUDIO_DB = Join-Path $env:RUNNER_TEMP "selftest.db"
+          $p = Start-Process -FilePath $exe -PassThru
+          $null = $p.Handle
+          if (-not $p.WaitForExit(120000)) {
+            $p.Kill()
+            throw "App did not exit within 120s: selftest did not complete"
+          }
+          if (-not (Test-Path $out)) { throw "No selftest report written (exit code $($p.ExitCode))" }
+          Get-Content $out
+          $r = Get-Content $out -Raw | ConvertFrom-Json
+          if ($p.ExitCode -ne 0 -or -not $r.ok) { throw "Selftest failed (exit code $($p.ExitCode))" }
+          Start-Sleep -Seconds 2
+          if (Get-Process -Id $r.stub.sidecarPid -ErrorAction SilentlyContinue) { throw "Sidecar pid $($r.stub.sidecarPid) still alive after app exit" }
+          Write-Host "sidecar pid $($r.stub.sidecarPid) is gone after app exit"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-smoke-evidence
+          path: |
+            ${{ runner.temp }}/spike-report.json
+            ${{ runner.temp }}/selftest.json
+          if-no-files-found: warn

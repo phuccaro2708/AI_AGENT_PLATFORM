@@ -83,3 +83,27 @@ export const TaskState = z.enum([
   "cancelled",
 ]);
 export type TaskState = z.infer<typeof TaskState>;
+
+// ---- Sidecar IPC (newline-delimited JSON over stdin/stdout) ----
+
+export const SidecarRequest = z.discriminatedUnion("method", [
+  z.object({ id: z.number().int(), method: z.literal("health") }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("runStub"),
+    params: z.object({ prompt: z.string() }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("queryTask"),
+    params: z.object({ taskId: z.string().min(1) }),
+  }),
+  z.object({ id: z.number().int(), method: z.literal("shutdown") }),
+]);
+export type SidecarRequest = z.infer<typeof SidecarRequest>;
+
+export const SidecarResponse = z.union([
+  z.object({ id: z.number().int(), result: z.unknown() }),
+  z.object({ id: z.number().int().nullable(), error: z.object({ message: z.string() }) }),
+]);
+export type SidecarResponse = z.infer<typeof SidecarResponse>;

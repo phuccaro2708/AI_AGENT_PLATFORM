@@ -49,7 +49,7 @@ describe("createLogger", () => {
     const log = createLogger({ name: "test", destination });
     log.info(
       {
-        apiKey: "SUPERSECRET1",
+        apiKey: "SUPERSECRET1", // pragma: allowlist secret
         headers: { authorization: "Bearer topsecrettoken123" },
         env: { X: "envsecret" },
       },

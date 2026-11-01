@@ -9,3 +9,4 @@ coverage/
 .env.*
 *.log
 .DS_Store
+services/orchestrator/sidecar-dist/

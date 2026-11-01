@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getHealth, type Health } from "./health";
+import { runSelftestIfRequested } from "./selftest";
 
 export function App() {
   const [health, setHealth] = useState<Health | null>(null);
@@ -7,6 +8,7 @@ export function App() {
 
   useEffect(() => {
     getHealth().then(setHealth, (e: unknown) => setError(String(e)));
+    void runSelftestIfRequested();
   }, []);
 
   return (

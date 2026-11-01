@@ -9,8 +9,11 @@ export type StudioDb = BetterSQLite3Database<typeof schema> & { $client: Databas
 export const MIGRATIONS_FOLDER = fileURLToPath(new URL("../drizzle", import.meta.url));
 
 /** Opens (creating if needed) a SQLite database with WAL + foreign keys enabled. */
-export function openDatabase(path: string): StudioDb {
-  const sqlite = new Database(path);
+export function openDatabase(path: string, opts: { nativeBinding?: string } = {}): StudioDb {
+  // `nativeBinding` lets a packaged sidecar load better_sqlite3.node from an explicit path.
+  const sqlite = opts.nativeBinding
+    ? new Database(path, { nativeBinding: opts.nativeBinding })
+    : new Database(path);
   sqlite.pragma("journal_mode = WAL"); // returns "memory" for :memory: DBs; that is expected
   sqlite.pragma("foreign_keys = ON");
   sqlite.pragma("busy_timeout = 5000");
@@ -18,6 +21,6 @@ export function openDatabase(path: string): StudioDb {
 }
 
 /** Applies pending migrations. Safe to call repeatedly (idempotent). */
-export function runMigrations(db: StudioDb): void {
-  migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+export function runMigrations(db: StudioDb, migrationsFolder: string = MIGRATIONS_FOLDER): void {
+  migrate(db, { migrationsFolder });
 }

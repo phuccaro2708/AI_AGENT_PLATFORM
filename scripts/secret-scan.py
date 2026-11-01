@@ -7,14 +7,18 @@ Requires: pip install detect-secrets==1.5.0
 """
 import json, subprocess, sys, tempfile, shutil, os
 
-# Reviewed by hand: immutable history snapshots containing the FAKE fixture value "SUPERSECRET1"
-# in the logger redaction test (added before the inline pragma existed). Exact (commit, file, type, line).
+# Reviewed by hand, exact (commit, file, type, line). Immutable history snapshots with (a) the FAKE
+# fixture value "SUPERSECRET1" in the logger redaction test (before the inline pragma existed) and
+# (b) the detect-secrets package name flagged by its own keyword detector.
 ACCEPTED_HISTORY = {
     ("2367e003", "packages/shared-utils/src/shared-utils.test.ts", "Secret Keyword", 52),
     ("16506623", "packages/shared-utils/src/shared-utils.test.ts", "Secret Keyword", 52),
     ("6d4977c2", "packages/shared-utils/src/shared-utils.test.ts", "Secret Keyword", 52),
     ("b56f1630", "packages/shared-utils/src/shared-utils.test.ts", "Secret Keyword", 50),
     ("e4c60bd3", "packages/shared-utils/src/shared-utils.test.ts", "Secret Keyword", 50),
+    # False positive: the CI step installs the package literally named "detect-secrets==1.5.0".
+    ("d4e1b0bc", ".github/workflows/ci.yml", "Secret Keyword", 60),
+    ("21c1ae96", ".github/workflows/ci.yml", "Secret Keyword", 60),
 }
 
 EXCLUDE = r"(pnpm-lock\.yaml|Cargo\.lock|\.png|\.ico|\.icns)$"

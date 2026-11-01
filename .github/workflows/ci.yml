@@ -57,7 +57,7 @@ jobs:
       - name: pnpm audit report (all severities, informational)
         run: pnpm audit --audit-level=low || true
       - name: Secret scan (detect-secrets, worktree + all commits)
-        run: |
+        run: | # pragma: allowlist secret (false positive: package name 'detect-secrets==1.5.0')
           python3 -m pip install detect-secrets==1.5.0
           python3 scripts/secret-scan.py
       - name: cargo audit

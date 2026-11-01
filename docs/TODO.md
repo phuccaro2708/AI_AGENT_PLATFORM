@@ -25,7 +25,7 @@
 - [ ] `apps/desktop`: Vite + React + Tailwind + shadcn, màn hình health
 - [ ] `apps/desktop/src-tauri`: shell Tauri 2, capabilities tối thiểu, command `system.health`
 - [ ] `services/orchestrator`: skeleton (entry, config, health), chạy StubAdapter end-to-end
-- [ ] Quyết định + ghi lại: orchestrator chạy như Tauri sidecar hay process riêng (ADR)
+- [ ] Spike sidecar: đóng gói Node + `better-sqlite3` + `node-pty` vào Tauri sidecar trên Windows; ghi kết quả vào ADR-001
 
 ### Docs
 - [ ] ARCHITECTURE.md, PROTOCOL.md, DATABASE.md, SECURITY.md
@@ -86,7 +86,7 @@
 - [ ] Canonical path validation + test traversal/symlink/junction (Windows)
 - [ ] Env var allowlist, executable allowlist theo adapter
 - [ ] Windows Job Object giới hạn process tree/RAM
-- [ ] Đánh giá OS isolation (AppContainer / Windows Sandbox) — ghi kết quả, kể cả hạn chế
+- [ ] Spike AppContainer / Windows Sandbox (chỉ đánh giá, không cam kết 1.0) — ghi kết quả, kể cả hạn chế vào SECURITY.md
 - [ ] Credential Manager cho secrets; redaction test toàn hệ thống
 - [ ] Siết Tauri capabilities; nếu có localhost WS: token + Origin check + test
 - [ ] Recovery 5 bước + UI resume/retry/abandon
@@ -111,8 +111,7 @@
 - [ ] Code signing + auto-update có xác minh chữ ký
 - [ ] Release pipeline + changelog + versioning
 - [ ] Compatibility matrix CLI + contract tests định kỳ
-- [ ] `mcp-gateway`
-- [ ] A2A gateway (tùy chọn) + compatibility tests đúng phiên bản spec
+- [ ] `mcp-gateway` (mức tối thiểu)
 - [ ] Tài liệu vận hành: cài đặt, troubleshooting, backup/restore, threat model
 - [ ] Chạy lại toàn bộ Production acceptance criteria
 - [ ] PHASE6_REPORT.md, tag 1.0
@@ -123,8 +122,13 @@
 - [ ] Cập nhật `docs/ASSUMPTIONS.md` mỗi khi phát hiện CLI khác giả định
 - [ ] Review chéo: Codex review code do Claude viết (theo phân công trong thiết kế)
 
-## Câu hỏi mở (cần bạn quyết định)
+## Quyết định đã chốt (chi tiết: `docs/DECISIONS.md`)
 
-- [ ] Orchestrator chạy như Tauri sidecar (đóng gói Node) hay yêu cầu Node cài sẵn?
-- [ ] Mức OS isolation mong muốn cho 1.0 (chỉ Job Object, hay thêm AppContainer/Windows Sandbox)?
-- [ ] A2A gateway có nằm trong 1.0 hay để sau?
+- Orchestrator chạy như Tauri sidecar, đóng gói sẵn Node runtime (ADR-001, cần spike Phase 0).
+- Cô lập 1.0 = Job Object + policy engine + allowlist + sandbox của provider; AppContainer/Windows Sandbox chỉ đánh giá (ADR-002).
+- A2A gateway làm sau 1.0 (ADR-003).
+
+## Sau 1.0 (v1.1)
+
+- [ ] A2A gateway + compatibility tests đúng phiên bản spec
+- [ ] Nếu spike khả thi: cô lập AppContainer / Windows Sandbox

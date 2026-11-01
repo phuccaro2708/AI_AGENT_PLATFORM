@@ -14,7 +14,7 @@ Nguyên tắc ưu tiên: **Agent Runtime → Message Router → Durable Task Sta
 | 3 | Gemini & Local AI | 1–2 tuần | Gemini CLI, Ollama + tool loop, capability routing, resource-aware scheduler |
 | 4 | Security & Reliability | 2–3 tuần | Policy engine, sandbox tests, recovery, observability |
 | 5 | Desktop Beta | 1–2 tuần | UI hoàn chỉnh, settings, installer Windows, beta test |
-| 6 | Production 1.0 | 2–4 tuần | Release engineering, update có chữ ký, A2A gateway (tùy chọn), tài liệu vận hành |
+| 6 | Production 1.0 | 2–4 tuần | Release engineering, update có chữ ký, MCP gateway tối thiểu, tài liệu vận hành (A2A → v1.1) |
 
 Tổng ≈ 9–18 tuần.
 
@@ -24,6 +24,7 @@ Tổng ≈ 9–18 tuần.
 
 - pnpm monorepo theo cấu trúc: `apps/desktop`, `services/orchestrator`, `packages/*`, `tests/*`, `docs/`.
 - Tauri 2 + React + Vite khởi chạy được.
+- Spike sidecar: đóng gói Node + native modules vào Tauri sidecar trên Windows (ADR-001).
 - `packages/contracts` (Zod): AgentMessage, AgentEvent, AgentTask, AgentCapability, state enums.
 - `packages/storage`: SQLite WAL + Drizzle + migrations (projects, workflows, tasks, task_dependencies, messages, events, settings).
 - `packages/agent-core`: interface `AgentAdapter` + `StubAdapter` xác định (deterministic).
@@ -38,6 +39,7 @@ Tổng ≈ 9–18 tuần.
 - [ ] `lint`, `typecheck`, `test`, `build` pass trên CI.
 - [ ] Không có secrets/đường dẫn cá nhân trong repo (secret scan sạch).
 - [ ] Mọi giả định chưa kiểm chứng được ghi trong ASSUMPTIONS.md.
+- [ ] Spike sidecar có kết quả ghi trong ADR-001 (thành công hoặc phương án thay thế).
 
 ## Phase 1 — Single-Agent MVP (1–2 tuần)
 
@@ -90,7 +92,7 @@ Tổng ≈ 9–18 tuần.
 ## Phase 4 — Security & Reliability (2–3 tuần)
 
 - Policy Engine: path scope (canonical path, chống traversal/symlink escape), command policy, network policy, 4 mức quyền (Read Only / Workspace Write / Restricted Tools / Privileged).
-- Cô lập: Job Objects (giới hạn process tree/RAM), whitelist env var, executable allowlist; đánh giá thêm OS isolation (AppContainer/Windows Sandbox) — ghi rõ phần chưa đạt.
+- Cô lập: Job Objects (giới hạn process tree/RAM), whitelist env var, executable allowlist; spike đánh giá AppContainer/Windows Sandbox (không cam kết 1.0, ADR-002) — ghi rõ phần chưa đạt.
 - Secrets qua Windows Credential Manager; redaction test.
 - Tauri capabilities tối thiểu; nếu cần localhost WebSocket: token phiên ngắn + kiểm tra Origin.
 - Recovery đầy đủ theo quy trình 5 bước; UI chọn resume / retry an toàn / bỏ.
@@ -118,7 +120,7 @@ Tổng ≈ 9–18 tuần.
 
 - Code signing, auto-update có xác minh chữ ký, release pipeline, changelog.
 - Compatibility matrix phiên bản CLI được hỗ trợ + CI chạy contract tests định kỳ.
-- A2A gateway (tùy chọn): chỉ gọi "A2A-compatible" sau khi qua compatibility tests đúng phiên bản spec. MCP gateway (`packages/mcp-gateway`).
+- MCP gateway tối thiểu (`packages/mcp-gateway`). A2A gateway **để sau 1.0 (v1.1)** — chỉ gọi "A2A-compatible" sau khi qua compatibility tests đúng phiên bản spec (ADR-003).
 - Tài liệu vận hành: cài đặt, troubleshooting, backup/restore DB, threat model.
 
 **Acceptance gate:** toàn bộ bảng Production acceptance trong thiết kế (persistence, delivery, CLI compat, cancellation, recovery, source safety, reliability, security, packaging, UI).

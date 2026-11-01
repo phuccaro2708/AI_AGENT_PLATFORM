@@ -1,0 +1,1 @@
+export default { singleQuote: false, printWidth: 100, trailingComma: "all" };

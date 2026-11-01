@@ -2,7 +2,7 @@
 
 Branch: `claude/loving-lovelace-32lh71`. Repository: `phuccaro2708/AI_AGENT_PLATFORM`.
 
-**Verdict: PHASE 0 BLOCKED.** All automated gates pass on GitHub-hosted runners, but there is **no verification on a physical Windows device** (see "Windows host verification"). Phase 0 must not be treated as closed until that is done.
+**Verdict: PHASE 0 PASS (with caveats).** All automated gates pass on GitHub-hosted runners, and the sidecar spike (11/11), the Tauri app selftest through real IPC, the visual health screen and process cleanup were verified on a physical Windows machine (Lenovo Legion) — evidence in [`reports/phase0-windows/README.md`](reports/phase0-windows/README.md). Caveats: host run used `tauri dev` (debug), not a release build or installer; the commit under test was not captured in the pasted output; raw logs and the screenshot are not committed; the physical run was done by the user and transcribed, not executed by the assistant.
 
 Evidence in this report comes from two places and they are kept separate:
 
@@ -41,7 +41,7 @@ Repair iterations used: 3 of 3 allowed in effect (better-sqlite3 pin, `.gitattri
 | `pnpm audit`                                                         | PASS at high/critical         | 2 **moderate**, both dev-only: `minimatch <11.0.1` via `eslint`; `esbuild <=0.24.2` via `drizzle-kit`. `--prod`: none. CI fails on high or critical                                                                                                         | upgrade when compatible versions exist  |
 | `cargo audit`                                                        | PASS                          | run 6, `cargo-audit 0.22.2`, 1395 advisories, 407 crates: 0 vulnerabilities, 2 allowed warnings — `RUSTSEC-2024-0370` (`proc-macro-error` unmaintained), `RUSTSEC-2024-0429` (`glib 0.18.5` unsound)                                                        | transitive (Tauri/GTK); watch upstream  |
 | ADR-001 (sidecar) written with evidence                              | PASS                          | `docs/ADR-001.md`                                                                                                                                                                                                                                           | none                                    |
-| **Windows host verification (physical Legion)**                      | **BLOCKED**                   | WinApps MCP not available; no computer connected through Remote Control (`list_computer_folders` returned empty). Nothing was run on a physical device                                                                                                      | run the manual commands below           |
+| **Windows host verification (physical Legion)**                      | **PASS (caveats)**            | WinApps MCP and Remote Control were unavailable, so the user ran the manual commands. Spike 11/11; selftest `ok: true`, stub `completed`; UI screenshot correct; no `agent-studio` process left; sidecar pid gone. See `reports/phase0-windows/README.md` | release build + installer (Phase 5)     |
 | CI on the final commit                                               | Not recorded in this file     | A file cannot cite the CI result of the commit that contains it. Commits after `865e541` only change docs; their CI results are reported in the session and visible in the Actions tab                                                                      | check Actions for the latest commit     |
 
 ### Accepted findings
@@ -49,9 +49,9 @@ Repair iterations used: 3 of 3 allowed in effect (better-sqlite3 pin, `.gitattri
 - 5 history snapshots contain the **fake** fixture value `SUPERSECRET1` in the logger-redaction test (before the inline `pragma: allowlist secret` existed). 2 snapshots contain the `detect-secrets==1.5.0` package name flagged by the scanner's own keyword rule. All 7 are listed with exact (commit, file, type, line) in `scripts/secret-scan.py`; none are credentials.
 - The two moderate `pnpm audit` findings and the two `cargo audit` warnings above are not fixed; they are dev-tool or transitive and were judged non-blocking for Phase 0.
 
-## Windows host verification (BLOCKED) — manual commands
+## Windows host verification — manual commands (executed by the user; results in `reports/phase0-windows/README.md`)
 
-Run on the Legion, PowerShell, repository root, on this branch. Save outputs under `docs/reports/phase0-windows/` (does not exist yet; **no results exist**).
+Run on the Legion, PowerShell, repository root, on this branch.
 
 ```powershell
 New-Item -ItemType Directory -Force docs\reports\phase0-windows | Out-Null
@@ -95,4 +95,4 @@ Expected: `selftest.json` has `"ok": true` and `stub.finalState = "completed"`; 
 
 ## Next required action
 
-Run the manual Windows commands above on the Legion (or connect it via Remote Control / WinApps MCP), commit the evidence under `docs/reports/phase0-windows/`, and re-evaluate. If it passes, Phase 0 can be marked PASS and Phase 1 planning can start.
+Phase 1 planning may start (not started yet). Carry-over items: build and measure the installer, Job Object tree cleanup (Phase 4), re-run the host check on a release build, and record the tested commit hash next time.

@@ -2,7 +2,7 @@
 
 ## ADR-001: Orchestrator là Tauri sidecar, đóng gói sẵn Node runtime
 
-- **Trạng thái:** Đã chốt (cần spike xác nhận ở Phase 0)
+- **Trạng thái:** Đã chốt. Spike đã chạy trên runner Windows của GitHub (chưa xác minh trên máy Windows vật lý) — xem [`ADR-001.md`](ADR-001.md)
 - **Bối cảnh:** Ứng dụng desktop cho người dùng cuối; không nên bắt họ cài Node. Orchestrator dùng TypeScript để chia sẻ types với UI.
 - **Quyết định:** Đóng gói orchestrator (bundle JS) cùng Node runtime làm sidecar của Tauri. Dev mode dùng Node hệ thống theo `.nvmrc`.
 - **Rủi ro chưa kiểm chứng:** native module (`better-sqlite3`, `node-pty`) có prebuild cho Windows x64 và đóng gói được vào sidecar hay không; kích thước installer.

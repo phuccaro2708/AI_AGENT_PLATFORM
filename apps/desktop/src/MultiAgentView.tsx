@@ -1,4 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
+import type { AdapterInfo, Project } from "./api";
+import { Composer, StartSteps } from "./Composer";
 import { TaskLogView, type TaskRef } from "./components";
 
 export interface MultiRun {
@@ -14,35 +16,39 @@ export interface MultiRun {
  * there is no coordination between them yet (roadmap Phase 9).
  */
 export function MultiAgentView({
+  projects,
+  projectId,
+  onProject,
+  onNewProject,
+  adapters,
   chosen,
-  projectName,
-  canRun,
+  onToggle,
   run,
   onStart,
   onError,
 }: {
-  /** Agents ticked in the right column. */
+  projects: Project[];
+  projectId: string;
+  onProject: (id: string) => void;
+  onNewProject: () => void;
+  adapters: AdapterInfo[];
   chosen: string[];
-  projectName: string | null;
-  canRun: boolean;
+  onToggle: (id: string) => void;
   run: MultiRun | null;
   onStart: (goal: string) => void;
   onError: (m: string) => void;
 }) {
   const [goal, setGoal] = useState("");
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    onStart(goal.trim());
-    setGoal("");
-  };
-  const ready = canRun && chosen.length >= 2 && goal.trim() !== "";
+  const project = projects.find((p) => p.id === projectId);
+  const blocker = !project
+    ? "Choose a project first"
+    : chosen.length < 2
+      ? "Pick at least 2 agents"
+      : goal.trim() === ""
+        ? "Describe the goal"
+        : null;
   return (
     <div className="chat">
-      <div className="chat-head">
-        <h1>{run ? run.goal.slice(0, 60) : "New multi-agent run"}</h1>
-        <span className="pill">team</span>
-      </div>
-
       <div className="chat-body">
         {run ? (
           <>
@@ -60,41 +66,62 @@ export function MultiAgentView({
             </div>
           </>
         ) : (
-          <div className="empty">
-            <p>
-              <strong>Tick the agents on the right, write the goal, start the run.</strong>
-            </p>
-            <p className="muted">
+          <>
+            <StartSteps
+              title="Start a team run"
+              steps={[
+                {
+                  label: "Choose a project",
+                  done: project !== undefined,
+                  action: { label: "Choose project", run: onNewProject },
+                },
+                { label: "Tick at least 2 agents", done: chosen.length >= 2 },
+                { label: "Describe the goal, then run it", done: false },
+              ]}
+            />
+            <p className="muted small">
               Each agent gets the goal and works on its own in the same project folder. They do not
               talk to each other yet, so changes to the same files can collide.
             </p>
-          </div>
+          </>
         )}
       </div>
 
-      <form onSubmit={submit} className="composer">
-        <textarea
-          aria-label="Goal"
-          rows={3}
-          maxLength={100000}
-          value={goal}
-          onChange={(e) => setGoal(e.target.value)}
-          placeholder={
-            canRun
-              ? `What should the team achieve in ${projectName}?`
-              : "Choose a project in the sidebar first"
-          }
-        />
-        <div className="composer-bar">
-          <span className="muted small">
-            {chosen.length} agent{chosen.length === 1 ? "" : "s"} · {projectName ?? "no project"}
-            {chosen.length < 2 ? " · pick at least 2" : ""}
-          </span>
-          <button type="submit" disabled={!ready}>
-            Start run
-          </button>
-        </div>
-      </form>
+      <Composer
+        projects={projects}
+        projectId={projectId}
+        onProject={onProject}
+        onNewProject={onNewProject}
+        agents={
+          <fieldset className="picker chips">
+            <legend className="muted small">Team</legend>
+            {adapters.map((a) => (
+              <label key={a.id} className={chosen.includes(a.id) ? "chip active" : "chip"}>
+                <input
+                  type="checkbox"
+                  checked={chosen.includes(a.id)}
+                  onChange={() => onToggle(a.id)}
+                />
+                <span className={a.available ? "dot ok" : "dot"} aria-hidden="true" />
+                {a.id}
+                {a.available ? "" : " (not found)"}
+              </label>
+            ))}
+          </fieldset>
+        }
+        value={goal}
+        onChange={setGoal}
+        label="Goal"
+        placeholder={
+          project ? `What should the team achieve in ${project.name}?` : "Choose a project to begin"
+        }
+        submitLabel="Run team"
+        blocker={blocker}
+        onSubmit={(text) => {
+          onStart(text);
+          setGoal("");
+        }}
+      />
     </div>
   );
 }

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { TaskState } from "@agent-studio/contracts";
-import { ActivityPanel } from "./ActivityPanel";
 import { AgentView } from "./AgentView";
+import { ErrorCard } from "./ErrorCard";
 import { Header } from "./Header";
+import { Inspector } from "./Inspector";
 import { api, type AdapterInfo, type CliProbe, type Project } from "./api";
-import { msg, TaskLogView, type TaskRef } from "./components";
+import { msg, type TaskRef } from "./components";
 import { getHealth, type Health } from "./health";
 import { MultiAgentView, type MultiRun } from "./MultiAgentView";
 import { runSelftestIfRequested } from "./selftest";
@@ -34,7 +35,7 @@ export function App() {
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [newProject, setNewProject] = useState(false);
   const [chosen, setChosen] = useState<string[]>([]);
-  const [terminal, setTerminal] = useState(false);
+  const [inspector, setInspector] = useState(false);
   const [states, setStates] = useState<Record<string, TaskState>>({});
 
   const fail = useCallback((m: string) => setError(m), []);
@@ -69,6 +70,13 @@ export function App() {
   useEffect(() => {
     setProjectId((cur) => (projects.some((p) => p.id === cur) ? cur : (projects[0]?.id ?? "")));
   }, [projects]);
+
+  const retry = () => {
+    setError(null);
+    getHealth().then(setHealth, (e: unknown) => setError(msg(e)));
+    refreshProjects();
+    refreshAgents();
+  };
 
   const detect = () => {
     setDetecting(true);
@@ -114,7 +122,6 @@ export function App() {
   };
 
   const project = projects.find((p) => p.id === projectId);
-  const canRun = project !== undefined;
   const toggleChosen = (id: string) =>
     setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
   const task = tasks.find((t) => t.id === selectedTask) ?? null;
@@ -162,14 +169,18 @@ export function App() {
     else setSelectedRun(null);
   };
 
-  const agent = adapters.find((a) => a.id === agentId);
   return (
-    <div className={settings ? "shell no-activity" : "shell"}>
+    <div className={inspector && !settings ? "shell with-inspector" : "shell"}>
       <Header
-        title={title}
+        project={project?.name ?? null}
+        session={title}
+        status={openTasks.length === 1 ? states[openTasks[0]!.id] : undefined}
         availableAgents={adapters.filter((a) => a.available).length}
-        terminalOpen={terminal}
-        onTerminal={() => setTerminal((v) => !v)}
+        inspectorOpen={inspector && !settings}
+        onInspector={() => {
+          setSettings(false);
+          setInspector((v) => !v);
+        }}
       />
       <Sidebar
         mode={mode}
@@ -189,11 +200,7 @@ export function App() {
       />
       <main className="main-col">
         <div className="content">
-          {error && (
-            <p role="alert" className="error banner">
-              {error} <button onClick={() => setError(null)}>Dismiss</button>
-            </p>
-          )}
+          {error && <ErrorCard message={error} onRetry={retry} onDismiss={() => setError(null)} />}
           {settings ? (
             <SettingsView
               nickname={nickname}
@@ -205,59 +212,47 @@ export function App() {
             />
           ) : mode === "agent" ? (
             <AgentView
+              projects={projects}
+              projectId={projectId}
+              onProject={setProjectId}
+              onNewProject={() => setNewProject(true)}
+              adapters={adapters}
               agentId={agentId}
-              agentAvailable={agent?.available ?? false}
-              projectName={project?.name ?? null}
-              canRun={canRun}
+              onAgent={setAgentId}
+              onDetect={detect}
               task={task}
               onStart={startAgentTask}
               onError={fail}
             />
           ) : (
             <MultiAgentView
+              projects={projects}
+              projectId={projectId}
+              onProject={setProjectId}
+              onNewProject={() => setNewProject(true)}
+              adapters={adapters}
               chosen={chosen}
-              projectName={project?.name ?? null}
-              canRun={canRun}
+              onToggle={toggleChosen}
               run={run}
               onStart={startRun}
               onError={fail}
             />
           )}
         </div>
-        {terminal && !settings && (
-          <section className="terminal" aria-label="Tool output">
-            <h2>Tool output · read-only, not a shell</h2>
-            {openTasks.length === 0 ? (
-              <p className="muted small">Open a session to see its tool calls and results.</p>
-            ) : (
-              openTasks.map((t) => (
-                <TaskLogView
-                  key={t.id}
-                  taskId={t.id}
-                  title={t.agentId}
-                  onError={fail}
-                  kinds={["tool"]}
-                  cancellable={false}
-                  variant="term"
-                />
-              ))
-            )}
-          </section>
-        )}
       </main>
-      {!settings && (
-        <ActivityPanel
-          mode={mode}
+      {inspector && !settings && (
+        <Inspector
+          project={project}
           adapters={adapters}
           cli={cli}
           detecting={detecting}
           onDetect={detect}
           agentId={agentId}
-          onAgent={setAgentId}
           chosen={chosen}
-          onToggle={toggleChosen}
+          multi={mode === "multi"}
           tasks={openTasks}
           states={states}
+          onError={fail}
         />
       )}
       {newProject && (

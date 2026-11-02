@@ -1,37 +1,48 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
+import type { AdapterInfo, Project } from "./api";
+import { Composer, StartSteps } from "./Composer";
 import { TaskLogView, type TaskRef } from "./components";
 
-/** Mode 1: talk to the agent chosen in the right column, inside the selected project. */
+/** Mode 1: one agent, one project, one task at a time. */
 export function AgentView({
+  projects,
+  projectId,
+  onProject,
+  onNewProject,
+  adapters,
   agentId,
-  agentAvailable,
-  projectName,
-  canRun,
+  onAgent,
+  onDetect,
   task,
   onStart,
   onError,
 }: {
+  projects: Project[];
+  projectId: string;
+  onProject: (id: string) => void;
+  onNewProject: () => void;
+  adapters: AdapterInfo[];
   agentId: string;
-  agentAvailable: boolean;
-  projectName: string | null;
-  canRun: boolean;
+  onAgent: (id: string) => void;
+  onDetect: () => void;
   task: TaskRef | null;
   onStart: (prompt: string) => void;
   onError: (m: string) => void;
 }) {
   const [prompt, setPrompt] = useState("");
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    onStart(prompt.trim());
-    setPrompt("");
-  };
+  const project = projects.find((p) => p.id === projectId);
+  const agent = adapters.find((a) => a.id === agentId);
+  const blocker = !project
+    ? "Choose a project first"
+    : !agent
+      ? "Pick an agent"
+      : !agent.available
+        ? `${agent.id} was not found on this machine`
+        : prompt.trim() === ""
+          ? "Describe the task"
+          : null;
   return (
     <div className="chat">
-      <div className="chat-head">
-        <h1>{task ? task.title : "New session"}</h1>
-        <span className="pill">{task?.agentId ?? (agentId || "no agent")}</span>
-      </div>
-
       <div className="chat-body">
         {task ? (
           <>
@@ -45,47 +56,58 @@ export function AgentView({
             />
           </>
         ) : (
-          <div className="empty">
-            <p>
-              <strong>Tell {agentId || "an agent"} what to do.</strong>
-            </p>
-            <p className="muted">
-              {canRun
-                ? `It will work inside ${projectName}. Pick another agent in the right column.`
-                : "Add or choose a project in the sidebar first."}
-            </p>
-          </div>
+          <StartSteps
+            title="Start a task"
+            steps={[
+              {
+                label: "Choose a project",
+                done: project !== undefined,
+                action: { label: "Choose project", run: onNewProject },
+              },
+              {
+                label: "Select an agent",
+                done: agent?.available ?? false,
+                action: { label: "Detect CLIs", run: onDetect },
+              },
+              { label: "Describe your task, then run it", done: false },
+            ]}
+          />
         )}
       </div>
 
-      <form onSubmit={submit} className="composer">
-        {agentId !== "" && !agentAvailable && (
-          <p className="warn">This agent was not found on this machine; the task will fail.</p>
-        )}
-        <textarea
-          aria-label="Prompt"
-          rows={3}
-          maxLength={100000}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && prompt.trim() && canRun) {
-              e.currentTarget.form?.requestSubmit();
-            }
-          }}
-          placeholder={
-            canRun ? `Message ${agentId || "your agent"}… (Ctrl+Enter)` : "Choose a project first"
-          }
-        />
-        <div className="composer-bar">
-          <span className="muted small">
-            {agentId || "no agent"} · {projectName ?? "no project"}
-          </span>
-          <button type="submit" disabled={!canRun || agentId === "" || prompt.trim() === ""}>
-            Start task
-          </button>
-        </div>
-      </form>
+      <Composer
+        projects={projects}
+        projectId={projectId}
+        onProject={onProject}
+        onNewProject={onNewProject}
+        agents={
+          <label className="picker">
+            <span className="muted small">Agent</span>
+            <select aria-label="Agent" value={agentId} onChange={(e) => onAgent(e.target.value)}>
+              {adapters.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.id}
+                  {a.available ? "" : " (not found)"}
+                </option>
+              ))}
+            </select>
+          </label>
+        }
+        value={prompt}
+        onChange={setPrompt}
+        label="Prompt"
+        placeholder={
+          project
+            ? `Describe what ${agentId || "the agent"} should do in ${project.name}…`
+            : "Choose a project to begin"
+        }
+        submitLabel="Run task"
+        blocker={blocker}
+        onSubmit={(text) => {
+          onStart(text);
+          setPrompt("");
+        }}
+      />
     </div>
   );
 }

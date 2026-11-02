@@ -15,6 +15,10 @@ const done = {
   num_turns: 1,
 };
 
+if (mode === "garbage") {
+  process.stdout.write(["this is not json", "{broken", ""].join("\n"));
+  process.exit(0);
+}
 if (mode === "crash") {
   process.stderr.write("boom: something broke\n");
   process.exit(3);

@@ -34,7 +34,8 @@ Hai task thật qua adapter (`--safe-mode --tools Read --allowed-tools Read --ma
 - QUAN SÁT: `--resume <session_id>` hoạt động; task thứ hai trả lời đúng nội dung tệp của task đầu, cùng `session_id`. Phải chạy cùng thư mục.
 - QUAN SÁT: chạy không cô lập thì **hook SessionStart/plugin của người dùng chạy trong task** và task tốn $0,69 (≈167k token tạo cache); với `--safe-mode` tốn $0,017. Vì vậy adapter bật `--safe-mode` mặc định (`safeMode:false` để tắt). Đây là cô lập cấu hình, **không phải sandbox bảo mật**.
 - QUAN SÁT: luồng có thêm dòng `system` (hook_*, init, task_summary, post_turn_summary) và `rate_limit_event`; parser bỏ qua đúng.
-- CHƯA quan sát: `--include-partial-messages`, định dạng khi hủy giữa chừng, `permission_denials` khi tool bị chặn, công cụ ghi (Write/Bash) và cơ chế phê duyệt, `--safe-mode` có chặn MCP/ghi file hay không, hành vi khi `--tools` không được đặt.
+- ĐÃ quan sát (2026-11-02, 2.1.314): hủy khi tool Bash đang chạy — tiến trình `claude` và `ping` con bị dừng, không có `result`, adapter phát `error: cancelled`; task chuyển `needs_reconciliation` vì còn `tool_call` chưa có `tool_result`. Codex 0.165.0 cho kết quả tương tự (`command_execution` đang chạy).
+- CHƯA quan sát: `--include-partial-messages`, `permission_denials` khi tool bị chặn, công cụ ghi (Write/Bash) và cơ chế phê duyệt, `--safe-mode` có chặn MCP/ghi file hay không, hành vi khi `--tools` không được đặt.
 - `capabilities()` khai `streaming`, `structured_output`, `tool_execution`, `session_resume`; không khai `approval`.
 
 ## Evidence: real `codex exec --json` runs (2026-11-02, máy Legion, codex-cli 0.165.0)

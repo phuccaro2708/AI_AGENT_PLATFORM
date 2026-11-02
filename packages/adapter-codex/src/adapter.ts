@@ -11,6 +11,18 @@ import { createCodexParser } from "./parse.js";
 /** `danger-full-access` is deliberately not offered; Codex also has a bypass flag we never pass. */
 export type CodexSandbox = "read-only" | "workspace-write";
 
+const isJson = (line: string): boolean => {
+  try {
+    JSON.parse(line);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const invalidNote = (n: number): string =>
+  n > 0 ? ` (${n} output line${n === 1 ? "" : "s"} were not valid JSON)` : "";
+
 export interface CodexAdapterOptions {
   id?: string;
   /** Executable name or path. Default `codex` (an npm shim is unwrapped to `node codex.js`). */
@@ -65,6 +77,7 @@ export class CodexAdapter implements AgentAdapter {
     let wake: (() => void) | undefined;
     let ended = false;
     let final: AgentEvent | undefined;
+    let invalidLines = 0; // non-empty stdout lines that are not JSON: reported if the run has no result
     const push = (e: AgentEvent) => {
       queue.push(e);
       wake?.();
@@ -73,6 +86,7 @@ export class CodexAdapter implements AgentAdapter {
     const parser = createCodexParser();
     const splitter = createLineSplitter((line) => {
       if (final) return; // nothing may follow the terminal event
+      if (line.trim() !== "" && !isJson(line)) invalidLines++;
       const parsed = parser.parse(line);
       for (const e of parsed.events) push(e);
       if (parsed.final) final = parsed.final;
@@ -127,7 +141,7 @@ export class CodexAdapter implements AgentAdapter {
         const detail = parser.lastError() ?? result.stderr.trim().slice(-300);
         yield {
           type: "error",
-          message: `codex exited (code ${String(result.exitCode)}) without a result${detail ? `: ${detail}` : ""}`,
+          message: `codex exited (code ${String(result.exitCode)}) without a result${detail ? `: ${detail}` : ""}${invalidNote(invalidLines)}`,
         };
       }
     } finally {

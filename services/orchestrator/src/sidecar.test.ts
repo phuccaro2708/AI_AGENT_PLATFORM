@@ -116,6 +116,18 @@ describe("D1 IPC", () => {
     expect(listed.map((x) => x.rootPath)).toContain("C:/demo");
   });
 
+  it("adds no project on a fresh start (the Phase 0 spike project is created only by runStub)", async () => {
+    const fresh = new SidecarService(
+      { dbPath: join(dir, "fresh.db") },
+      createLogger({ name: "t", destination: sink }),
+    );
+    try {
+      expect((await call(fresh, "projects.list")).result?.projects).toEqual([]);
+    } finally {
+      fresh.close();
+    }
+  });
+
   it("pushes task.message in sequence order and a final task.state (D2)", async () => {
     svc.close();
     const events: SidecarEvent[] = [];

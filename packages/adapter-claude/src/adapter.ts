@@ -8,6 +8,18 @@ import {
 } from "@agent-studio/process-manager";
 import { parseClaudeLine } from "./parse.js";
 
+const isJson = (line: string): boolean => {
+  try {
+    JSON.parse(line);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const invalidNote = (n: number): string =>
+  n > 0 ? ` (${n} output line${n === 1 ? "" : "s"} were not valid JSON)` : "";
+
 export interface ClaudeAdapterOptions {
   id?: string;
   /** Executable name or path. Default `claude`. Tests point this at `process.execPath`. */
@@ -66,6 +78,7 @@ export class ClaudeAdapter implements AgentAdapter {
     let wake: (() => void) | undefined;
     let ended = false;
     let final: AgentEvent | undefined;
+    let invalidLines = 0; // non-empty stdout lines that are not JSON: reported if the run has no result
     const push = (e: AgentEvent) => {
       queue.push(e);
       wake?.();
@@ -73,6 +86,7 @@ export class ClaudeAdapter implements AgentAdapter {
 
     const splitter = createLineSplitter((line) => {
       if (final) return; // nothing may follow the terminal event
+      if (line.trim() !== "" && !isJson(line)) invalidLines++;
       const parsed = parseClaudeLine(line);
       for (const e of parsed.events) push(e);
       if (parsed.final) final = parsed.final;
@@ -128,7 +142,7 @@ export class ClaudeAdapter implements AgentAdapter {
         const tail = result.stderr.trim().slice(-300);
         yield {
           type: "error",
-          message: `claude exited (code ${String(result.exitCode)}) without a result${tail ? `: ${tail}` : ""}`,
+          message: `claude exited (code ${String(result.exitCode)}) without a result${tail ? `: ${tail}` : ""}${invalidNote(invalidLines)}`,
         };
       }
     } finally {

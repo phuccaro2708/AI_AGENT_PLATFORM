@@ -170,6 +170,13 @@ describe("CodexAdapter", () => {
     const last = events.at(-1);
     expect(last?.type === "error" && last.message).toMatch(/code 3.*without a result.*boom/s);
   });
+  it("malformed JSON output without a result is reported, not silently dropped", async () => {
+    const events = await run(make("garbage"), task());
+    const last = events.at(-1);
+    expect(last?.type === "error" && last.message).toMatch(
+      /without a result.*2 output lines were not valid JSON/s,
+    );
+  });
   it("a missing CLI is an error event, detect() is false, and nothing throws", async () => {
     const a = new CodexAdapter({ command: "definitely-not-a-real-cli-xyz" });
     expect(await a.detect()).toBe(false);

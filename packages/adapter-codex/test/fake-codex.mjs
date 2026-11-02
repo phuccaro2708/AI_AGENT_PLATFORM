@@ -8,6 +8,10 @@ const mode = process.env.FAKE_MODE ?? "ok";
 const msg = (id, text) => ({ type: "item.completed", item: { id, type: "agent_message", text } });
 const done = { type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } };
 
+if (mode === "garbage") {
+  process.stdout.write(["this is not json", "{broken", ""].join("\n"));
+  process.exit(0);
+}
 if (mode === "crash") {
   process.stderr.write("boom: something broke\n");
   process.exit(3);

@@ -26,7 +26,7 @@ Bằng chứng cục bộ: `pnpm test` 17 file / 165 test pass; lint, format, ty
 **Chặn việc đóng Phase 1**
 
 - [x] CI xanh (run `41526633402`). Hai nguyên nhân đã gặp đã thấy trong log run `41521937556`: (1) job _Tauri shell_: 3/7 test Rust trong `sidecar.rs` fail trên runner Windows (`pushed_events_reach_the_callback_and_errors_become_err`, `a_request_times_out_and_a_dead_sidecar_fails_waiters_and_later_calls`, `replies_match_by_id_even_when_they_finish_out_of_order`) dù pass 7/7 trên máy Legion — chưa điều tra, nghi test phụ thuộc thời gian/sidecar giả; (2) job _Security_: secret scan báo 23 phát hiện so với 7 đã chấp nhận, toàn bộ ở `docs/reports/phase0-windows/spike-report.json` (Base64 High Entropy) — cần xác nhận là dữ liệu spike vô hại rồi thêm vào danh sách chấp nhận trong `scripts/secret-scan.py`, hoặc bỏ file khỏi repo. Không được coi là "xanh" khi chưa chạy lại.
-- [ ] Hủy một CLI thật đang chạy tool; bấm Cancel trong app Tauri thật.
+- [x] Hủy một CLI thật đang chạy tool; bấm Cancel trong app Tauri thật (2026-11-02, claude + codex, 0 orphan; state `needs_reconciliation`).
 - [ ] Chưa kiểm trong app Tauri thật: các thay đổi UI sau `818431e`, nút Browse… (plugin dialog, quyền `dialog:allow-open`), bản release trên máy thứ hai.
 - [x] PHASE1_REPORT đã cập nhật số CI.
 
@@ -34,7 +34,7 @@ Bằng chứng cục bộ: `pnpm test` 17 file / 165 test pass; lint, format, ty
 
 - [ ] `tasks.list` — danh sách session hiện chỉ nằm trong bộ nhớ, mất khi mở lại app (chuyển sang Phase 7).
 - [ ] UI phê duyệt (approval) — chưa có; chuyển sang Phase 2/7.
-- [ ] Policy cho `projects.rootPath`; test nhánh lỗi của `JobObject::spawn`; project lạ `spike-6844` chưa rõ nguồn gốc.
+- [ ] Policy cho `projects.rootPath`; test nhánh lỗi của `JobObject::spawn`; (đã xong: project lạ `spike-NNNN` do `SidecarService` tạo mỗi lần khởi động, nay tạo lười trong `runStub`).
 - [ ] Claude: tool ghi/phê duyệt, `--include-partial-messages`, hủy giữa chừng chưa kiểm với CLI thật. Codex: `turn.failed`, item khác, resume, app-server + approval, ép read-only chưa kiểm (ghi trong ASSUMPTIONS).
 - [ ] `cargo audit` cho plugin dialog; ẩn adapter `stub` ngoài chế độ dev; chưa kiểm bố cục hẹp (< 800 px).
 - [ ] Hai cảnh báo `pnpm audit` mức moderate và hai cảnh báo `cargo audit` (từ Phase 0) vẫn mở.

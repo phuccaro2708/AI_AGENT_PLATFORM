@@ -34,7 +34,8 @@ export class SidecarService {
   private readonly repo: Repo;
   private readonly registry = new AdapterRegistry();
   private readonly orchestrator: Orchestrator;
-  private readonly workflowId: string;
+  /** Phase 0 spike workflow for `runStub`; created on first use so a normal start adds no project. */
+  private spikeWorkflowId: string | undefined;
   private readonly recoveredTasks: number;
   private readonly probes: Record<"claude" | "codex", () => Promise<ProbeResult>>;
   /** Tasks currently executing in this process. */
@@ -79,9 +80,13 @@ export class SidecarService {
       onState: (taskId, state, reason) =>
         opts.onEvent?.({ event: "task.state", taskId, state, ...(reason ? { reason } : {}) }),
     });
-    this.workflowId = this.repo.createWorkflow(
+  }
+
+  private spikeWorkflow(): string {
+    this.spikeWorkflowId ??= this.repo.createWorkflow(
       this.repo.createProject(`spike-${process.pid}`, `spike://${process.pid}-${Date.now()}`),
     );
+    return this.spikeWorkflowId;
   }
 
   async handle(raw: unknown): Promise<{ response: SidecarResponse; shutdown: boolean }> {
@@ -115,7 +120,7 @@ export class SidecarService {
         }
         case "runStub": {
           const r = await this.orchestrator.runTask({
-            workflowId: this.workflowId,
+            workflowId: this.spikeWorkflow(),
             agentId: "stub",
             prompt: req.params.prompt,
             cwd: process.cwd(),

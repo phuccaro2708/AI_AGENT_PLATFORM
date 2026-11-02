@@ -16,6 +16,7 @@ export class SidecarService {
   private readonly repo: Repo;
   private readonly orchestrator: Orchestrator;
   private readonly workflowId: string;
+  private readonly recoveredTasks: number;
 
   constructor(
     private readonly opts: SidecarOptions,
@@ -28,6 +29,14 @@ export class SidecarService {
     if (opts.migrationsFolder) runMigrations(this.db, opts.migrationsFolder);
     else runMigrations(this.db);
     this.repo = new Repo(this.db);
+    const recovered = this.repo.recoverInterruptedTasks();
+    if (recovered.length > 0) {
+      log.warn(
+        { taskIds: recovered },
+        "tasks interrupted by a previous exit -> needs_reconciliation",
+      );
+    }
+    this.recoveredTasks = recovered.length;
     const registry = new AdapterRegistry();
     registry.register(new StubAdapter());
     this.orchestrator = new Orchestrator(registry, this.repo, log);
@@ -59,6 +68,7 @@ export class SidecarService {
                 sqlite: v,
                 journalMode: journal,
                 dbPath: this.opts.dbPath,
+                recoveredTasks: this.recoveredTasks,
               },
             },
             shutdown: false,

@@ -71,6 +71,38 @@ describe("migrations & pragmas", () => {
   });
 });
 
+describe("crash recovery (D4)", () => {
+  it("moves running/waiting_approval tasks to needs_reconciliation, never retries, leaves others", () => {
+    const { w, t: running } = seed();
+    repo.setTaskState(running, "running");
+    const waiting = repo.createTask(w, "stub");
+    repo.setTaskState(waiting, "running");
+    repo.setTaskState(waiting, "waiting_approval");
+    const queued = repo.createTask(w, "stub");
+    const done = repo.createTask(w, "stub");
+    repo.setTaskState(done, "running");
+    repo.setTaskState(done, "completed");
+
+    const recovered = repo.recoverInterruptedTasks();
+
+    expect(recovered.sort()).toEqual([running, waiting].sort());
+    expect(repo.getTaskState(running)).toBe("needs_reconciliation");
+    expect(repo.getTaskState(waiting)).toBe("needs_reconciliation");
+    expect(repo.getTaskState(queued)).toBe("queued");
+    expect(repo.getTaskState(done)).toBe("completed");
+    expect(repo.getTaskAttempt(running)).toBe(0); // no automatic retry
+    const last = repo.listEvents(running).at(-1);
+    expect(JSON.parse(last?.payloadJson ?? "{}")).toMatchObject({
+      from: "running",
+      state: "needs_reconciliation",
+    });
+  });
+  it("is a no-op when nothing was interrupted", () => {
+    seed();
+    expect(repo.recoverInterruptedTasks()).toEqual([]);
+  });
+});
+
 describe("constraints", () => {
   it("rejects invalid task state and self-dependency", () => {
     const { t } = seed();

@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
   AgentMessage,
   IllegalTransitionError,
@@ -93,6 +93,25 @@ export class Repo {
         })
         .run();
     });
+  }
+
+  /**
+   * Startup recovery: a task still `running`/`waiting_approval` belongs to a process that no longer
+   * exists. Its side effects are unknown, so it becomes `needs_reconciliation` (CLAUDE.md principle 6);
+   * nothing is re-run. Call once, before accepting work. Returns the affected task ids.
+   */
+  recoverInterruptedTasks(): string[] {
+    const stuck = this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(inArray(tasks.state, ["running", "waiting_approval"]))
+      .all();
+    for (const { id } of stuck) {
+      this.setTaskState(id, "needs_reconciliation", {
+        reason: "interrupted: the orchestrator stopped while this task was in progress",
+      });
+    }
+    return stuck.map((s) => s.id);
   }
 
   /** Upserts the latest probe result for a provider (plain data; storage does not depend on cli-probe). */

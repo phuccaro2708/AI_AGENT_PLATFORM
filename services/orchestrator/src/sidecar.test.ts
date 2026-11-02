@@ -38,6 +38,31 @@ describe("SidecarService", () => {
     const { response } = await svc.handle({ id: 4, method: "nope" });
     expect(response).toMatchObject({ id: 4, error: { message: "invalid request" } });
   });
+  it("on restart, a task left running becomes needs_reconciliation and health reports it (D4)", async () => {
+    const seeded = svc.db.$client;
+    const repoSql = (q: string, ...a: unknown[]) => seeded.prepare(q).run(...a);
+    const ts = new Date().toISOString();
+    repoSql("insert into projects (id,name,root_path,created_at) values ('p','n','r',?)", ts);
+    repoSql(
+      "insert into workflows (id,project_id,state,created_at) values ('w','p','pending',?)",
+      ts,
+    );
+    repoSql(
+      "insert into tasks (id,workflow_id,state,created_at,updated_at) values ('t','w','running',?,?)",
+      ts,
+      ts,
+    );
+    svc.close(); // simulate a crash: the row stays `running`
+
+    svc = new SidecarService(
+      { dbPath: join(dir, "s.db") },
+      createLogger({ name: "t", destination: sink }),
+    );
+    const q = await svc.handle({ id: 6, method: "queryTask", params: { taskId: "t" } });
+    expect(q.response).toMatchObject({ result: { state: "needs_reconciliation" } });
+    const h = await svc.handle({ id: 7, method: "health" });
+    expect(h.response).toMatchObject({ result: { recoveredTasks: 1 } });
+  });
   it("flags shutdown", async () => {
     expect((await svc.handle({ id: 5, method: "shutdown" })).shutdown).toBe(true);
   });

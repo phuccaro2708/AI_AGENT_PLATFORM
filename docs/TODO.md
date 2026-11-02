@@ -81,7 +81,7 @@
 - [ ] D1. IPC: agents.detect/list/capabilities, projects.create, workflows.create/start, tasks.cancel, logs.query
 - [ ] D2. Event stream tới UI (Tauri event channel) + backpressure
 - [ ] D3. UI: Projects, Agents, New Task, Output stream, Cancel
-- [ ] D4. Crash detection khi khởi động → `needs_reconciliation`
+- [~] D4. Crash detection khi khởi động → `needs_reconciliation` — xong phía backend: `Repo.recoverInterruptedTasks()` chạy trong constructor `SidecarService` (task `running`/`waiting_approval` → `needs_reconciliation`, không tự chạy lại, `attempt` giữ nguyên; `health` trả `recoveredTasks`). Test: storage + sidecar (khởi động lại trên cùng DB). CHƯA: UI hiển thị/giải quyết (cần D1/D3), kiểm tra với process thật bị kill giữa chừng
 
 ### Sprint E — Đóng phase
 

@@ -101,10 +101,45 @@ h1 {
   height: 16px;
 }
 
-main {
-  max-width: 1280px;
-  margin: 0 auto;
+/* shell: app bar on top, sidebar left, content right (Claude Desktop style) */
+.shell {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  grid-template-rows: 48px 1fr;
+  grid-template-areas: "bar bar" "side main";
+  height: 100vh;
+}
+.appbar {
+  grid-area: bar;
+}
+.sidebar {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  overflow: auto;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+}
+.content {
+  grid-area: main;
+  min-width: 0;
+  overflow: auto;
   padding: 16px;
+}
+@media (max-width: 800px) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: 48px auto 1fr;
+    grid-template-areas: "bar" "side" "main";
+    height: auto;
+    min-height: 100vh;
+  }
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
 }
 h2 {
   font-size: 12px;
@@ -114,23 +149,178 @@ h2 {
   color: var(--muted);
   margin: 0 0 10px;
 }
-.grid {
+.small {
+  font-size: 12px;
+}
+.modes {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) 1fr;
-  gap: 16px;
-  align-items: start;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
-@media (max-width: 800px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
+.mode {
+  border: 0;
+  background: transparent;
+  font-weight: 600;
+  color: var(--muted);
 }
-aside,
-.main {
+.mode.active {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: var(--shadow);
+}
+.mode-hint {
+  margin: -4px 2px 0;
+}
+.side-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.side-title h2 {
+  margin: 0;
+}
+.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent);
+  padding: 2px 8px;
+}
+.view {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+  min-height: 100%;
+}
+.view-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
   min-width: 0;
+}
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.agent-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 12px;
+  background: var(--surface);
+  border-radius: 10px;
+}
+.agent-card.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.agent-card.disabled {
+  border: 1px dashed var(--line);
+  color: var(--muted);
+  background: transparent;
+  cursor: default;
+}
+.agent-name {
+  font-weight: 600;
+}
+.empty {
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 28px 16px;
+  text-align: center;
+}
+.empty p {
+  margin: 4px 0;
+}
+.composer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.composer textarea {
+  border: 0;
+  background: transparent;
+  padding: 2px;
+  resize: none;
+}
+.composer textarea:focus-visible {
+  outline: none;
+}
+.composer:focus-within {
+  border-color: var(--accent);
+}
+.composer p {
+  margin: 0;
+}
+.composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.participants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.participants legend {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 0;
+  margin-bottom: 6px;
+}
+.chip {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+}
+.chip.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.chip input {
+  margin: 0;
+}
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.badges {
+  display: flex;
+  gap: 4px;
+}
+.side-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .card {
   background: var(--surface);

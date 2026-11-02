@@ -8,6 +8,13 @@
       "when": 1793495361554,
       "tag": "0000_acoustic_luke_cage",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793584251906,
+      "tag": "0001_yielding_wasp",
+      "breakpoints": true
     }
   ]
 }

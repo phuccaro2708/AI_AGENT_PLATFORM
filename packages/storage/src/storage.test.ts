@@ -56,6 +56,10 @@ describe("migrations & pragmas", () => {
       "messages",
       "events",
       "settings",
+      "sessions",
+      "execution_runs",
+      "artifacts",
+      "approvals",
     ]) {
       expect(tables).toContain(t);
     }
@@ -74,6 +78,37 @@ describe("constraints", () => {
     expect(() =>
       db.$client.prepare("insert into task_dependencies values (?,?)").run(t, t),
     ).toThrow();
+  });
+  it("enforces constraints on the Phase 1 tables", () => {
+    const { t } = seed();
+    const ts = new Date().toISOString();
+    const bad = (sql: string, ...args: unknown[]) =>
+      expect(() => db.$client.prepare(sql).run(...args)).toThrow();
+    bad(
+      "insert into approvals (id,task_id,state,request_json,created_at) values ('a',?,'maybe','{}',?)",
+      t,
+      ts,
+    );
+    bad(
+      "insert into approvals (id,task_id,request_json,created_at) values ('a','nope','{}',?)",
+      ts,
+    );
+    bad("insert into artifacts values ('x',?,'f.txt','short',?)", t, ts);
+    bad("insert into execution_runs (id,task_id,started_at) values ('r','nope',?)", ts);
+    db.$client
+      .prepare("insert into approvals (id,task_id,request_json,created_at) values ('a',?,'{}',?)")
+      .run(t, ts);
+    expect(db.$client.prepare("select state from approvals where id='a'").get()).toEqual({
+      state: "pending",
+    });
+  });
+  it("records execution runs", () => {
+    const { t } = seed();
+    const run = repo.startRun(t, { pid: 4242, attempt: 0 });
+    repo.finishRun(run, { exitCode: 0, signal: null });
+    expect(repo.getRun(run)).toMatchObject({ taskId: t, pid: 4242, exitCode: 0, signal: null });
+    expect(repo.getRun(run)?.endedAt).toBeTruthy();
+    expect(() => repo.finishRun("nope", { exitCode: 1, signal: null })).toThrow();
   });
   it("enforces unique (task_id, sequence)", () => {
     const { t } = seed();

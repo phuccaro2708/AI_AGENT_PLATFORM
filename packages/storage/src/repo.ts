@@ -7,7 +7,7 @@ import {
 } from "@agent-studio/contracts";
 import { newId } from "@agent-studio/shared-utils";
 import type { StudioDb } from "./db.js";
-import { events, messages, projects, tasks, workflows } from "./schema.js";
+import { events, executionRuns, messages, projects, tasks, workflows } from "./schema.js";
 
 const now = () => new Date().toISOString();
 
@@ -77,6 +77,36 @@ export class Repo {
         })
         .run();
     });
+  }
+
+  /** Records the launch of a process for a task attempt; returns the run id. */
+  startRun(taskId: string, opts: { pid?: number; attempt?: number; sessionId?: string }): string {
+    const id = newId("run");
+    this.db
+      .insert(executionRuns)
+      .values({
+        id,
+        taskId,
+        sessionId: opts.sessionId ?? null,
+        attempt: opts.attempt ?? 0,
+        pid: opts.pid ?? null,
+        startedAt: now(),
+      })
+      .run();
+    return id;
+  }
+
+  finishRun(runId: string, result: { exitCode: number | null; signal: string | null }): void {
+    const res = this.db
+      .update(executionRuns)
+      .set({ exitCode: result.exitCode, signal: result.signal, endedAt: now() })
+      .where(eq(executionRuns.id, runId))
+      .run();
+    if (res.changes !== 1) throw new Error(`Unknown run: ${runId}`);
+  }
+
+  getRun(runId: string) {
+    return this.db.select().from(executionRuns).where(eq(executionRuns.id, runId)).get();
   }
 
   /** Validates and appends a message; sequence is assigned per task. */

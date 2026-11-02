@@ -1,4 +1,4 @@
-import { AgentEvent, type AgentMessage } from "@agent-studio/contracts";
+import { AgentEvent, type AgentMessage, type TaskState } from "@agent-studio/contracts";
 import type { AdapterRegistry } from "@agent-studio/agent-core";
 import type { Logger } from "@agent-studio/shared-utils";
 import { newId } from "@agent-studio/shared-utils";
@@ -17,12 +17,29 @@ export interface RunResult {
  * Phase 0 skeleton: runs ONE task on ONE adapter and persists every event as a
  * message. No scheduler, router or DAG yet (Phase 2).
  */
+export interface OrchestratorHooks {
+  /** After a message is persisted. */
+  onMessage?: (message: AgentMessage) => void;
+  /** After a task state change is persisted. */
+  onState?: (taskId: string, state: TaskState, reason?: string) => void;
+}
+
 export class Orchestrator {
   constructor(
     private readonly registry: AdapterRegistry,
     private readonly repo: Repo,
     private readonly log: Logger,
+    private readonly hooks: OrchestratorHooks = {},
   ) {}
+
+  /** A broken listener (UI side) must never fail or alter a task. */
+  private notify(fn: () => void): void {
+    try {
+      fn();
+    } catch (err) {
+      this.log.warn({ err: String(err) }, "orchestrator hook threw");
+    }
+  }
 
   async runTask(opts: {
     workflowId: string;
@@ -41,24 +58,26 @@ export class Orchestrator {
     const correlationId = newId("corr");
     const signal = opts.signal ?? new AbortController().signal;
     let sequence = 0;
-    const record = (type: AgentMessage["type"], payload: unknown) =>
-      this.repo.appendMessage(
-        {
-          id: newId("msg"),
-          schemaVersion: 1,
-          workflowId: opts.workflowId,
-          taskId,
-          correlationId,
-          fromAgent: opts.agentId,
-          toAgent: "orchestrator",
-          type,
-          payload,
-          createdAt: new Date().toISOString(),
-        },
-        sequence++,
-      );
+    const record = (type: AgentMessage["type"], payload: unknown) => {
+      const base = {
+        id: newId("msg"),
+        schemaVersion: 1 as const,
+        workflowId: opts.workflowId,
+        taskId,
+        correlationId,
+        fromAgent: opts.agentId,
+        toAgent: "orchestrator",
+        type,
+        payload,
+        createdAt: new Date().toISOString(),
+      };
+      const seq = sequence++;
+      this.repo.appendMessage(base, seq);
+      this.notify(() => this.hooks.onMessage?.({ ...base, sequence: seq }));
+    };
 
     this.repo.setTaskState(taskId, "running");
+    this.notify(() => this.hooks.onState?.(taskId, "running"));
     record("task.accepted", { prompt: opts.prompt });
     const events: AgentEvent[] = [];
     let abnormalEnd: string | undefined;
@@ -103,6 +122,7 @@ export class Orchestrator {
     }
     const finalState = outcome.state;
     this.repo.setTaskState(taskId, finalState, outcome.reason ? { reason: outcome.reason } : {});
+    this.notify(() => this.hooks.onState?.(taskId, finalState, outcome.reason));
     this.log.info({ taskId, finalState, reason: outcome.reason }, "task finished");
     return { taskId, finalState, ...(outcome.reason ? { reason: outcome.reason } : {}), events };
   }

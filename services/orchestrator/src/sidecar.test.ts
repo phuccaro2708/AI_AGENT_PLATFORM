@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
-import type { AgentEvent } from "@agent-studio/contracts";
+import type { AgentEvent, SidecarEvent } from "@agent-studio/contracts";
 import { StubAdapter, type AgentTask } from "@agent-studio/agent-core";
 import { createLogger } from "@agent-studio/shared-utils";
 import { SidecarService } from "./sidecar.js";
@@ -114,6 +114,58 @@ describe("D1 IPC", () => {
     expect(JSON.stringify(page2.result?.messages)).toContain("C:/demo"); // stub echoes cwd
     const listed = (await call(svc, "projects.list")).result?.projects as { rootPath: string }[];
     expect(listed.map((x) => x.rootPath)).toContain("C:/demo");
+  });
+
+  it("pushes task.message in sequence order and a final task.state (D2)", async () => {
+    svc.close();
+    const events: SidecarEvent[] = [];
+    svc = new SidecarService(
+      { dbPath: join(dir, "e.db"), onEvent: (e) => events.push(e) },
+      createLogger({ name: "t", destination: sink }),
+    );
+    const p = (await call(svc, "projects.create", { name: "e", rootPath: "C:/e" })).result;
+    const w = (await call(svc, "workflows.create", { projectId: p?.projectId })).result;
+    const s = (
+      await call(svc, "workflows.start", {
+        workflowId: w?.workflowId,
+        agentId: "stub",
+        prompt: "x",
+      })
+    ).result;
+    await svc.idle();
+    const mine = events.filter((e) => e.taskId === s?.taskId);
+    const seqs = mine.flatMap((e) => (e.event === "task.message" ? [e.sequence] : []));
+    expect(seqs.length).toBeGreaterThan(2);
+    expect(seqs).toEqual(seqs.map((_, i) => i)); // contiguous from 0
+    expect(mine.at(0)).toMatchObject({ event: "task.state", state: "running" });
+    expect(mine.at(-1)).toMatchObject({ event: "task.state", state: "completed" });
+    // Same data the log view returns: events are a live view of persisted messages.
+    const logged = (await call(svc, "logs.query", { taskId: s?.taskId })).result?.messages;
+    expect(logged).toHaveLength(seqs.length);
+  });
+
+  it("a throwing listener cannot fail the task", async () => {
+    svc.close();
+    svc = new SidecarService(
+      {
+        dbPath: join(dir, "f.db"),
+        onEvent: () => {
+          throw new Error("ui gone");
+        },
+      },
+      createLogger({ name: "t", destination: sink }),
+    );
+    const p = (await call(svc, "projects.create", { name: "f", rootPath: "C:/f" })).result;
+    const w = (await call(svc, "workflows.create", { projectId: p?.projectId })).result;
+    const s = (
+      await call(svc, "workflows.start", {
+        workflowId: w?.workflowId,
+        agentId: "stub",
+        prompt: "x",
+      })
+    ).result;
+    await svc.idle();
+    expect((await call(svc, "queryTask", { taskId: s?.taskId })).result?.state).toBe("completed");
   });
 
   it("rejects unknown ids and agents with a message, not a crash", async () => {

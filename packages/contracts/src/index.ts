@@ -148,6 +148,27 @@ export const SidecarRequest = z.discriminatedUnion("method", [
 ]);
 export type SidecarRequest = z.infer<typeof SidecarRequest>;
 
+/**
+ * Server-pushed line (no `id`). Lossy by design under backpressure: a client that sees a gap in
+ * `sequence` (or reconnects) recovers with `logs.query {afterSequence}`, which is the source of truth.
+ * `task.state` is never dropped.
+ */
+export const SidecarEvent = z.discriminatedUnion("event", [
+  z.object({
+    event: z.literal("task.message"),
+    taskId: z.string(),
+    sequence: z.number().int(),
+    message: AgentMessage,
+  }),
+  z.object({
+    event: z.literal("task.state"),
+    taskId: z.string(),
+    state: TaskState,
+    reason: z.string().optional(),
+  }),
+]);
+export type SidecarEvent = z.infer<typeof SidecarEvent>;
+
 export const SidecarResponse = z.union([
   z.object({ id: z.number().int(), result: z.unknown() }),
   z.object({ id: z.number().int().nullable(), error: z.object({ message: z.string() }) }),

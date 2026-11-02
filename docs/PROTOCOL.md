@@ -38,4 +38,13 @@ Newline-delimited JSON on stdin/stdout: `{id, method, params?}` → `{id, result
 | `logs.query`                                 | `{taskId, afterSequence=-1, limit=200}` | `{messages, nextAfterSequence}` (cursor paging)                                                                                                |
 | `health`, `runStub`, `queryTask`, `shutdown` | Phase 0                                 | unchanged; `health` adds `recoveredTasks`                                                                                                      |
 
-Not yet: server-pushed events (D2), real adapters (C2/C3), path/approval policy for `rootPath` (Phase 4).
+### Server-pushed events (D2)
+
+Lines with an `event` field (no `id`) are pushed on stdout: `SidecarEvent` in `packages/contracts`.
+
+- `{event:"task.message", taskId, sequence, message}` — after the message is persisted.
+- `{event:"task.state", taskId, state, reason?}` — `running`, then the final state (also on queued cancel).
+
+Backpressure: when stdout has more than 1 MiB pending, `task.message` events are dropped (`task.state` never is). Dropping is safe because messages are persisted: on a `sequence` gap, or after reconnect, call `logs.query {taskId, afterSequence}`. A throwing listener never affects the task.
+
+Not yet: Tauri (Rust) bridge, real adapters (C2/C3), path/approval policy for `rootPath` (Phase 4).

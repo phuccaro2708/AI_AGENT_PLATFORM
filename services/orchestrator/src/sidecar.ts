@@ -1,4 +1,4 @@
-import { SidecarRequest, type SidecarResponse } from "@agent-studio/contracts";
+import { SidecarRequest, type SidecarEvent, type SidecarResponse } from "@agent-studio/contracts";
 import { AdapterRegistry, StubAdapter, type AgentAdapter } from "@agent-studio/agent-core";
 import { probeClaude, probeCodex, type ProbeResult } from "@agent-studio/cli-probe";
 import { createLogger, type Logger } from "@agent-studio/shared-utils";
@@ -11,6 +11,8 @@ export interface SidecarOptions {
   migrationsFolder?: string;
   /** Test seam: adapters to register in addition to the stub. */
   extraAdapters?: AgentAdapter[];
+  /** Receives server-pushed events (the transport decides how to deliver / drop them). */
+  onEvent?: (event: SidecarEvent) => void;
   /** Test seam: replaces the real CLI probes. */
   probes?: Partial<Record<"claude" | "codex", () => Promise<ProbeResult>>>;
 }
@@ -62,7 +64,17 @@ export class SidecarService {
     this.recoveredTasks = recovered.length;
     this.registry.register(new StubAdapter());
     for (const a of opts.extraAdapters ?? []) this.registry.register(a);
-    this.orchestrator = new Orchestrator(this.registry, this.repo, log);
+    this.orchestrator = new Orchestrator(this.registry, this.repo, log, {
+      onMessage: (message) =>
+        opts.onEvent?.({
+          event: "task.message",
+          taskId: message.taskId,
+          sequence: message.sequence,
+          message,
+        }),
+      onState: (taskId, state, reason) =>
+        opts.onEvent?.({ event: "task.state", taskId, state, ...(reason ? { reason } : {}) }),
+    });
     this.workflowId = this.repo.createWorkflow(
       this.repo.createProject(`spike-${process.pid}`, `spike://${process.pid}-${Date.now()}`),
     );
@@ -209,6 +221,12 @@ export class SidecarService {
           }
           if (state === "queued") {
             this.repo.setTaskState(req.params.taskId, "cancelled", { reason: "cancelled by user" });
+            this.opts.onEvent?.({
+              event: "task.state",
+              taskId: req.params.taskId,
+              state: "cancelled",
+              reason: "cancelled by user",
+            });
             return ok(req.id, { requested: true, state: "cancelled" });
           }
           return ok(req.id, { requested: false, state });

@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline";
 import { createLogger } from "@agent-studio/shared-utils";
+import { createEventWriter } from "./event-writer.js";
 import { SidecarService } from "./sidecar.js";
 
 /** stdout is reserved for the protocol; all logs go to stderr. */
@@ -18,9 +19,14 @@ if (!dbPath) {
 const log = createLogger({ name: "sidecar", destination: process.stderr });
 const nativeBinding = arg("sqlite-binding");
 const migrationsFolder = arg("migrations");
+const events = createEventWriter({
+  write: (line) => void process.stdout.write(line),
+  pending: () => process.stdout.writableLength,
+});
 const service = new SidecarService(
   {
     dbPath,
+    onEvent: events.emit,
     ...(nativeBinding ? { nativeBinding } : {}),
     ...(migrationsFolder ? { migrationsFolder } : {}),
   },

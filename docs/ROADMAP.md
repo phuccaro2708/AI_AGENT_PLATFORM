@@ -214,7 +214,7 @@ Lấp khoảng trống UX so với AionUi, nhưng theo cách task-centric.
 - [ ] Lịch chạy không bao giờ vượt policy đã cấp, kể cả khi người dùng vắng mặt.
 - [ ] UI Multi-agent chạy một đội có vai và bảng ngữ cảnh chung trên dự án mẫu; người dùng thấy được agent nào nhận phần ngữ cảnh nào.
 
-**Câu hỏi mở (chờ người dùng quyết):** có đẩy phần "đội, vai, ngữ cảnh" của Phase 9 lên trước Phase 7–8 hay không. Hiện thứ tự là Phase 2 → 7 → 8 → 9; chưa đổi.
+**Đã chốt (2026-11-02):** giữ thứ tự Phase 2 → 7 → 8 → 9. Phần "đội, vai, ngữ cảnh" của Phase 9 không được đẩy lên trước Phase 7–8; phần tối thiểu (vai, bảng ngữ cảnh) vẫn nằm ở Phase 2.
 
 ### Phase 10 — Nhẹ, nhanh, hoàn thiện sản phẩm (1–2 tuần, song song Phase 5–6)
 

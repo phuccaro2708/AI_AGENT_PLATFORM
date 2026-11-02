@@ -187,7 +187,7 @@
 - [ ] Handoff mang bằng chứng (diff, test, hash)
 - [ ] UI Multi-agent theo đội: chọn mẫu, gán agent vào vai, xem kế hoạch/tiến độ (thay chế độ "cùng mục tiêu, độc lập" hiện tại)
 - [ ] Ngữ cảnh chung có kiểm soát: giới hạn cỡ, tóm tắt có nguồn, hiển thị phần mỗi agent nhận, nhật ký sửa/xóa
-- [ ] Quyết định thứ tự: có đẩy "đội/vai/ngữ cảnh" lên trước Phase 7–8 không (chờ người dùng)
+- [x] Quyết định thứ tự (2026-11-02): giữ Phase 2 → 7 → 8 → 9, không đẩy "đội/vai/ngữ cảnh" lên trước Phase 7–8
 - [ ] Bảng verified / agent-reported / estimated trên mọi màn hình trạng thái
 - [ ] Lịch chạy có giới hạn, qua policy
 - [ ] Gộp worktree an toàn, xem trước xung đột

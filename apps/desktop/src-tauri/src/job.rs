@@ -4,21 +4,28 @@
 //! (including when this process crashes or is killed), Windows terminates every process in it.
 //! Descendants inherit job membership, so agent CLIs started later by the sidecar are covered too.
 //!
-//! Limits (see ADR-004): the child must be assigned right after spawn, before it starts children of
-//! its own; this protects against *app* death, not per-task cancel (that is `killTree` in the Node
+//! The child is created suspended, assigned to the job, then resumed (`JobObject::spawn`), so it
+//! cannot start a child of its own before it is in the job.
+//!
+//! Limits (see ADR-004): this protects against *app* death, not per-task cancel (that is `killTree` in the Node
 //! process manager); on non-Windows platforms this module is a no-op.
 
 #[cfg(windows)]
 mod imp {
     use std::io;
     use std::os::windows::io::AsRawHandle;
-    use std::process::Child;
-    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use std::os::windows::process::CommandExt;
+    use std::process::{Child, Command};
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
+    };
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
         SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
+    use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
 
     pub struct JobObject(HANDLE);
 
@@ -52,13 +59,58 @@ mod imp {
             Ok(job)
         }
 
-        pub fn assign(&self, child: &Child) -> io::Result<()> {
+        /// Spawns `cmd` suspended (on top of `flags`), puts it in this job, then resumes it. On any
+        /// failure the child is killed, so a process outside the job never runs.
+        pub fn spawn(&self, cmd: &mut Command, flags: u32) -> io::Result<Child> {
+            const CREATE_SUSPENDED: u32 = 0x0000_0004;
+            cmd.creation_flags(flags | CREATE_SUSPENDED);
+            let mut child = cmd.spawn()?;
+            if let Err(e) = self.assign(&child).and_then(|()| resume(child.id())) {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(e);
+            }
+            Ok(child)
+        }
+
+        fn assign(&self, child: &Child) -> io::Result<()> {
             // SAFETY: both handles are valid for the duration of the call.
             let ok = unsafe { AssignProcessToJobObject(self.0, child.as_raw_handle() as HANDLE) };
             if ok == 0 {
                 Err(io::Error::last_os_error())
             } else {
                 Ok(())
+            }
+        }
+    }
+
+    /// Resumes the threads of a process created with CREATE_SUSPENDED (only its main thread exists).
+    fn resume(pid: u32) -> io::Result<()> {
+        // SAFETY: plain Win32 calls; every handle opened here is closed before returning.
+        unsafe {
+            let snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+            if snap == INVALID_HANDLE_VALUE {
+                return Err(io::Error::last_os_error());
+            }
+            let mut entry: THREADENTRY32 = std::mem::zeroed();
+            entry.dwSize = std::mem::size_of::<THREADENTRY32>() as u32;
+            let mut resumed = false;
+            let mut more = Thread32First(snap, &mut entry) != 0;
+            while more {
+                if entry.th32OwnerProcessID == pid {
+                    let th = OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID);
+                    if !th.is_null() {
+                        resumed |= ResumeThread(th) != u32::MAX;
+                        CloseHandle(th);
+                    }
+                }
+                more = Thread32Next(snap, &mut entry) != 0;
+            }
+            CloseHandle(snap);
+            if resumed {
+                Ok(())
+            } else {
+                Err(io::Error::other("could not resume suspended process"))
             }
         }
     }
@@ -74,7 +126,7 @@ mod imp {
 #[cfg(not(windows))]
 mod imp {
     use std::io;
-    use std::process::Child;
+    use std::process::{Child, Command};
 
     /// No-op stand-in so the code compiles on Linux/macOS dev machines.
     pub struct JobObject;
@@ -83,8 +135,8 @@ mod imp {
         pub fn new_kill_on_close() -> io::Result<Self> {
             Ok(JobObject)
         }
-        pub fn assign(&self, _child: &Child) -> io::Result<()> {
-            Ok(())
+        pub fn spawn(&self, cmd: &mut Command, _flags: u32) -> io::Result<Child> {
+            cmd.spawn()
         }
     }
 }
@@ -130,14 +182,16 @@ mod tests {
     fn closing_the_job_kills_child_and_grandchild() {
         let job = JobObject::new_kill_on_close().expect("create job");
         // cmd.exe starts ping.exe as its own child process (the grandchild).
-        let mut child = Command::new("cmd.exe")
-            .args(["/C", "ping", "-n", "120", "127.0.0.1"])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("spawn cmd");
-        job.assign(&child).expect("assign to job");
+        let mut child = job
+            .spawn(
+                Command::new("cmd.exe")
+                    .args(["/C", "ping", "-n", "120", "127.0.0.1"])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null()),
+                0,
+            )
+            .expect("spawn cmd in job");
 
         let parent = child.id();
         let mut grandchild: Option<u32> = None;

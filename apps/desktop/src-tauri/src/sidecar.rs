@@ -89,21 +89,11 @@ impl Sidecar {
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::from(log_file));
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-        }
-        let mut child = cmd
-            .spawn()
-            .map_err(|e| format!("failed to spawn sidecar: {e}"))?;
-        // Assign immediately, before any request, so nothing the sidecar starts can escape the job.
+        // Created suspended, put in the job, then resumed: nothing the sidecar starts can escape it.
         let job = JobObject::new_kill_on_close().map_err(|e| format!("job object: {e}"))?;
-        if let Err(e) = job.assign(&child) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(format!("failed to assign sidecar to job object: {e}"));
-        }
+        let mut child = job
+            .spawn(&mut cmd, 0x0800_0000) // CREATE_NO_WINDOW
+            .map_err(|e| format!("failed to spawn sidecar in job object: {e}"))?;
         let stdin = child.stdin.take().ok_or("no sidecar stdin")?;
         let stdout = child.stdout.take().ok_or("no sidecar stdout")?;
         let pid = child.id();

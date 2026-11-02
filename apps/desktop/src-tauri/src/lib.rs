@@ -1,3 +1,4 @@
+mod job;
 mod sidecar;
 
 use serde::Serialize;
@@ -53,7 +54,9 @@ fn with_sidecar<T>(
 ) -> Result<T, String> {
     let mut guard = state.0.lock().map_err(|_| "sidecar lock poisoned")?;
     if guard.is_none() {
-        *guard = Some(Sidecar::spawn(&sidecar_dir()?, &db_path(app)?)?);
+        let db = db_path(app)?;
+        let log = db.with_file_name("sidecar.log");
+        *guard = Some(Sidecar::spawn(&sidecar_dir()?, &db, &log)?);
     }
     f(guard.as_mut().expect("just set"))
 }

@@ -2,6 +2,8 @@
 //! The frontend never talks to this directly; it goes through Tauri commands.
 
 use serde_json::{json, Value};
+use crate::job::JobObject;
+use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -12,12 +14,21 @@ pub struct Sidecar {
     stdin: Option<ChildStdin>,
     stdout: BufReader<ChildStdout>,
     next_id: i64,
+    /// Kept alive for the lifetime of the sidecar; dropping it (or dying) kills the process tree.
+    _job: JobObject,
 }
 
 impl Sidecar {
     /// Spawns `<dir>/node[.exe] <dir>/sidecar.mjs ...` with an argument array (no shell).
-    pub fn spawn(dir: &Path, db: &Path) -> Result<Self, String> {
+    pub fn spawn(dir: &Path, db: &Path, log: &Path) -> Result<Self, String> {
         let node = dir.join(if cfg!(windows) { "node.exe" } else { "node" });
+        // stderr goes straight to an append-only file: no reader thread, so a full pipe can never
+        // stall the sidecar. The file may contain agent output; it is not rotated yet (Phase 4).
+        let log_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log)
+            .map_err(|e| format!("cannot open sidecar log {}: {e}", log.display()))?;
         let mut cmd = Command::new(&node);
         cmd.arg(dir.join("sidecar.mjs"))
             .arg("--db")
@@ -28,7 +39,7 @@ impl Sidecar {
             .arg(dir.join("drizzle"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null());
+            .stderr(Stdio::from(log_file));
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -37,9 +48,16 @@ impl Sidecar {
         let mut child = cmd
             .spawn()
             .map_err(|e| format!("failed to spawn sidecar {}: {e}", node.display()))?;
+        // Assign immediately, before any request, so nothing the sidecar starts can escape the job.
+        let job = JobObject::new_kill_on_close().map_err(|e| format!("job object: {e}"))?;
+        if let Err(e) = job.assign(&child) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!("failed to assign sidecar to job object: {e}"));
+        }
         let stdin = child.stdin.take().ok_or("no sidecar stdin")?;
         let stdout = BufReader::new(child.stdout.take().ok_or("no sidecar stdout")?);
-        Ok(Self { child, stdin: Some(stdin), stdout, next_id: 0 })
+        Ok(Self { child, stdin: Some(stdin), stdout, next_id: 0, _job: job })
     }
 
     pub fn pid(&self) -> u32 {

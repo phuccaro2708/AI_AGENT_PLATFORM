@@ -1,5 +1,6 @@
 import { SidecarRequest, type SidecarEvent, type SidecarResponse } from "@agent-studio/contracts";
 import { AdapterRegistry, StubAdapter, type AgentAdapter } from "@agent-studio/agent-core";
+import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { probeClaude, probeCodex, type ProbeResult } from "@agent-studio/cli-probe";
 import { createLogger, type Logger } from "@agent-studio/shared-utils";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
@@ -63,6 +64,7 @@ export class SidecarService {
     }
     this.recoveredTasks = recovered.length;
     this.registry.register(new StubAdapter());
+    this.registry.register(new ClaudeAdapter());
     for (const a of opts.extraAdapters ?? []) this.registry.register(a);
     this.orchestrator = new Orchestrator(this.registry, this.repo, log, {
       onMessage: (message) =>

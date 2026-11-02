@@ -12,6 +12,7 @@ export default defineConfig({
       "@agent-studio/storage": src("packages/storage"),
       "@agent-studio/process-manager": src("packages/process-manager"),
       "@agent-studio/cli-probe": src("packages/cli-probe"),
+      "@agent-studio/adapter-claude": src("packages/adapter-claude"),
       "@agent-studio/orchestrator": src("services/orchestrator"),
     },
   },

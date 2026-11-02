@@ -24,3 +24,11 @@ Một prompt thật (`Reply with exactly the word: ok`, `--tools ""`, `--no-sess
 - Đã quan sát: dòng NDJSON `system/init` → `assistant` (`message.content[].type=text`) → `result` (`subtype`, `is_error`, `total_cost_usd`, `terminal_reason`). Có thêm dòng `system/hook_*` khi hook của người dùng chạy (bị lược khỏi fixture; adapter phải bỏ qua type/subtype lạ).
 - **Chi phí**: ngữ cảnh khởi tạo ~157k token (plugin/skill/MCP/hook của người dùng) → ~$0.63 dù prompt 1 từ; `--max-budget-usd` chỉ cắt sau lượt đó, CLI thoát mã 1 với `subtype=error_max_budget_usd`. Adapter phải cô lập cấu hình người dùng (`--bare`, `--strict-mcp-config`, `--disable-slash-commands`, `--setting-sources`) — CHƯA kiểm chứng từng cờ.
 - CHƯA quan sát: `tool_use`/`tool_result`, `--include-partial-messages`, `--resume`, định dạng lỗi khi hủy, kết quả `--input-format stream-json`.
+
+## Assumptions of `adapter-claude` (C2) — chưa kiểm chứng với CLI thật
+
+- Prompt được gửi qua **stdin** khi chạy `claude -p` không có prompt vị trí (tránh prompt bắt đầu bằng `-`). Chưa thử với CLI thật.
+- Khối `tool_use` (assistant) và `tool_result` (user) có dạng `{name, input}` / `{content}` — chưa quan sát; test dùng CLI giả.
+- `--resume <sessionId>` dùng cho `task.sessionId`; chưa chạy thật.
+- Chưa thêm cờ cô lập cấu hình người dùng; truyền qua `extraArgs` khi đã kiểm chứng.
+- `capabilities()` chỉ khai `streaming`, `structured_output`.

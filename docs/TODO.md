@@ -2,10 +2,12 @@
 
 Đánh dấu `[x]` khi xong **và đã kiểm chứng**. Ngữ cảnh/acceptance: `docs/ROADMAP.md`.
 
-## Trạng thái hiện tại (cập nhật 2026-11-01)
+## Trạng thái hiện tại (cập nhật 2026-11-02)
 
 - **Phase 0: PASS (có hạn chế)** — xem `docs/PHASE0_REPORT.md`, `docs/reports/phase0-windows/README.md`. CI xanh trên runner Windows/Ubuntu (run 9, commit `d9cf954`); đã xác minh trên máy Windows vật lý (Legion) bằng bản `tauri dev`.
 - **Phase 1: đang làm.** Xong Sprint A, C1, C4; B1–B4 xong một phần (đã có help thật của Claude 2.1.314 và Codex 0.165.0 từ máy Legion). Codex chỉ có npm shim → `process-manager` map `codex.cmd` sang `node <script>` (`unwrapNpmShim`). Chưa có: adapter C2/C3, Sprint D, fixture `stream-json`/JSONL.
+- **Cập nhật 2026-11-02:** Sprint D1–D4 đã có và chạy được trong app Tauri thật. Đã kiểm bằng tay trong webview thật (qua CDP): thêm project, Detect CLIs, chạy task StubAdapter, badge cập nhật theo event. Sidecar giờ được tạo ở trạng thái treo → gán vào Job Object → resume (`JobObject::spawn`, ADR-004), `cargo test` 7/7, clippy sạch, selftest Tauri qua lại vẫn pass. Kill cứng `agent-studio.exe` không để lại sidecar. Chưa kiểm: Cancel trong app thật (cần adapter chậm), nhánh lỗi của `JobObject::spawn` (assign/resume thất bại) chưa có test, một project lạ `spike-6844` từng xuất hiện trong DB mới (chưa rõ nguyên nhân), claude thật (`tool_use`, `--resume`, stdin, cờ cô lập).
+- **Hướng mở rộng (2026-11-02):** thêm Phase 7–10 trong `docs/ROADMAP.md` (ngang AionUi về trải nghiệm, hơn ở an toàn/tin cậy/multi-agent có cấu trúc/nhẹ). Chỉ bắt đầu sau Phase 2.
 - Chưa có PR; nhánh làm việc `claude/loving-lovelace-32lh71`.
 
 ## Phase 0 — Foundation (HOÀN THÀNH, có hạn chế)
@@ -154,6 +156,44 @@
 - [ ] Tài liệu vận hành: cài đặt, troubleshooting, backup/restore, threat model
 - [ ] Chạy lại toàn bộ Production acceptance criteria
 - [ ] PHASE6_REPORT.md, tag 1.0
+
+## Phase 7 — Ngang AionUi về trải nghiệm cốt lõi (sau Phase 2)
+
+- [ ] `tasks.list` + lịch sử task, lọc, tìm kiếm log
+- [ ] Hộp thoại chọn thư mục qua backend
+- [ ] Settings → Agents (command/args/env, probe, secrets vào Credential Manager)
+- [ ] Approval UI đầy đủ (một lần / trong phạm vi / từ chối) + nhật ký quyết định
+- [ ] Tailwind/shadcn, dark/light, phím tắt
+- [ ] Preset "assistant" cục bộ, export/import
+- [ ] E2E "cài đặt → project → task thật" không đụng terminal
+- [ ] Policy cho `projects.rootPath`
+- [ ] PHASE7_REPORT.md
+
+## Phase 8 — Mở rộng agent: ACP, MCP, Skills
+
+- [ ] Probe + contract test ACP với ≥ 2 agent thật; ghi ASSUMPTIONS
+- [ ] Permission ACP đi qua Policy Engine + Approval UI
+- [ ] Quản lý MCP server theo project (bật/tắt tool, hiển thị quyền)
+- [ ] Skills/prompt packs: nguồn + hash, mặc định chỉ đọc
+- [ ] Process registry (PID + thời điểm tạo) để dọn mồ côi an toàn
+- [ ] Hạn mức khởi tạo theo CLI/ACP
+- [ ] PHASE8_REPORT.md
+
+## Phase 9 — Multi-agent có cấu trúc
+
+- [ ] 3 workflow mẫu (implement → review → fix; song song trên worktree; kiểm tra chéo), export/import
+- [ ] Handoff mang bằng chứng (diff, test, hash)
+- [ ] Bảng verified / agent-reported / estimated trên mọi màn hình trạng thái
+- [ ] Lịch chạy có giới hạn, qua policy
+- [ ] Gộp worktree an toàn, xem trước xung đột
+- [ ] PHASE9_REPORT.md
+
+## Phase 10 — Nhẹ, nhanh, hoàn thiện
+
+- [ ] Ngân sách hiệu năng trong CI (khởi động, RAM, kích thước installer, độ trễ event)
+- [ ] Diagnostics một nút, đã redact
+- [ ] ADR đánh giá Remote/WebUI và làm việc nhóm
+- [ ] PHASE10_REPORT.md
 
 ## Việc xuyên suốt
 

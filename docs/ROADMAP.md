@@ -4,13 +4,14 @@
 
 Nguyên tắc ưu tiên: **Agent Runtime → Message Router → Durable Task State → Permission Engine** trước, UI và số lượng LLM sau.
 
-## Tiến trình (cập nhật 2026-11-01)
+## Tiến trình (cập nhật 2026-11-02)
 
-| Phase | Trạng thái                                                                                                    |
-| ----- | ------------------------------------------------------------------------------------------------------------- |
-| 0     | **PASS (có hạn chế)** — CI xanh (runner), đã xác minh trên Windows vật lý bằng `tauri dev`; xem PHASE0_REPORT |
-| 1     | Backlog đã đề xuất (Sprint A–E trong TODO.md), chưa bắt đầu                                                   |
-| 2–6   | Chưa bắt đầu                                                                                                  |
+| Phase | Trạng thái                                                                                                                                                                        |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | **PASS (có hạn chế)** — CI xanh (runner), đã xác minh trên Windows vật lý bằng `tauri dev`; xem PHASE0_REPORT                                                                     |
+| 1     | **Đang làm** — Sprint A, B, C1, C2 (Claude), D1–D4 xong và đã chạy thật trong Tauri (sidecar trong Job Object). Còn: C3 Codex, xác minh Claude thật, Sprint E, `PHASE1_REPORT.md` |
+| 2–6   | Chưa bắt đầu                                                                                                                                                                      |
+| 7–10  | Kế hoạch mở rộng "ngang AionUi, hơn ở an toàn / tin cậy / multi-agent / nhẹ" — xem cuối tài liệu; chỉ bắt đầu sau Phase 2                                                         |
 
 ## Tổng quan
 
@@ -24,7 +25,7 @@ Nguyên tắc ưu tiên: **Agent Runtime → Message Router → Durable Task Sta
 | 5     | Desktop Beta           | 1–2 tuần  | UI hoàn chỉnh, settings, installer Windows, beta test                                        |
 | 6     | Production 1.0         | 2–4 tuần  | Release engineering, update có chữ ký, MCP gateway tối thiểu, tài liệu vận hành (A2A → v1.1) |
 
-Tổng ≈ 9–18 tuần.
+Tổng Phase 0–6 ≈ 9–18 tuần. Phase 7–10 (mở rộng sản phẩm) ≈ 8–14 tuần thêm.
 
 ## Phase 0 — Foundation (3–5 ngày)
 
@@ -143,14 +144,95 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 
 **Acceptance gate:** toàn bộ bảng Production acceptance trong thiết kế (persistence, delivery, CLI compat, cancellation, recovery, source safety, reliability, security, packaging, UI).
 
+## Hướng mở rộng: ngang AionUi, hơn ở bốn điểm (Phase 7–10)
+
+Tham chiếu: AionUi/AionCore (Apache-2.0, chỉ đọc ý tưởng, không sao chép code; xem `docs/REFERENCES.md`). Quyết định đã chốt với chủ dự án (2026-11-02):
+
+- **Đối tượng:** cá nhân/dev, Windows trước. Remote/WebUI và làm việc nhóm **ngoài phạm vi** cho tới khi có nhu cầu mới.
+- **Giao thức agent:** native CLI trước; **ACP là adapter bổ sung ở Phase 8**, kèm compatibility test, không thay lõi.
+- **Khác biệt cần thắng:** (1) an toàn và kiểm soát, (2) độ tin cậy, (3) multi-agent có cấu trúc, (4) nhẹ và nhanh.
+
+AionUi thiên về hội thoại tự do, nhiều agent và nhiều kênh (YOLO mode, chat nhóm, WebUI, kênh nhắn tin). Agent Studio thiên về **tác vụ có thể kiểm chứng**: mỗi việc có trạng thái bền, quyền rõ ràng và bằng chứng kết quả.
+
+| Điểm hơn           | Cam kết đo được                                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| An toàn, kiểm soát | Không có chế độ "tự duyệt tất cả" mặc định; mọi quyền ghi/chạy lệnh đi qua policy; ghi nhật ký quyết định; báo rõ phần không sandbox |
+| Tin cậy            | Kill app giữa chừng không mất state; task không chắc kết quả → `needs_reconciliation`; có bảng "đã xác minh / agent báo / ước tính"  |
+| Multi-agent        | Workflow có cấu trúc (implement → review, song song trên worktree), handoff mang bằng chứng, không chat tự do                        |
+| Nhẹ, nhanh         | Tauri + sidecar; có ngân sách đo được cho khởi động, RAM nhàn rỗi, kích thước installer, độ trễ event                                |
+
+### Phase 7 — Ngang AionUi về trải nghiệm cốt lõi (2–3 tuần, sau Phase 2)
+
+Lấp khoảng trống UX so với AionUi, nhưng theo cách task-centric.
+
+- Lịch sử: `tasks.list`, lọc theo project/agent/trạng thái, mở lại log và kết quả; tìm kiếm trong log.
+- Chọn thư mục bằng hộp thoại hệ điều hành (qua backend, không để frontend tự chạm filesystem).
+- Trang **Settings → Agents**: command, args, env cho từng agent; kiểm tra bằng probe; bí mật vào Credential Manager, không ghi DB.
+- **Approval UI** đầy đủ: thẻ Cho phép một lần / Luôn cho phép trong phạm vi / Từ chối; hiển thị lệnh, đường dẫn, diff dự kiến; mọi quyết định ghi vào nhật ký.
+- Giao diện hoàn thiện: Tailwind/shadcn, dark/light, phím tắt, trạng thái rỗng và lỗi nhất quán.
+- Mẫu prompt và "assistant" cục bộ: preset (agent + quyền + hướng dẫn), lưu dạng file có thể export.
+
+**Acceptance gate**
+
+- [ ] Người dùng mới đi từ cài đặt → thêm project → chạy task thật mà không đụng terminal (đo bằng kịch bản E2E).
+- [ ] Mọi yêu cầu phê duyệt hiển thị đủ lệnh/đường dẫn; từ chối không làm treo task.
+- [ ] Không có mật khẩu/token nào xuất hiện trong DB, log hoặc diagnostics (test redaction).
+
+### Phase 8 — Mở rộng agent: ACP, MCP, Skills (2–3 tuần)
+
+- **ACP adapter** (Agent Client Protocol): chỉ sau khi có probe + contract test với ít nhất hai agent thật; ghi capability thực tế vào ASSUMPTIONS, không gọi "tương thích" khi chưa qua test.
+- Mọi permission request từ ACP đi qua cùng Policy Engine và Approval UI như CLI native.
+- **MCP**: quản lý danh sách MCP server theo project, bật/tắt từng tool, hiển thị quyền; gateway tối thiểu (xem Phase 6) là điều kiện tiên quyết.
+- **Skills/prompt packs**: nạp từ thư mục project, hiển thị nguồn và hash; mặc định chỉ đọc; không tải mã từ mạng khi chưa có xác nhận.
+- Process registry khi khởi động: ghi PID + thời điểm tạo, chỉ dọn tiến trình mồ côi khi khớp danh tính, tránh kill nhầm.
+- Hạn mức thời gian khởi tạo cho từng CLI/ACP (lạnh dài hơn nóng) và báo lỗi có nguyên nhân.
+
+**Acceptance gate**
+
+- [ ] Thêm agent ACP thứ hai không sửa Orchestrator core.
+- [ ] Permission từ ACP bị chặn đúng theo policy trong test (path escape, lệnh bị cấm).
+- [ ] Skill/MCP không rõ nguồn không thể kích hoạt âm thầm.
+
+### Phase 9 — Multi-agent có cấu trúc vượt "team chat" (2–3 tuần)
+
+- Mẫu workflow đóng gói được: implement → review → fix, song song N worker trên worktree, kiểm tra chéo; xuất/nhập dạng file.
+- Handoff mang bằng chứng: diff, kết quả test, hash artifact; reviewer thấy đúng những gì worker đã làm, không dựa vào lời kể.
+- Bảng **verified / agent-reported / estimated** trên mọi màn hình trạng thái.
+- Lịch chạy (scheduled tasks) với giới hạn: không chạy khi app đóng trừ khi người dùng bật dịch vụ nền; mỗi lần chạy đều qua policy; side effect không rõ → `needs_reconciliation`.
+- Gộp kết quả worktree an toàn: xem trước xung đột, không tự merge vào nhánh chính.
+
+**Acceptance gate**
+
+- [ ] 3 workflow mẫu chạy thật trên dự án mẫu, kết quả có thể tái lập.
+- [ ] Kill app giữa workflow → mở lại → trạng thái đúng, không lặp side effect.
+- [ ] Lịch chạy không bao giờ vượt policy đã cấp, kể cả khi người dùng vắng mặt.
+
+### Phase 10 — Nhẹ, nhanh, hoàn thiện sản phẩm (1–2 tuần, song song Phase 5–6)
+
+- Ngân sách hiệu năng chốt từ baseline Phase 1 và chạy trong CI: thời gian khởi động, RAM nhàn rỗi, RAM khi 2 task, kích thước installer, độ trễ event.
+- So sánh công khai với số đo của chính mình theo từng bản phát hành (không đặt số của đối thủ vào tài liệu nếu chưa tự đo).
+- Chế độ chẩn đoán: xuất gói diagnostics đã redact, một nút.
+- Đánh giá lại Remote/WebUI và làm việc nhóm: chỉ mở phase mới nếu có yêu cầu và có mô hình xác thực được duyệt (ADR riêng).
+
+**Acceptance gate**
+
+- [ ] Vượt ngân sách hiệu năng → CI đỏ.
+- [ ] Diagnostics không chứa secret hoặc đường dẫn cá nhân (test).
+
+### Ngoài phạm vi (cố ý)
+
+Chế độ tự duyệt tất cả (YOLO), kênh nhắn tin (WeChat/DingTalk/Lark), desktop pet, WebUI công khai, hub extension tải mã từ mạng. Mở lại khi có yêu cầu và ADR đánh giá rủi ro.
+
 ## Rủi ro chính
 
-| Rủi ro                                          | Giảm thiểu                                                          |
-| ----------------------------------------------- | ------------------------------------------------------------------- |
-| CLI đổi flag/format giữa các phiên bản          | Compatibility probe + fixture contract tests + pin phiên bản hỗ trợ |
-| Agent ghi file ngoài phạm vi                    | Policy engine + Job Object; không dựa vào worktree làm sandbox      |
-| Retry gây side effect trùng                     | `needs_reconciliation`, idempotent handler                          |
-| Orphan process trên Windows                     | Job Objects, test cancel                                            |
-| Hết RAM/VRAM (16 GB / 8 GB)                     | Resource-aware scheduler, concurrency mặc định 2                    |
-| Phụ thuộc/nội dung repo công khai không an toàn | Chính sách trong `CLAUDE.md`, ghi `docs/REFERENCES.md`              |
-| Scope creep (thêm nhiều LLM, UI sớm)            | Chỉ đóng phase khi đạt gate                                         |
+| Rủi ro                                          | Giảm thiểu                                                                         |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------- |
+| CLI đổi flag/format giữa các phiên bản          | Compatibility probe + fixture contract tests + pin phiên bản hỗ trợ                |
+| Agent ghi file ngoài phạm vi                    | Policy engine + Job Object; không dựa vào worktree làm sandbox                     |
+| Retry gây side effect trùng                     | `needs_reconciliation`, idempotent handler                                         |
+| Orphan process trên Windows                     | Job Objects, test cancel                                                           |
+| Hết RAM/VRAM (16 GB / 8 GB)                     | Resource-aware scheduler, concurrency mặc định 2                                   |
+| Phụ thuộc/nội dung repo công khai không an toàn | Chính sách trong `CLAUDE.md`, ghi `docs/REFERENCES.md`                             |
+| Scope creep (thêm nhiều LLM, UI sớm)            | Chỉ đóng phase khi đạt gate                                                        |
+| Đuổi tính năng AionUi, mất lợi thế an toàn      | Phase 7–10 chỉ nhận tính năng qua Policy Engine + Approval; có mục "Ngoài phạm vi" |
+| Phụ thuộc adapter ACP của bên thứ ba            | ACP là adapter bổ sung, có probe + contract test; native CLI vẫn là lõi            |

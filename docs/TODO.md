@@ -12,7 +12,7 @@
 
 ## Đối chiếu với ROADMAP (2026-11-02, commit `982232a`)
 
-Bằng chứng cục bộ: `pnpm test` 17 file / 165 test pass; lint, format, typecheck, build xanh (lần chạy gần nhất khi làm UI). **CI thật (GitHub Actions) KHÔNG xanh** cho các commit Phase 1 đã push: run `41520802510` và `41521937556` fail; run của `982232a` (`41524725428`) chưa xong tại thời điểm ghi.
+Bằng chứng cục bộ: `pnpm test` 17 file / 165 test pass; lint, format, typecheck, build xanh (lần chạy gần nhất khi làm UI). CI từng đỏ ở run `41520802510`, `41521937556`, `41524725428`; **đã xanh 5/5 job ở run `41526633402`** sau khi sửa (ghim Node cho job Tauri, polling thoát sidecar, chấp nhận 1 phát hiện secret scan đã xem).
 
 ### Đã làm (có bằng chứng)
 
@@ -25,10 +25,10 @@ Bằng chứng cục bộ: `pnpm test` 17 file / 165 test pass; lint, format, ty
 
 **Chặn việc đóng Phase 1**
 
-- [ ] CI xanh trên commit hiện tại. Hai nguyên nhân đã thấy trong log run `41521937556`: (1) job _Tauri shell_: 3/7 test Rust trong `sidecar.rs` fail trên runner Windows (`pushed_events_reach_the_callback_and_errors_become_err`, `a_request_times_out_and_a_dead_sidecar_fails_waiters_and_later_calls`, `replies_match_by_id_even_when_they_finish_out_of_order`) dù pass 7/7 trên máy Legion — chưa điều tra, nghi test phụ thuộc thời gian/sidecar giả; (2) job _Security_: secret scan báo 23 phát hiện so với 7 đã chấp nhận, toàn bộ ở `docs/reports/phase0-windows/spike-report.json` (Base64 High Entropy) — cần xác nhận là dữ liệu spike vô hại rồi thêm vào danh sách chấp nhận trong `scripts/secret-scan.py`, hoặc bỏ file khỏi repo. Không được coi là "xanh" khi chưa chạy lại.
+- [x] CI xanh (run `41526633402`). Hai nguyên nhân đã gặp đã thấy trong log run `41521937556`: (1) job _Tauri shell_: 3/7 test Rust trong `sidecar.rs` fail trên runner Windows (`pushed_events_reach_the_callback_and_errors_become_err`, `a_request_times_out_and_a_dead_sidecar_fails_waiters_and_later_calls`, `replies_match_by_id_even_when_they_finish_out_of_order`) dù pass 7/7 trên máy Legion — chưa điều tra, nghi test phụ thuộc thời gian/sidecar giả; (2) job _Security_: secret scan báo 23 phát hiện so với 7 đã chấp nhận, toàn bộ ở `docs/reports/phase0-windows/spike-report.json` (Base64 High Entropy) — cần xác nhận là dữ liệu spike vô hại rồi thêm vào danh sách chấp nhận trong `scripts/secret-scan.py`, hoặc bỏ file khỏi repo. Không được coi là "xanh" khi chưa chạy lại.
 - [ ] Hủy một CLI thật đang chạy tool; bấm Cancel trong app Tauri thật.
 - [ ] Chưa kiểm trong app Tauri thật: các thay đổi UI sau `818431e`, nút Browse… (plugin dialog, quyền `dialog:allow-open`), bản release trên máy thứ hai.
-- [ ] Cập nhật `docs/PHASE1_REPORT.md` bằng số CI thật sau khi sửa hai lỗi trên.
+- [x] PHASE1_REPORT đã cập nhật số CI.
 
 **Nợ kỹ thuật Phase 1 (nêu trong báo cáo, chưa làm)**
 

@@ -30,12 +30,12 @@ Nhánh `claude/loving-lovelace-32lh71`. Trạng thái đo: commit `818431e` (và
 
 **Cập nhật 2026-11-02 (commit `982232a`):** `pnpm test` hiện 17 file, 165 test pass (gồm test cho UI/biệt danh). Các thay đổi giao diện sau `818431e` (theme, sidebar, Settings, bố cục 3 cột, composer, thẻ lỗi) chỉ được kiểm trong trình duyệt với sidecar giả và bằng bản release chạy tay; chưa có test tự động trong app Tauri thật.
 
-**CI (GitHub Actions): ĐỎ.** Đã push và chạy. Run `41520802510` (`edd080e`) và `41521937556` (`0459386`) đều fail; run `41524725428` (`982232a`) chưa xong khi ghi. Các job TypeScript (ubuntu + windows) và Windows desktop spike **xanh**. Hai job fail:
+**CI (GitHub Actions): XANH từ run `41526633402` (commit sửa CI, 5/5 job success).** Trước đó đỏ: đã push và chạy. Run `41520802510` (`edd080e`) và `41521937556` (`0459386`) đều fail; run `41524725428` (`982232a`) chưa xong khi ghi. Các job TypeScript (ubuntu + windows) và Windows desktop spike **xanh**. Hai job fail:
 
 1. _Tauri shell (Rust check + test, Windows)_: `cargo test --locked` — 3/7 test trong `src/sidecar.rs` fail trên runner (kể cả `a_request_times_out…` ở `assert!(!s.is_alive())`), dù 7/7 pass trên máy Legion. Chưa điều tra nguyên nhân; nghi test phụ thuộc thời gian hoặc process giả.
 2. _Security_: secret scan báo 23 phát hiện, chỉ 7 được chấp nhận; toàn bộ phát hiện mới nằm ở `docs/reports/phase0-windows/spike-report.json` (Base64 High Entropy String). Chưa xác nhận bản chất dữ liệu; chưa thêm vào danh sách chấp nhận.
 
-Vì vậy tiêu chí "CI pass" của quy trình làm việc **chưa đạt** cho Phase 1.
+**Đã sửa:** job Tauri thiếu Node được ghim (thêm `actions/setup-node`) và test chờ sidecar thoát bằng polling thay vì `sleep` cố định; secret scan chấp nhận đúng dòng 28 của `spike-report.json` (task id ULID sinh tự động, đã xem). Nguyên nhân gốc của 3 test fail là suy luận (Node trên runner không phải bản ghim), được xác nhận gián tiếp vì sau sửa test pass; không tái hiện được cục bộ.
 
 ## Đã làm trong Phase 1
 

@@ -5,7 +5,7 @@
 ## Trạng thái hiện tại (cập nhật 2026-11-01)
 
 - **Phase 0: PASS (có hạn chế)** — xem `docs/PHASE0_REPORT.md`, `docs/reports/phase0-windows/README.md`. CI xanh trên runner Windows/Ubuntu (run 9, commit `d9cf954`); đã xác minh trên máy Windows vật lý (Legion) bằng bản `tauri dev`.
-- **Phase 1: backlog đã đề xuất, chưa bắt đầu.** Chờ người dùng xác nhận Sprint A và cho biết CLI nào đã cài.
+- **Phase 1: đang làm.** Xong Sprint A, C1, C4; B1–B4 xong một phần (đã có help thật của Claude 2.1.314 và Codex 0.165.0 từ máy Legion). Codex chỉ có npm shim → `process-manager` map `codex.cmd` sang `node <script>` (`unwrapNpmShim`). Chưa có: adapter C2/C3, Sprint D, fixture `stream-json`/JSONL.
 - Chưa có PR; nhánh làm việc `claude/loving-lovelace-32lh71`.
 
 ## Phase 0 — Foundation (HOÀN THÀNH, có hạn chế)
@@ -64,8 +64,8 @@
 
 ### Sprint B — Phát hiện CLI và probe
 
-- [~] B1. Detection + probe Claude Code (version, flags thực tế) — `packages/cli-probe`; đã chạy thật với `claude` 2.1.316 trong container Linux (không phải Legion); chưa probe trên Legion
-- [~] B2. Detection + probe Codex (version, `app-server`, `exec --json`) — code xong, test chỉ bằng help **giả lập**; `codex` chưa cài trong container nên chưa có output thật
+- [~] B1. Detection + probe Claude Code (version, flags thực tế) — `packages/cli-probe`; đã chạy thật với `claude` 2.1.316 (container Linux) và 2.1.314 trên máy Legion (2026-11-01, `claude.exe`, fixture `claude/2.1.314/`; `--help` giống hệt); chưa chạy `packages/cli-probe` trên Legion
+- [~] B2. Detection + probe Codex (version, `app-server`, `exec --json`) — code xong; đã có output thật trên máy Legion (`codex-cli 0.165.0`, 2026-11-01, fixture `codex/0.165.0/`: `app-server`, `exec --json` có trong help). Codex cài qua npm shim (`codex` sh + `codex.cmd`, không có `.exe`) → đã chọn map sang `node <npm>/@openai/codex/bin/codex.js` (`unwrapNpmShim`, shell:false; test bằng shim giả). Probe đã chạy với fixture thật (test). Chưa kiểm chứng event JSONL
 - [~] B3. (chỉ có fixture `claude --help`/`--version`; chưa có output stream-json hay Codex; đã có bảng `agents` lưu capabilities) Fixture output thật → `tests/contracts/fixtures`; cập nhật ASSUMPTIONS; lưu `agents.capabilities`
 - [~] B4. Lỗi CLI báo rõ, không crash — xong: chưa cài, shim, exit ≠ 0, timeout, spawn lỗi, version không đọc được. CHƯA làm: "sai version" (chưa có version tối thiểu được kiểm chứng) và JSON hỏng (thuộc adapter, Sprint C)
 

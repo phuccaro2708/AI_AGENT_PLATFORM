@@ -32,3 +32,21 @@ Một prompt thật (`Reply with exactly the word: ok`, `--tools ""`, `--no-sess
 - `--resume <sessionId>` dùng cho `task.sessionId`; chưa chạy thật.
 - Chưa thêm cờ cô lập cấu hình người dùng; truyền qua `extraArgs` khi đã kiểm chứng.
 - `capabilities()` chỉ khai `streaming`, `structured_output`.
+
+## Evidence: real `codex exec --json` runs (2026-11-02, máy Legion, codex-cli 0.165.0)
+
+Ba prompt rất nhỏ, `-s read-only`, `--ephemeral` (2 lần đầu), thư mục tạm ngoài repo. Fixture: `tests/contracts/fixtures/codex/0.165.0/exec-json-text.jsonl`, `exec-json-command.jsonl`.
+
+- QUAN SÁT: `thread.started{thread_id}`, `turn.started`, `item.started`/`item.completed` với `item.type` = `agent_message{text}` và `command_execution{command, aggregated_output, exit_code, status}`, `turn.completed{usage{input_tokens, cached_input_tokens, cache_write_input_tokens, output_tokens, reasoning_output_tokens}}`. Prompt qua stdin với `-` hoạt động. Exit code 0.
+- QUAN SÁT: `codex` là npm shim, adapter chạy được qua `unwrapNpmShim` (`node codex.js`, `shell:false`) từ `CodexAdapter` thật.
+- QUAN SÁT: ngoài thư mục git, Codex thoát code 1 với "Not inside a trusted directory and --skip-git-repo-check was not specified." Adapter không tự thêm cờ này; project phải là repo git, hoặc người dùng đặt `extraArgs`.
+- QUAN SÁT: stderr có lỗi `failed to refresh available models: request timed out` nhưng task vẫn xong; không coi stderr là lỗi.
+- Ghi chú an toàn: `command_execution.command` hiển thị lệnh thật gồm đường dẫn shell của máy; không đưa vào log công khai.
+
+## Assumptions of `adapter-codex` (C3) — chưa kiểm chứng
+
+- `turn.failed{error{message}}` và `error{message}` (top-level) là dạng lỗi; chưa quan sát, test dùng CLI giả.
+- Các `item.type` khác (`file_change`, `mcp_tool_call`, `web_search`, `todo_list`, ...) chưa quan sát; parser coi mọi loại lạ trừ `reasoning` và `error` là tool (cặp tool_call/tool_result) để task dở dang thành `needs_reconciliation`.
+- `-s read-only` được tôn trọng khi agent cố ghi file: chưa thử. Mặc định `read-only`; `danger-full-access` và cờ bypass không được cung cấp.
+- Resume (`codex exec resume <id>`), approval và `app-server` chưa dùng: `capabilities()` không khai `session_resume`/`approval`; `task.sessionId` bị bỏ qua.
+- Hủy giữa chừng khi codex đang chạy tool: chưa thử với CLI thật (test dùng CLI giả).

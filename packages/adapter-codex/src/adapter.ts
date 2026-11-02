@@ -1,0 +1,138 @@
+import type { AgentCapability, AgentEvent } from "@agent-studio/contracts";
+import type { AgentAdapter, AgentTask } from "@agent-studio/agent-core";
+import {
+  createLineSplitter,
+  resolveExecutable,
+  startProcess,
+  type RunningProcess,
+} from "@agent-studio/process-manager";
+import { createCodexParser } from "./parse.js";
+
+/** `danger-full-access` is deliberately not offered; Codex also has a bypass flag we never pass. */
+export type CodexSandbox = "read-only" | "workspace-write";
+
+export interface CodexAdapterOptions {
+  id?: string;
+  /** Executable name or path. Default `codex` (an npm shim is unwrapped to `node codex.js`). */
+  command?: string;
+  /** Arguments placed before `exec` (tests: the fake CLI script). */
+  baseArgs?: readonly string[];
+  /** Sandbox for model-generated shell commands. Default `read-only`. */
+  sandbox?: CodexSandbox;
+  /** Extra flags after the built-in ones. */
+  extraArgs?: readonly string[];
+  env?: Record<string, string | undefined>;
+}
+
+/**
+ * Runs `codex exec --json -s <sandbox> -` and maps its JSONL to AgentEvent. The prompt goes to
+ * stdin (`-`), never argv or a shell string. Resume is NOT claimed: `codex exec resume` takes a
+ * different argv shape that has not been verified, so `task.sessionId` is ignored for now.
+ */
+export class CodexAdapter implements AgentAdapter {
+  readonly id: string;
+  private readonly running = new Map<string, RunningProcess>();
+
+  constructor(private readonly opts: CodexAdapterOptions = {}) {
+    this.id = opts.id ?? "codex";
+  }
+
+  async detect(): Promise<boolean> {
+    try {
+      resolveExecutable(this.opts.command ?? "codex", this.opts.env ? { env: this.opts.env } : {});
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Only what the help and the observed runs support; approval/resume are not claimed. */
+  async capabilities(): Promise<AgentCapability[]> {
+    return ["streaming", "structured_output", "tool_execution"];
+  }
+
+  async cancel(taskId: string): Promise<void> {
+    await this.running.get(taskId)?.cancel();
+  }
+
+  async *execute(task: AgentTask): AsyncIterable<AgentEvent> {
+    if (task.signal.aborted) {
+      yield { type: "error", message: "cancelled" };
+      return;
+    }
+
+    const queue: AgentEvent[] = [];
+    let wake: (() => void) | undefined;
+    let ended = false;
+    let final: AgentEvent | undefined;
+    const push = (e: AgentEvent) => {
+      queue.push(e);
+      wake?.();
+    };
+
+    const parser = createCodexParser();
+    const splitter = createLineSplitter((line) => {
+      if (final) return; // nothing may follow the terminal event
+      const parsed = parser.parse(line);
+      for (const e of parsed.events) push(e);
+      if (parsed.final) final = parsed.final;
+    });
+
+    const args = [
+      ...(this.opts.baseArgs ?? []),
+      "exec",
+      "--json",
+      "-s",
+      this.opts.sandbox ?? "read-only",
+      ...(this.opts.extraArgs ?? []),
+      "-",
+    ];
+    const proc = startProcess({
+      command: this.opts.command ?? "codex",
+      args,
+      cwd: task.cwd,
+      ...(this.opts.env ? { env: this.opts.env } : {}),
+      stdin: task.prompt,
+      signal: task.signal,
+      onStdout: (c) => splitter.write(c),
+    });
+    this.running.set(task.id, proc);
+    void proc.done.then(() => {
+      splitter.end();
+      ended = true;
+      wake?.();
+    });
+
+    try {
+      for (;;) {
+        const next = queue.shift();
+        if (next) {
+          yield next;
+          continue;
+        }
+        if (ended) break;
+        await new Promise<void>((r) => (wake = r));
+        wake = undefined;
+      }
+      const result = await proc.done;
+      if (task.signal.aborted && !final) {
+        yield { type: "error", message: "cancelled" };
+      } else if (final) {
+        yield final;
+      } else if (result.outcome === "spawn_error") {
+        yield { type: "error", message: `could not start codex: ${result.error ?? "unknown"}` };
+      } else if (result.outcome === "cancelled") {
+        yield { type: "error", message: "cancelled" };
+      } else {
+        const detail = parser.lastError() ?? result.stderr.trim().slice(-300);
+        yield {
+          type: "error",
+          message: `codex exited (code ${String(result.exitCode)}) without a result${detail ? `: ${detail}` : ""}`,
+        };
+      }
+    } finally {
+      this.running.delete(task.id);
+      await proc.cancel(); // no-op once exited; stops the child if the consumer abandons the stream
+    }
+  }
+}

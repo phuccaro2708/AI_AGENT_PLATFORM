@@ -29,6 +29,7 @@ await build({
     "@agent-studio/process-manager": join(root, "packages/process-manager/src/index.ts"),
     "@agent-studio/cli-probe": join(root, "packages/cli-probe/src/index.ts"),
     "@agent-studio/adapter-claude": join(root, "packages/adapter-claude/src/index.ts"),
+    "@agent-studio/adapter-codex": join(root, "packages/adapter-codex/src/index.ts"),
   },
   banner: {
     js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);",

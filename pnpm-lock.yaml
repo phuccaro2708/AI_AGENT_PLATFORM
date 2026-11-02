@@ -76,6 +76,18 @@ importers:
         specifier: workspace:*
         version: link:../process-manager
 
+  packages/adapter-codex:
+    dependencies:
+      '@agent-studio/agent-core':
+        specifier: workspace:*
+        version: link:../agent-core
+      '@agent-studio/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@agent-studio/process-manager':
+        specifier: workspace:*
+        version: link:../process-manager
+
   packages/agent-core:
     dependencies:
       '@agent-studio/contracts':
@@ -132,6 +144,9 @@ importers:
       '@agent-studio/adapter-claude':
         specifier: workspace:*
         version: link:../../packages/adapter-claude
+      '@agent-studio/adapter-codex':
+        specifier: workspace:*
+        version: link:../../packages/adapter-codex
       '@agent-studio/agent-core':
         specifier: workspace:*
         version: link:../../packages/agent-core

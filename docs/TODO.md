@@ -75,7 +75,7 @@
 
 - [x] C1. Contract test suite dùng chung — `tests/contract/adapter-contract.ts` (suite) + validators `validateEventStream`/`validateCapabilities` trong `agent-core`. Mới chạy với StubAdapter; adapter claude/codex (C2/C3) phải gọi `describeAdapterContract`.
 - [~] C2. `adapter-claude` — xong: `packages/adapter-claude` (parser stream-json → AgentEvent, spawn `shell:false`, prompt qua stdin, cancel kill-tree, lỗi → event `error`), qua contract suite chung + test với fixture thật và CLI giả; đã đăng ký trong sidecar. CHƯA: tool_use/partial/resume với CLI thật, cờ cô lập cấu hình (xem ASSUMPTIONS), chạy contract với claude thật
-- [ ] C3. `adapter-codex` (app-server, fallback exec, approval, cancel)
+- [~] C3. `adapter-codex` — xong: `packages/adapter-codex` (`codex exec --json -s read-only -`, prompt qua stdin, shell:false qua `unwrapNpmShim`, parser JSONL → AgentEvent, cancel kill-tree, lỗi → event `error`), qua contract suite chung + fixture thật 0.165.0 (text, command_execution) + CLI giả; đã đăng ký trong sidecar; đã chạy thật 1 task qua adapter (completed + thread id). Codex từ chối thư mục không phải git (không tự thêm `--skip-git-repo-check`). CHƯA: `turn.failed`/item khác/hủy khi đang chạy tool với CLI thật, xác minh sandbox, resume, app-server + approval (xem ASSUMPTIONS)
 - [x] C4. Side effect không xác minh được → `needs_reconciliation` — `classifyOutcome` + `Orchestrator.resolveReconciliation`. Quy tắc: số `tool_call` > số `tool_result` (kể cả khi bị hủy) → `needs_reconciliation`; không tự chạy lại, chỉ `requeue` tường minh mới tăng `attempt`. Giới hạn: không phân biệt tool chỉ-đọc/ghi; phụ thuộc adapter báo `tool_call` trung thực; chưa kiểm với CLI thật.
 
 ### Sprint D — IPC và UI

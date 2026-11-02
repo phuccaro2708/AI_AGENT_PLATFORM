@@ -30,21 +30,18 @@ export function applyTheme(theme: Theme): void {
   document.documentElement.dataset.theme = theme;
 }
 
-export function useTheme(): { theme: Theme; toggle: () => void } {
+export function useTheme(): { theme: Theme; set: (t: Theme) => void } {
   const [theme, setTheme] = useState<Theme>(initialTheme);
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
-  const toggle = useCallback(() => {
-    setTheme((cur) => {
-      const next: Theme = cur === "dark" ? "light" : "dark";
-      try {
-        localStorage.setItem(KEY, next);
-      } catch {
-        /* keep the in-memory choice */
-      }
-      return next;
-    });
+  const set = useCallback((next: Theme) => {
+    setTheme(next);
+    try {
+      localStorage.setItem(KEY, next);
+    } catch {
+      /* keep the in-memory choice */
+    }
   }, []);
-  return { theme, toggle };
+  return { theme, set };
 }

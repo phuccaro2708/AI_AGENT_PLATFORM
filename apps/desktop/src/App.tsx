@@ -9,9 +9,15 @@ import { runSelftestIfRequested } from "./selftest";
 import { onSidecarEvent } from "./sidecar";
 import { NewProjectDialog } from "./NewProjectDialog";
 import { Sidebar, type Mode, type Session } from "./Sidebar";
+import { SettingsView } from "./SettingsView";
+import { useNickname } from "./profile";
+import { useTheme } from "./theme";
 
 export function App() {
   const [mode, setMode] = useState<Mode>("agent");
+  const [settings, setSettings] = useState(false);
+  const { nickname, setNickname } = useNickname();
+  const { theme, set: setTheme } = useTheme();
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -121,12 +127,20 @@ export function App() {
     })),
   ];
   const openSession = (s: Session) => {
+    setSettings(false);
     setMode(s.mode);
     setProjectId(s.projectId);
     if (s.mode === "agent") setSelectedTask(s.id);
     else setSelectedRun(s.id);
   };
+  const newSession = (pid?: string) => {
+    setSettings(false);
+    if (pid) setProjectId(pid);
+    setSelectedTask(null);
+    setSelectedRun(null);
+  };
   const switchMode = (m: Mode) => {
+    setSettings(false);
     setMode(m);
     if (m === "agent") setSelectedTask(null);
     else setSelectedRun(null);
@@ -145,7 +159,10 @@ export function App() {
         selected={mode === "agent" ? selectedTask : selectedRun}
         onSession={openSession}
         onNewProject={() => setNewProject(true)}
-        version={health ? `${health.source} · v${health.version}` : "starting…"}
+        onNewSession={newSession}
+        nickname={nickname}
+        onSettings={() => setSettings((v) => !v)}
+        settingsOpen={settings}
       />
       <main className="content">
         {error && (
@@ -153,7 +170,16 @@ export function App() {
             {error} <button onClick={() => setError(null)}>Dismiss</button>
           </p>
         )}
-        {mode === "agent" ? (
+        {settings ? (
+          <SettingsView
+            nickname={nickname}
+            onNickname={setNickname}
+            theme={theme}
+            onTheme={setTheme}
+            version={health ? `${health.source} · v${health.version}` : "starting…"}
+            onClose={() => setSettings(false)}
+          />
+        ) : mode === "agent" ? (
           <AgentView
             adapters={adapters}
             cli={cli}

@@ -56,19 +56,6 @@ body {
     color 0.15s;
 }
 
-.theme-toggle {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  display: grid;
-  place-items: center;
-  background: transparent;
-}
-.theme-toggle svg {
-  width: 16px;
-  height: 16px;
-}
-
 /* shell: sidebar left, content right (Claude Code style) */
 .logo {
   width: 22px;
@@ -678,4 +665,127 @@ p[role="status"] {
 }
 .log .error {
   color: var(--err);
+}
+
+/* sidebar: actions, rows, footer */
+.new-session {
+  color: var(--accent);
+}
+.search {
+  width: 100%;
+}
+.group-row,
+.session-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.group-row .group,
+.session-row .session {
+  flex: 1;
+  min-width: 0;
+}
+.icon-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.icon-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--fg);
+  border-color: transparent;
+}
+.group-row .icon-btn,
+.session-row .more {
+  visibility: hidden;
+}
+.group-row:hover .icon-btn,
+.group-row:focus-within .icon-btn,
+.session-row:hover .more,
+.session-row:focus-within .more,
+.session-row .more[aria-expanded="true"] {
+  visibility: visible;
+}
+.popmenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 5;
+  min-width: 140px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.popmenu button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+}
+.side-foot {
+  gap: 8px;
+}
+.avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 12px;
+  font-weight: 700;
+}
+.nick {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.gear svg {
+  width: 16px;
+  height: 16px;
+}
+.gear.active {
+  color: var(--accent);
+}
+.view-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.view-head h1 {
+  margin: 0;
+  font-size: 20px;
+}
+.settings {
+  max-width: 640px;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.seg-item {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 6px 16px;
+}
+.seg-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
 }

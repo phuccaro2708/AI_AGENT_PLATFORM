@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { TaskState } from "@agent-studio/contracts";
 import type { Project } from "./api";
-import { ThemeToggle } from "./components";
+import { initials } from "./profile";
 
 export type Mode = "agent" | "multi";
 
@@ -32,7 +32,10 @@ export function Sidebar({
   selected,
   onSession,
   onNewProject,
-  version,
+  onNewSession,
+  nickname,
+  onSettings,
+  settingsOpen,
 }: {
   mode: Mode;
   onMode: (m: Mode) => void;
@@ -44,9 +47,17 @@ export function Sidebar({
   selected: string | null;
   onSession: (s: Session) => void;
   onNewProject: () => void;
-  version: string;
+  /** Start an empty session, optionally in a given project. */
+  onNewSession: (projectId?: string) => void;
+  nickname: string;
+  onSettings: () => void;
+  settingsOpen: boolean;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [query, setQuery] = useState("");
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [menu, setMenu] = useState<string | null>(null);
+  const q = query.trim().toLowerCase();
   const nav = [
     ["agent", "Agent", "Work with one agent on your machine"],
     ["multi", "Multi-agent", "A bigger project with several agents"],
@@ -59,6 +70,17 @@ export function Sidebar({
         </span>
         <strong>Agent Studio</strong>
       </div>
+      <button className="nav-item new-session" onClick={() => onNewSession()}>
+        <span aria-hidden="true">＋</span> New session
+      </button>
+      <input
+        className="search"
+        type="search"
+        aria-label="Search sessions"
+        placeholder="Search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
       <nav className="nav" role="tablist" aria-label="Mode">
         {nav.map(([m, label, hint]) => (
           <button
@@ -77,12 +99,12 @@ export function Sidebar({
       <div className="side-title">
         <h2>Projects</h2>
         <button
-          className="ghost"
+          className="icon-btn"
           onClick={onNewProject}
           aria-label="New project"
           title="New project"
         >
-          + New
+          +
         </button>
       </div>
       <div className="tree">
@@ -93,42 +115,81 @@ export function Sidebar({
         )}
         {projects.map((p) => {
           const open = !collapsed[p.id];
-          const mine = sessions.filter((s) => s.projectId === p.id);
+          const nameHit = p.name.toLowerCase().includes(q);
+          const mine = sessions.filter(
+            (s) =>
+              s.projectId === p.id &&
+              !hidden.has(s.id) &&
+              (q === "" || nameHit || s.label.toLowerCase().includes(q)),
+          );
+          if (q !== "" && !nameHit && mine.length === 0) return null;
           return (
             <div key={p.id}>
-              <button
-                className={p.id === projectId ? "group active" : "group"}
-                aria-expanded={open}
-                title={p.rootPath}
-                onClick={() => {
-                  onProject(p.id);
-                  setCollapsed((c) => ({ ...c, [p.id]: open }));
-                }}
-              >
-                <span className={open ? "chev open" : "chev"} aria-hidden="true">
-                  ▸
-                </span>
-                <span className="group-name">{p.name}</span>
-              </button>
+              <div className="group-row">
+                <button
+                  className={p.id === projectId ? "group active" : "group"}
+                  aria-expanded={open}
+                  title={p.rootPath}
+                  onClick={() => {
+                    onProject(p.id);
+                    setCollapsed((c) => ({ ...c, [p.id]: open }));
+                  }}
+                >
+                  <span className={open ? "chev open" : "chev"} aria-hidden="true">
+                    ▸
+                  </span>
+                  <span className="group-name">{p.name}</span>
+                </button>
+                <button
+                  className="icon-btn"
+                  aria-label={`New session in ${p.name}`}
+                  title="New session in this project"
+                  onClick={() => onNewSession(p.id)}
+                >
+                  +
+                </button>
+              </div>
               {open &&
                 (mine.length === 0 ? (
                   <p className="muted small session-empty">No sessions yet</p>
                 ) : (
                   mine.map((s) => (
-                    <button
-                      key={s.id}
-                      className={
-                        s.id === selected && s.mode === mode ? "session active" : "session"
-                      }
-                      onClick={() => onSession(s)}
-                    >
-                      <span
-                        className={`sdot ${dotClass(s.taskIds.map((t) => states[t]))}`}
-                        aria-hidden="true"
-                      />
-                      <span className="session-label">{s.label}</span>
-                      {s.mode === "multi" && <span className="tag">team</span>}
-                    </button>
+                    <div key={s.id} className="session-row">
+                      <button
+                        className={
+                          s.id === selected && s.mode === mode ? "session active" : "session"
+                        }
+                        onClick={() => onSession(s)}
+                      >
+                        <span
+                          className={`sdot ${dotClass(s.taskIds.map((t) => states[t]))}`}
+                          aria-hidden="true"
+                        />
+                        <span className="session-label">{s.label}</span>
+                        {s.mode === "multi" && <span className="tag">team</span>}
+                      </button>
+                      <button
+                        className="icon-btn more"
+                        aria-label="Session options"
+                        aria-expanded={menu === s.id}
+                        onClick={() => setMenu(menu === s.id ? null : s.id)}
+                      >
+                        …
+                      </button>
+                      {menu === s.id && (
+                        <div className="popmenu" role="menu">
+                          <button
+                            role="menuitem"
+                            onClick={() => {
+                              setHidden((h) => new Set(h).add(s.id));
+                              setMenu(null);
+                            }}
+                          >
+                            Hide from list
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ))
                 ))}
             </div>
@@ -137,8 +198,22 @@ export function Sidebar({
       </div>
 
       <div className="side-foot">
-        <span className="muted small">{version}</span>
-        <ThemeToggle />
+        <span className="avatar" aria-hidden="true">
+          {initials(nickname)}
+        </span>
+        <span className="nick" title={nickname}>
+          {nickname}
+        </span>
+        <button
+          className={settingsOpen ? "icon-btn gear active" : "icon-btn gear"}
+          aria-label="Settings"
+          title="Settings"
+          onClick={onSettings}
+        >
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M9.4.9a1 1 0 0 0-.98-.8H7.6a1 1 0 0 0-.98.8l-.2 1a5.6 5.6 0 0 0-1.1.64l-.97-.33a1 1 0 0 0-1.2.46l-.41.7a1 1 0 0 0 .2 1.25l.77.67a5.7 5.7 0 0 0 0 1.28l-.77.67a1 1 0 0 0-.2 1.25l.4.7a1 1 0 0 0 1.2.46l.98-.33c.34.26.7.47 1.1.64l.2 1a1 1 0 0 0 .98.8h.82a1 1 0 0 0 .98-.8l.2-1c.4-.17.76-.38 1.1-.64l.97.33a1 1 0 0 0 1.2-.46l.41-.7a1 1 0 0 0-.2-1.25l-.77-.67a5.7 5.7 0 0 0 0-1.28l.77-.67a1 1 0 0 0 .2-1.25l-.4-.7a1 1 0 0 0-1.2-.46l-.98.33a5.6 5.6 0 0 0-1.1-.64l-.2-1ZM8 10.2a2.2 2.2 0 1 1 0-4.4 2.2 2.2 0 0 1 0 4.4Z" />
+          </svg>
+        </button>
       </div>
     </aside>
   );

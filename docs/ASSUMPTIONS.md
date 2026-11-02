@@ -54,3 +54,9 @@ Ba prompt rất nhỏ, `-s read-only`, `--ephemeral` (2 lần đầu), thư mụ
 - `-s read-only` được tôn trọng khi agent cố ghi file: chưa thử. Mặc định `read-only`; `danger-full-access` và cờ bypass không được cung cấp.
 - Resume (`codex exec resume <id>`), approval và `app-server` chưa dùng: `capabilities()` không khai `session_resume`/`approval`; `task.sessionId` bị bỏ qua.
 - Hủy giữa chừng khi codex đang chạy tool: chưa thử với CLI thật (test dùng CLI giả).
+
+## Assumptions of multi-agent context sharing (Phase 2/9) — chưa kiểm chứng
+
+- Mỗi CLI giữ phiên riêng (Claude `--resume <session_id>` đã kiểm chứng; Codex resume chưa dùng). Không có bộ nhớ dùng chung giữa Claude và Codex: "ngữ cảnh chung" chỉ là văn bản do Agent Studio đưa vào prompt của từng lần chạy.
+- Chi phí token tăng theo kích thước bảng ngữ cảnh chung và số agent; chưa đo. Cần giới hạn cỡ và đo trước khi chốt mặc định.
+- Việc agent có tôn trọng đúng phần ngữ cảnh/vai được giao (không tự đọc ngoài phạm vi) chưa kiểm chứng; quyền thực tế vẫn do chế độ chỉ đọc/ghi của CLI và worktree quyết định, và worktree không phải sandbox bảo mật.

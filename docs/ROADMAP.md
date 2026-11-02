@@ -82,6 +82,8 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 - `packages/git-worktrees`: tạo/dọn worktree theo task, branch naming, phát hiện conflict, bảng `worktrees`.
 - Workflow engine: Supervisor + Peer Review + Parallel Workers.
 - Handoff mẫu: Claude implement → Codex review (`review.request` / `review.result`).
+- **Vai (role) cho agent trong workflow:** mỗi vai khai hướng dẫn, quyền (chỉ đọc / ghi trong worktree) và agent được phép đảm nhiệm; gán agent vào vai là cấu hình của lượt chạy, không hard-code theo tên agent.
+- **Bảng ngữ cảnh chung (mức tối thiểu):** mỗi lượt chạy có một bảng gồm mục tiêu, kế hoạch, quyết định và artifact (path + hash); mỗi mục ghi nguồn (verified / agent-reported). Agent chỉ nhận phần bảng mà vai của nó được thấy, và không đọc log thô của agent khác.
 - Artifact registry (path + hash), diff viewer, message timeline.
 - Approval Center cơ bản (`approvals.resolve`).
 
@@ -91,6 +93,7 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 - [ ] Kill app giữa chừng → restart không mất message đã commit; duplicate được xử lý an toàn.
 - [ ] 2 agent song song trên 2 worktree không ghi đè nhau.
 - [ ] Task side-effect không rõ → `needs_reconciliation`, không auto-retry.
+- [ ] Gán vai cho agent trong một workflow thật; agent chỉ nhận đúng phần bảng ngữ cảnh mà vai được thấy (test).
 
 ## Phase 3 — Gemini & Local AI (1–2 tuần)
 
@@ -197,6 +200,9 @@ Lấp khoảng trống UX so với AionUi, nhưng theo cách task-centric.
 
 - Mẫu workflow đóng gói được: implement → review → fix, song song N worker trên worktree, kiểm tra chéo; xuất/nhập dạng file.
 - Handoff mang bằng chứng: diff, kết quả test, hash artifact; reviewer thấy đúng những gì worker đã làm, không dựa vào lời kể.
+- **Đội (team) trong UI Multi-agent:** chọn mẫu workflow, gán agent vào từng vai, xem kế hoạch và tiến độ từng bước; thay chế độ hiện tại ("mọi agent nhận cùng mục tiêu, chạy độc lập, không phối hợp").
+- **Chia sẻ ngữ cảnh có kiểm soát:** bảng ngữ cảnh chung có giới hạn kích thước (chi phí token), tóm tắt có nguồn, hiển thị cho người dùng đúng phần mỗi agent được nhận; mọi mục sửa/xóa đều ghi nhật ký. Không có chat tự do giữa các agent.
+- **Giới hạn phải nói rõ trong UI:** Claude và Codex mỗi bên giữ phiên riêng; "ngữ cảnh chung" là văn bản dự án đưa vào prompt, không phải bộ nhớ dùng chung (xem ASSUMPTIONS.md).
 - Bảng **verified / agent-reported / estimated** trên mọi màn hình trạng thái.
 - Lịch chạy (scheduled tasks) với giới hạn: không chạy khi app đóng trừ khi người dùng bật dịch vụ nền; mỗi lần chạy đều qua policy; side effect không rõ → `needs_reconciliation`.
 - Gộp kết quả worktree an toàn: xem trước xung đột, không tự merge vào nhánh chính.
@@ -206,6 +212,9 @@ Lấp khoảng trống UX so với AionUi, nhưng theo cách task-centric.
 - [ ] 3 workflow mẫu chạy thật trên dự án mẫu, kết quả có thể tái lập.
 - [ ] Kill app giữa workflow → mở lại → trạng thái đúng, không lặp side effect.
 - [ ] Lịch chạy không bao giờ vượt policy đã cấp, kể cả khi người dùng vắng mặt.
+- [ ] UI Multi-agent chạy một đội có vai và bảng ngữ cảnh chung trên dự án mẫu; người dùng thấy được agent nào nhận phần ngữ cảnh nào.
+
+**Câu hỏi mở (chờ người dùng quyết):** có đẩy phần "đội, vai, ngữ cảnh" của Phase 9 lên trước Phase 7–8 hay không. Hiện thứ tự là Phase 2 → 7 → 8 → 9; chưa đổi.
 
 ### Phase 10 — Nhẹ, nhanh, hoàn thiện sản phẩm (1–2 tuần, song song Phase 5–6)
 

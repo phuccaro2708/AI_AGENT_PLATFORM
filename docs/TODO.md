@@ -102,6 +102,8 @@
 - [ ] `git-worktrees`: create/remove/list, branch naming, dirty check, conflict detect, cleanup khi hủy
 - [ ] Workflow engine: Supervisor, Peer Review, Parallel Workers
 - [ ] Message types: task._, review._, approval.request, agent.message
+- [ ] Vai (role) trong workflow: hướng dẫn, quyền, agent cho phép; gán agent vào vai theo cấu hình lượt chạy
+- [ ] Bảng ngữ cảnh chung tối thiểu: mục tiêu/kế hoạch/quyết định/artifact (hash), nguồn từng mục, lọc theo vai (test: agent chỉ nhận phần được thấy)
 - [ ] Workflow mẫu Claude implement → Codex review (e2e thật)
 - [ ] Artifact registry (hash) + Diff Viewer
 - [ ] Approval Center (`approvals.resolve`), expiry
@@ -183,6 +185,9 @@
 
 - [ ] 3 workflow mẫu (implement → review → fix; song song trên worktree; kiểm tra chéo), export/import
 - [ ] Handoff mang bằng chứng (diff, test, hash)
+- [ ] UI Multi-agent theo đội: chọn mẫu, gán agent vào vai, xem kế hoạch/tiến độ (thay chế độ "cùng mục tiêu, độc lập" hiện tại)
+- [ ] Ngữ cảnh chung có kiểm soát: giới hạn cỡ, tóm tắt có nguồn, hiển thị phần mỗi agent nhận, nhật ký sửa/xóa
+- [ ] Quyết định thứ tự: có đẩy "đội/vai/ngữ cảnh" lên trước Phase 7–8 không (chờ người dùng)
 - [ ] Bảng verified / agent-reported / estimated trên mọi màn hình trạng thái
 - [ ] Lịch chạy có giới hạn, qua policy
 - [ ] Gộp worktree an toàn, xem trước xung đột

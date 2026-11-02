@@ -117,6 +117,9 @@ importers:
       '@agent-studio/agent-core':
         specifier: workspace:*
         version: link:../../packages/agent-core
+      '@agent-studio/cli-probe':
+        specifier: workspace:*
+        version: link:../../packages/cli-probe
       '@agent-studio/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

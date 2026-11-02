@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import {
   AgentMessage,
   IllegalTransitionError,
@@ -42,6 +42,20 @@ export class Repo {
       })
       .run();
     return id;
+  }
+
+  listProjects() {
+    return this.db.select().from(projects).orderBy(asc(projects.createdAt)).all();
+  }
+
+  /** The project root a workflow runs in, or undefined when the workflow does not exist. */
+  getWorkflowRoot(workflowId: string): { projectId: string; rootPath: string } | undefined {
+    return this.db
+      .select({ projectId: projects.id, rootPath: projects.rootPath })
+      .from(workflows)
+      .innerJoin(projects, eq(projects.id, workflows.projectId))
+      .where(eq(workflows.id, workflowId))
+      .get();
   }
 
   getTaskAttempt(taskId: string): number | undefined {
@@ -208,6 +222,27 @@ export class Repo {
       .orderBy(asc(messages.sequence))
       .all()
       .map((r) => AgentMessage.parse(JSON.parse(r.payloadJson)));
+  }
+
+  /** Messages with sequence > `afterSequence`, oldest first (cursor paging for the log view). */
+  listMessagesAfter(taskId: string, afterSequence: number, limit: number): AgentMessage[] {
+    return this.db
+      .select()
+      .from(messages)
+      .where(and(eq(messages.taskId, taskId), gt(messages.sequence, afterSequence)))
+      .orderBy(asc(messages.sequence))
+      .limit(limit)
+      .all()
+      .map((r) => AgentMessage.parse(JSON.parse(r.payloadJson)));
+  }
+
+  listAgentProbes() {
+    return this.db
+      .select({ provider: agents.provider })
+      .from(agents)
+      .all()
+      .map((r) => this.getAgentProbe(r.provider))
+      .filter((p): p is NonNullable<typeof p> => p !== undefined);
   }
 
   listEvents(aggregateId: string) {

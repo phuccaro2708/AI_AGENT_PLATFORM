@@ -30,11 +30,14 @@ export class Orchestrator {
     prompt: string;
     cwd: string;
     signal?: AbortSignal;
+    /** Called synchronously once the task row exists, before any adapter work. */
+    onCreated?: (taskId: string) => void;
   }): Promise<RunResult> {
     const adapter = this.registry.get(opts.agentId);
     if (!adapter) throw new Error(`Unknown agent: ${opts.agentId}`);
 
     const taskId = this.repo.createTask(opts.workflowId, opts.agentId);
+    opts.onCreated?.(taskId);
     const correlationId = newId("corr");
     const signal = opts.signal ?? new AbortController().signal;
     let sequence = 0;

@@ -78,7 +78,7 @@
 
 ### Sprint D — IPC và UI
 
-- [ ] D1. IPC: agents.detect/list/capabilities, projects.create, workflows.create/start, tasks.cancel, logs.query
+- [~] D1. IPC: agents.detect/list/capabilities, projects.create/list, workflows.create/start, tasks.cancel, logs.query — xong ở sidecar (`SidecarRequest`, test bằng StubAdapter + adapter chậm cho cancel); `cwd` lấy từ project root, UI không gửi. CHƯA: cầu nối lệnh Tauri (Rust) tới sidecar, adapter thật (C2/C3), policy cho `rootPath`
 - [ ] D2. Event stream tới UI (Tauri event channel) + backpressure
 - [ ] D3. UI: Projects, Agents, New Task, Output stream, Cancel
 - [~] D4. Crash detection khi khởi động → `needs_reconciliation` — xong phía backend: `Repo.recoverInterruptedTasks()` chạy trong constructor `SidecarService` (task `running`/`waiting_approval` → `needs_reconciliation`, không tự chạy lại, `attempt` giữ nguyên; `health` trả `recoveredTasks`). Test: storage + sidecar (khởi động lại trên cùng DB). CHƯA: UI hiển thị/giải quyết (cần D1/D3), kiểm tra với process thật bị kill giữa chừng

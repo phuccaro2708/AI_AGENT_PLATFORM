@@ -98,6 +98,52 @@ export const SidecarRequest = z.discriminatedUnion("method", [
     method: z.literal("queryTask"),
     params: z.object({ taskId: z.string().min(1) }),
   }),
+  // ---- Phase 1 (D1). `cwd` is never sent by the UI: a workflow runs in its project's root. ----
+  z.object({ id: z.number().int(), method: z.literal("agents.list") }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("agents.detect"),
+    params: z.object({ providers: z.array(z.enum(["claude", "codex"])).optional() }).default({}),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("agents.capabilities"),
+    params: z.object({ provider: z.enum(["claude", "codex"]) }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("projects.create"),
+    params: z.object({ name: z.string().trim().min(1).max(200), rootPath: z.string().min(1) }),
+  }),
+  z.object({ id: z.number().int(), method: z.literal("projects.list") }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("workflows.create"),
+    params: z.object({ projectId: z.string().min(1) }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("workflows.start"),
+    params: z.object({
+      workflowId: z.string().min(1),
+      agentId: z.string().min(1),
+      prompt: z.string().min(1).max(100_000),
+    }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("tasks.cancel"),
+    params: z.object({ taskId: z.string().min(1) }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("logs.query"),
+    params: z.object({
+      taskId: z.string().min(1),
+      afterSequence: z.number().int().min(-1).default(-1),
+      limit: z.number().int().min(1).max(1000).default(200),
+    }),
+  }),
   z.object({ id: z.number().int(), method: z.literal("shutdown") }),
 ]);
 export type SidecarRequest = z.infer<typeof SidecarRequest>;

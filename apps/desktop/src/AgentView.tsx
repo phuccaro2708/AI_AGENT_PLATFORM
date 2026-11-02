@@ -1,93 +1,57 @@
 import { useState, type FormEvent } from "react";
-import type { AdapterInfo, CliProbe } from "./api";
-import { TaskLogView } from "./components";
+import { TaskLogView, type TaskRef } from "./components";
 
-/** Mode 1: pick one agent installed on this machine and talk to it in the selected project. */
+/** Mode 1: talk to the agent chosen in the right column, inside the selected project. */
 export function AgentView({
-  adapters,
-  cli,
-  detecting,
-  onDetect,
   agentId,
-  onAgent,
+  agentAvailable,
   projectName,
   canRun,
-  selected,
+  task,
   onStart,
   onError,
 }: {
-  adapters: AdapterInfo[];
-  cli: CliProbe[];
-  detecting: boolean;
-  onDetect: () => void;
   agentId: string;
-  onAgent: (id: string) => void;
+  agentAvailable: boolean;
   projectName: string | null;
   canRun: boolean;
-  selected: string | null;
+  task: TaskRef | null;
   onStart: (prompt: string) => void;
   onError: (m: string) => void;
 }) {
   const [prompt, setPrompt] = useState("");
-  const agent = adapters.find((a) => a.id === agentId);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     onStart(prompt.trim());
     setPrompt("");
   };
-  const probe = (id: string) => cli.find((c) => c.provider === id);
   return (
-    <div className="view">
-      <div className="view-body">
-        <section>
-          <div className="side-title">
-            <h2>Agents on this machine</h2>
-            <button className="ghost" onClick={onDetect} disabled={detecting}>
-              {detecting ? "Detecting…" : "Detect CLIs"}
-            </button>
-          </div>
-          <div className="agent-grid" role="radiogroup" aria-label="Agent">
-            {adapters.map((a) => {
-              const p = probe(a.id);
-              return (
-                <button
-                  key={a.id}
-                  role="radio"
-                  aria-checked={a.id === agentId}
-                  className={a.id === agentId ? "agent-card active" : "agent-card"}
-                  onClick={() => onAgent(a.id)}
-                >
-                  <span className="agent-name">
-                    <span className={a.available ? "dot ok" : "dot"} aria-hidden="true" />
-                    {a.id}
-                  </span>
-                  <span className={a.available ? "ok small" : "muted small"}>
-                    {a.available ? "available" : "not found"}
-                    {p?.version ? ` · ${p.version}` : ""}
-                  </span>
-                  <span className="muted small">
-                    {a.capabilities.join(", ") || "no capabilities"}
-                  </span>
-                </button>
-              );
-            })}
-            <div className="agent-card disabled" aria-disabled="true">
-              <span className="agent-name">+ Connect remote agent</span>
-              <span className="muted small">Not supported yet (ACP/MCP, roadmap Phase 8).</span>
-            </div>
-          </div>
-        </section>
+    <div className="chat">
+      <div className="chat-head">
+        <h1>{task ? task.title : "New session"}</h1>
+        <span className="pill">{task?.agentId ?? (agentId || "no agent")}</span>
+      </div>
 
-        {selected ? (
-          <TaskLogView key={selected} taskId={selected} onError={onError} />
+      <div className="chat-body">
+        {task ? (
+          <>
+            <p className="bubble user">{task.prompt}</p>
+            <TaskLogView
+              key={task.id}
+              taskId={task.id}
+              title={task.agentId}
+              onError={onError}
+              kinds={["text", "info", "error"]}
+            />
+          </>
         ) : (
           <div className="empty">
             <p>
-              <strong>Pick an agent, then tell it what to do.</strong>
+              <strong>Tell {agentId || "an agent"} what to do.</strong>
             </p>
             <p className="muted">
               {canRun
-                ? `It will work inside ${projectName}.`
+                ? `It will work inside ${projectName}. Pick another agent in the right column.`
                 : "Add or choose a project in the sidebar first."}
             </p>
           </div>
@@ -95,7 +59,7 @@ export function AgentView({
       </div>
 
       <form onSubmit={submit} className="composer">
-        {agent && !agent.available && (
+        {agentId !== "" && !agentAvailable && (
           <p className="warn">This agent was not found on this machine; the task will fail.</p>
         )}
         <textarea
@@ -110,9 +74,7 @@ export function AgentView({
             }
           }}
           placeholder={
-            canRun
-              ? `Ask ${agentId || "an agent"} to do something… (Ctrl+Enter)`
-              : "Choose a project first"
+            canRun ? `Message ${agentId || "your agent"}… (Ctrl+Enter)` : "Choose a project first"
           }
         />
         <div className="composer-bar">

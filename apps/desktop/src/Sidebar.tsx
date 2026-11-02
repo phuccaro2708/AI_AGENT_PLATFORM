@@ -64,12 +64,6 @@ export function Sidebar({
   ] as const;
   return (
     <aside className="sidebar">
-      <div className="brand">
-        <span className="logo" aria-hidden="true">
-          A
-        </span>
-        <strong>Agent Studio</strong>
-      </div>
       <button className="nav-item new-session" onClick={() => onNewSession()}>
         <span aria-hidden="true">＋</span> New session
       </button>

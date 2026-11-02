@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { TaskState } from "@agent-studio/contracts";
+import { ActivityPanel } from "./ActivityPanel";
 import { AgentView } from "./AgentView";
+import { Header } from "./Header";
 import { api, type AdapterInfo, type CliProbe, type Project } from "./api";
-import { msg, type TaskRef } from "./components";
+import { msg, TaskLogView, type TaskRef } from "./components";
 import { getHealth, type Health } from "./health";
 import { MultiAgentView, type MultiRun } from "./MultiAgentView";
 import { runSelftestIfRequested } from "./selftest";
@@ -31,6 +33,8 @@ export function App() {
   const [runs, setRuns] = useState<MultiRun[]>([]);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [newProject, setNewProject] = useState(false);
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [terminal, setTerminal] = useState(false);
   const [states, setStates] = useState<Record<string, TaskState>>({});
 
   const fail = useCallback((m: string) => setError(m), []);
@@ -77,7 +81,7 @@ export function App() {
   const startAgentTask = (text: string) => {
     api.startTask(projectId, agentId, text).then(
       (id) => {
-        setTasks((t) => [{ id, title: text.slice(0, 60), agentId, projectId }, ...t]);
+        setTasks((t) => [{ id, title: text.slice(0, 60), prompt: text, agentId, projectId }, ...t]);
         setSelectedTask(id);
         setError(null);
       },
@@ -85,7 +89,8 @@ export function App() {
     );
   };
 
-  const startRun = (goal: string, agentIds: string[]) => {
+  const startRun = (goal: string) => {
+    const agentIds = chosen;
     Promise.all(agentIds.map((a) => api.startTask(projectId, a, goal))).then(
       (ids) => {
         const run: MultiRun = {
@@ -95,6 +100,7 @@ export function App() {
           tasks: ids.map((id, i) => ({
             id,
             title: goal.slice(0, 60),
+            prompt: goal,
             agentId: agentIds[i]!,
             projectId,
           })),
@@ -109,6 +115,16 @@ export function App() {
 
   const project = projects.find((p) => p.id === projectId);
   const canRun = project !== undefined;
+  const toggleChosen = (id: string) =>
+    setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+  const task = tasks.find((t) => t.id === selectedTask) ?? null;
+  const run = runs.find((r) => r.id === selectedRun) ?? null;
+  const openTasks = mode === "agent" ? (task ? [task] : []) : (run?.tasks ?? []);
+  const title = settings
+    ? "Settings"
+    : mode === "agent"
+      ? (task?.title ?? "New session")
+      : (run?.goal.slice(0, 60) ?? "New multi-agent run");
 
   const sessions: Session[] = [
     ...tasks.map((t) => ({
@@ -146,8 +162,15 @@ export function App() {
     else setSelectedRun(null);
   };
 
+  const agent = adapters.find((a) => a.id === agentId);
   return (
-    <div className="shell">
+    <div className={settings ? "shell no-activity" : "shell"}>
+      <Header
+        title={title}
+        availableAgents={adapters.filter((a) => a.available).length}
+        terminalOpen={terminal}
+        onTerminal={() => setTerminal((v) => !v)}
+      />
       <Sidebar
         mode={mode}
         onMode={switchMode}
@@ -164,47 +187,79 @@ export function App() {
         onSettings={() => setSettings((v) => !v)}
         settingsOpen={settings}
       />
-      <main className="content">
-        {error && (
-          <p role="alert" className="error banner">
-            {error} <button onClick={() => setError(null)}>Dismiss</button>
-          </p>
-        )}
-        {settings ? (
-          <SettingsView
-            nickname={nickname}
-            onNickname={setNickname}
-            theme={theme}
-            onTheme={setTheme}
-            version={health ? `${health.source} · v${health.version}` : "starting…"}
-            onClose={() => setSettings(false)}
-          />
-        ) : mode === "agent" ? (
-          <AgentView
-            adapters={adapters}
-            cli={cli}
-            detecting={detecting}
-            onDetect={detect}
-            agentId={agentId}
-            onAgent={setAgentId}
-            projectName={project?.name ?? null}
-            canRun={canRun}
-            selected={selectedTask}
-            onStart={startAgentTask}
-            onError={fail}
-          />
-        ) : (
-          <MultiAgentView
-            adapters={adapters}
-            projectName={project?.name ?? null}
-            canRun={canRun}
-            runs={runs}
-            selected={selectedRun}
-            onStart={startRun}
-            onError={fail}
-          />
+      <main className="main-col">
+        <div className="content">
+          {error && (
+            <p role="alert" className="error banner">
+              {error} <button onClick={() => setError(null)}>Dismiss</button>
+            </p>
+          )}
+          {settings ? (
+            <SettingsView
+              nickname={nickname}
+              onNickname={setNickname}
+              theme={theme}
+              onTheme={setTheme}
+              version={health ? `${health.source} · v${health.version}` : "starting…"}
+              onClose={() => setSettings(false)}
+            />
+          ) : mode === "agent" ? (
+            <AgentView
+              agentId={agentId}
+              agentAvailable={agent?.available ?? false}
+              projectName={project?.name ?? null}
+              canRun={canRun}
+              task={task}
+              onStart={startAgentTask}
+              onError={fail}
+            />
+          ) : (
+            <MultiAgentView
+              chosen={chosen}
+              projectName={project?.name ?? null}
+              canRun={canRun}
+              run={run}
+              onStart={startRun}
+              onError={fail}
+            />
+          )}
+        </div>
+        {terminal && !settings && (
+          <section className="terminal" aria-label="Tool output">
+            <h2>Tool output · read-only, not a shell</h2>
+            {openTasks.length === 0 ? (
+              <p className="muted small">Open a session to see its tool calls and results.</p>
+            ) : (
+              openTasks.map((t) => (
+                <TaskLogView
+                  key={t.id}
+                  taskId={t.id}
+                  title={t.agentId}
+                  onError={fail}
+                  kinds={["tool"]}
+                  cancellable={false}
+                  variant="term"
+                />
+              ))
+            )}
+          </section>
         )}
       </main>
+      {!settings && (
+        <ActivityPanel
+          mode={mode}
+          adapters={adapters}
+          cli={cli}
+          detecting={detecting}
+          onDetect={detect}
+          agentId={agentId}
+          onAgent={setAgentId}
+          chosen={chosen}
+          onToggle={toggleChosen}
+          tasks={openTasks}
+          states={states}
+        />
+      )}
       {newProject && (
         <NewProjectDialog
           onClose={() => setNewProject(false)}

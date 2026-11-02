@@ -25,13 +25,17 @@ Một prompt thật (`Reply with exactly the word: ok`, `--tools ""`, `--no-sess
 - **Chi phí**: ngữ cảnh khởi tạo ~157k token (plugin/skill/MCP/hook của người dùng) → ~$0.63 dù prompt 1 từ; `--max-budget-usd` chỉ cắt sau lượt đó, CLI thoát mã 1 với `subtype=error_max_budget_usd`. Adapter phải cô lập cấu hình người dùng (`--bare`, `--strict-mcp-config`, `--disable-slash-commands`, `--setting-sources`) — CHƯA kiểm chứng từng cờ.
 - CHƯA quan sát: `tool_use`/`tool_result`, `--include-partial-messages`, `--resume`, định dạng lỗi khi hủy, kết quả `--input-format stream-json`.
 
-## Assumptions of `adapter-claude` (C2) — chưa kiểm chứng với CLI thật
+## Evidence: real task through `ClaudeAdapter` (2026-11-02, 2.1.314, đăng nhập bằng plan)
 
-- Prompt được gửi qua **stdin** khi chạy `claude -p` không có prompt vị trí (tránh prompt bắt đầu bằng `-`). Chưa thử với CLI thật.
-- Khối `tool_use` (assistant) và `tool_result` (user) có dạng `{name, input}` / `{content}` — chưa quan sát; test dùng CLI giả.
-- `--resume <sessionId>` dùng cho `task.sessionId`; chưa chạy thật.
-- Chưa thêm cờ cô lập cấu hình người dùng; truyền qua `extraArgs` khi đã kiểm chứng.
-- `capabilities()` chỉ khai `streaming`, `structured_output`.
+Hai task thật qua adapter (`--safe-mode --tools Read --allowed-tools Read --max-budget-usd 1.00`, thư mục tạm ngoài repo) và một lần chạy `claude -p` trực tiếp để lấy fixture `print-stream-json-tool.jsonl` (đã làm sạch).
+
+- QUAN SÁT: prompt qua **stdin** hoạt động (`-p` không có prompt vị trí).
+- QUAN SÁT: assistant `tool_use{id,name,input}` → `tool_call`; user `tool_result{tool_use_id,content}` (content là chuỗi) → `tool_result`; luồng: assistant(tool_use), user(tool_result), assistant(text), result `subtype:"success", is_error:false`. Khớp parser.
+- QUAN SÁT: `--resume <session_id>` hoạt động; task thứ hai trả lời đúng nội dung tệp của task đầu, cùng `session_id`. Phải chạy cùng thư mục.
+- QUAN SÁT: chạy không cô lập thì **hook SessionStart/plugin của người dùng chạy trong task** và task tốn $0,69 (≈167k token tạo cache); với `--safe-mode` tốn $0,017. Vì vậy adapter bật `--safe-mode` mặc định (`safeMode:false` để tắt). Đây là cô lập cấu hình, **không phải sandbox bảo mật**.
+- QUAN SÁT: luồng có thêm dòng `system` (hook_*, init, task_summary, post_turn_summary) và `rate_limit_event`; parser bỏ qua đúng.
+- CHƯA quan sát: `--include-partial-messages`, định dạng khi hủy giữa chừng, `permission_denials` khi tool bị chặn, công cụ ghi (Write/Bash) và cơ chế phê duyệt, `--safe-mode` có chặn MCP/ghi file hay không, hành vi khi `--tools` không được đặt.
+- `capabilities()` khai `streaming`, `structured_output`, `tool_execution`, `session_resume`; không khai `approval`.
 
 ## Evidence: real `codex exec --json` runs (2026-11-02, máy Legion, codex-cli 0.165.0)
 

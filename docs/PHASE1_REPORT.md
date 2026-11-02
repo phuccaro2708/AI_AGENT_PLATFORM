@@ -2,7 +2,7 @@
 
 Nhánh `claude/loving-lovelace-32lh71`. Trạng thái đo: commit `818431e` (và các thay đổi tài liệu/script của Sprint E).
 
-**Kết luận: PHASE 1 CHƯA ĐÓNG.** Một trong bốn tiêu chí của Acceptance gate chưa đạt (Claude chưa chạy một task thật qua adapter), một tiêu chí chỉ đạt một phần (hủy với CLI thật), và CI chưa chạy cho 13 commit hiện chưa push. Phần còn lại, gồm cầu nối Tauri, UI, phát hiện crash, adapter Codex và baseline hiệu năng, đã làm và kiểm chứng như dưới đây.
+**Kết luận: PHASE 1 CHƯA ĐÓNG, còn hai việc.** Tiêu chí "Claude và Codex mỗi bên chạy 1 task thật" đã đạt (2026-11-02). Còn: hủy một CLI thật đang chạy tool (và Cancel trong app Tauri thật) mới đạt một phần, và CI chưa chạy cho các commit chưa push. Phần còn lại, gồm cầu nối Tauri, UI, phát hiện crash, hai adapter và baseline hiệu năng, đã làm và kiểm chứng như dưới đây.
 
 ## Acceptance gate (ROADMAP.md)
 
@@ -44,7 +44,7 @@ Sidecar khởi động nguội p50 122 ms; RSS rảnh 53 MiB; stub tới message
 
 ## Hạn chế và việc còn lại để đóng Phase 1
 
-1. Chạy một task thật qua `ClaudeAdapter` (cần đồng ý vì tốn usage), cập nhật ASSUMPTIONS theo kết quả.
+1. (Đã xong) task Claude thật qua adapter; còn nợ: tool ghi và phê duyệt, `--include-partial-messages`, hủy giữa chừng.
 2. Hủy một CLI thật đang chạy tool; bấm Cancel trong app Tauri thật.
 3. Push để CI chạy trên Windows/Ubuntu; ghi số run vào báo cáo này.
 4. Release chỉ chạy được với `AGENT_STUDIO_SIDECAR_DIR` hoặc thư mục `sidecar` cạnh exe; chưa có đóng gói tài nguyên/installer (Phase 5). Chưa kiểm bản release trên máy thứ hai.

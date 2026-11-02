@@ -14,15 +14,21 @@ export interface ClaudeAdapterOptions {
   command?: string;
   /** Arguments placed before the flags below (tests: the fake CLI script). */
   baseArgs?: readonly string[];
-  /** Extra flags, e.g. isolation flags once verified on a machine. */
+  /**
+   * Pass `--safe-mode` (default true): start without the user's CLAUDE.md, hooks, plugins, skills and
+   * MCP servers. Verified on 2.1.314: user SessionStart hooks otherwise run inside our task and the
+   * run cost ~40x more (context bloat). It is isolation of configuration, NOT a security sandbox.
+   */
+  safeMode?: boolean;
+  /** Extra flags, e.g. a tool allowlist (`--tools Read --allowed-tools Read`). */
   extraArgs?: readonly string[];
   env?: Record<string, string | undefined>;
 }
 
 /**
  * Runs `claude -p --output-format stream-json --verbose` and maps its NDJSON to AgentEvent.
- * The prompt goes to stdin (never into argv or a shell string). ASSUMPTION (unverified): `-p` reads
- * the prompt from stdin when no positional prompt is given — see docs/ASSUMPTIONS.md.
+ * The prompt goes to stdin (never into argv or a shell string). VERIFIED (2.1.314, 2026-11-02): `-p` reads
+ * the prompt from stdin; tool_use/tool_result shapes and `--resume` behave as mapped. See docs/ASSUMPTIONS.md.
  */
 export class ClaudeAdapter implements AgentAdapter {
   readonly id: string;
@@ -41,9 +47,9 @@ export class ClaudeAdapter implements AgentAdapter {
     }
   }
 
-  /** Only what `--help` and the observed run support; resume/approval are not claimed yet. */
+  /** Only what was observed on 2.1.314: tool use and --resume work; approval is not claimed. */
   async capabilities(): Promise<AgentCapability[]> {
-    return ["streaming", "structured_output"];
+    return ["streaming", "structured_output", "tool_execution", "session_resume"];
   }
 
   async cancel(taskId: string): Promise<void> {
@@ -78,6 +84,7 @@ export class ClaudeAdapter implements AgentAdapter {
       "--output-format",
       "stream-json",
       "--verbose",
+      ...(this.opts.safeMode === false ? [] : ["--safe-mode"]),
       ...(task.sessionId ? ["--resume", task.sessionId] : []),
       ...(this.opts.extraArgs ?? []),
     ];

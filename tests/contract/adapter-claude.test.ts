@@ -54,6 +54,23 @@ describe("parseClaudeLine on the REAL 2.1.314 fixture", () => {
   });
 });
 
+const toolFixture = fileURLToPath(
+  new URL("../contracts/fixtures/claude/2.1.314/print-stream-json-tool.jsonl", import.meta.url),
+);
+describe("parseClaudeLine on the REAL tool-use fixture (2.1.314)", () => {
+  it("maps tool_use -> tool_call, tool_result -> tool_result, text, and a successful result", () => {
+    const parsed = readFileSync(toolFixture, "utf8").trim().split("\n").map(parseClaudeLine);
+    const events = parsed.flatMap((p) => p.events);
+    expect(events.map((e) => e.type)).toEqual(["tool_call", "tool_result", "text", "usage"]);
+    expect(events[0]).toMatchObject({ type: "tool_call", name: "Read" });
+    expect(events[1]).toEqual({ type: "tool_result", result: "1\tagent-studio-probe-42\n2\t" });
+    expect(parsed.find((p) => p.final)?.final).toEqual({
+      type: "completed",
+      sessionId: "00000000-0000-0000-0000-000000000000",
+    });
+  });
+});
+
 describe("ClaudeAdapter", () => {
   it("streams text then completed with the session id, and drops anything after the result", async () => {
     const events = await run(make(), task());
@@ -81,10 +98,16 @@ describe("ClaudeAdapter", () => {
       "--output-format",
       "stream-json",
       "--verbose",
+      "--safe-mode",
       "--resume",
       "abc",
       "--strict-mcp-config",
     ]);
+  });
+  it("safe mode can be turned off", async () => {
+    const events = await run(make("args", { safeMode: false }), task());
+    const argv = JSON.parse((events[0] as { content: string }).content) as string[];
+    expect(argv).toEqual(["-p", "--output-format", "stream-json", "--verbose"]);
   });
   it("kills a hanging run on abort and reports cancelled", async () => {
     const ac = new AbortController();
@@ -115,6 +138,11 @@ describe("ClaudeAdapter", () => {
   });
   it("detect() is true when the command resolves; capabilities are limited to what is verified", async () => {
     expect(await make().detect()).toBe(true);
-    expect(await make().capabilities()).toEqual(["streaming", "structured_output"]);
+    expect(await make().capabilities()).toEqual([
+      "streaming",
+      "structured_output",
+      "tool_execution",
+      "session_resume",
+    ]);
   });
 });

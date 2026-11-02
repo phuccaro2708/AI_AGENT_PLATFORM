@@ -1,12 +1,15 @@
-import type { AgentEvent, AgentMessage } from "@agent-studio/contracts";
+import { AgentEvent, type AgentMessage } from "@agent-studio/contracts";
 import type { AdapterRegistry } from "@agent-studio/agent-core";
 import type { Logger } from "@agent-studio/shared-utils";
 import { newId } from "@agent-studio/shared-utils";
 import type { Repo } from "@agent-studio/storage";
+import { classifyOutcome, type FinalState } from "./outcome.js";
 
 export interface RunResult {
   taskId: string;
-  finalState: "completed" | "failed" | "cancelled";
+  finalState: FinalState;
+  /** Why the task ended in `failed` or `needs_reconciliation`, when known. */
+  reason?: string;
   events: AgentEvent[];
 }
 
@@ -55,31 +58,70 @@ export class Orchestrator {
     this.repo.setTaskState(taskId, "running");
     record("task.accepted", { prompt: opts.prompt });
     const events: AgentEvent[] = [];
-    let finalState: RunResult["finalState"] = "failed";
+    let abnormalEnd: string | undefined;
     try {
-      for await (const ev of adapter.execute({
+      for await (const raw of adapter.execute({
         id: taskId,
         prompt: opts.prompt,
         cwd: opts.cwd,
         signal,
       })) {
+        const parsed = AgentEvent.safeParse(raw);
+        if (!parsed.success) {
+          abnormalEnd = "adapter produced an invalid event";
+          break;
+        }
+        const ev = parsed.data;
         events.push(ev);
         if (ev.type === "completed") {
-          finalState = "completed";
           record("task.completed", ev);
+          break;
         } else if (ev.type === "error") {
-          finalState = ev.message === "cancelled" ? "cancelled" : "failed";
           record("task.failed", ev);
+          break;
         } else {
           record("task.progress", ev);
         }
       }
     } catch (err) {
       this.log.error({ taskId, err: String(err) }, "adapter threw");
-      record("task.failed", { type: "error", message: String(err) });
+      abnormalEnd = `adapter threw: ${String(err)}`;
     }
-    this.repo.setTaskState(taskId, finalState);
-    this.log.info({ taskId, finalState }, "task finished");
-    return { taskId, finalState, events };
+    const outcome = classifyOutcome({
+      events,
+      ...(abnormalEnd !== undefined ? { abnormalEnd } : {}),
+    });
+    if (abnormalEnd !== undefined || outcome.state === "needs_reconciliation") {
+      record("task.failed", {
+        type: "error",
+        message: outcome.reason ?? abnormalEnd,
+        needsReconciliation: outcome.state === "needs_reconciliation",
+      });
+    }
+    const finalState = outcome.state;
+    this.repo.setTaskState(taskId, finalState, outcome.reason ? { reason: outcome.reason } : {});
+    this.log.info({ taskId, finalState, reason: outcome.reason }, "task finished");
+    return { taskId, finalState, ...(outcome.reason ? { reason: outcome.reason } : {}), events };
+  }
+
+  /**
+   * A person (or later a verified check) decides what happened to a `needs_reconciliation` task.
+   * Nothing calls this automatically; `requeue` is the ONLY path that re-runs work and it bumps `attempt`.
+   */
+  resolveReconciliation(
+    taskId: string,
+    decision: "completed" | "failed" | "cancelled" | "requeue",
+    note: string,
+  ): void {
+    const state = this.repo.getTaskState(taskId);
+    if (state !== "needs_reconciliation") {
+      throw new Error(`Task ${taskId} is ${String(state)}, not needs_reconciliation`);
+    }
+    const reason = `reconciled by user: ${note}`;
+    if (decision === "requeue") {
+      this.repo.setTaskState(taskId, "queued", { reason, incrementAttempt: true });
+    } else {
+      this.repo.setTaskState(taskId, decision, { reason });
+    }
   }
 }

@@ -71,10 +71,10 @@
 
 ### Sprint C — Adapter
 
-- [ ] C1. Contract test suite dùng chung
+- [x] C1. Contract test suite dùng chung — `tests/contract/adapter-contract.ts` (suite) + validators `validateEventStream`/`validateCapabilities` trong `agent-core`. Mới chạy với StubAdapter; adapter claude/codex (C2/C3) phải gọi `describeAdapterContract`.
 - [ ] C2. `adapter-claude` (stream-json → AgentEvent, session map, cancel, error mapping)
 - [ ] C3. `adapter-codex` (app-server, fallback exec, approval, cancel)
-- [ ] C4. Side effect không xác minh được → `needs_reconciliation`
+- [x] C4. Side effect không xác minh được → `needs_reconciliation` — `classifyOutcome` + `Orchestrator.resolveReconciliation`. Quy tắc: số `tool_call` > số `tool_result` (kể cả khi bị hủy) → `needs_reconciliation`; không tự chạy lại, chỉ `requeue` tường minh mới tăng `attempt`. Giới hạn: không phân biệt tool chỉ-đọc/ghi; phụ thuộc adapter báo `tool_call` trung thực; chưa kiểm với CLI thật.
 
 ### Sprint D — IPC và UI
 

@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import {
   AgentMessage,
   IllegalTransitionError,
@@ -44,6 +44,10 @@ export class Repo {
     return id;
   }
 
+  getTaskAttempt(taskId: string): number | undefined {
+    return this.db.select({ a: tasks.attempt }).from(tasks).where(eq(tasks.id, taskId)).get()?.a;
+  }
+
   getTaskState(taskId: string): TaskState | undefined {
     return this.db.select({ s: tasks.state }).from(tasks).where(eq(tasks.id, taskId)).get()?.s as
       TaskState | undefined;
@@ -54,7 +58,11 @@ export class Repo {
    * Compare-and-set: the UPDATE only applies if the state is still the one the guard checked,
    * so a concurrent writer cannot make an illegal transition slip through.
    */
-  setTaskState(taskId: string, state: TaskState): void {
+  setTaskState(
+    taskId: string,
+    state: TaskState,
+    opts: { reason?: string; incrementAttempt?: boolean } = {},
+  ): void {
     this.db.transaction((tx) => {
       const ts = now();
       const row = tx.select({ s: tasks.state }).from(tasks).where(eq(tasks.id, taskId)).get();
@@ -63,7 +71,11 @@ export class Repo {
       if (!canTransition(from, state)) throw new IllegalTransitionError(taskId, from, state);
       const res = tx
         .update(tasks)
-        .set({ state, updatedAt: ts })
+        .set({
+          state,
+          updatedAt: ts,
+          ...(opts.incrementAttempt ? { attempt: sql`${tasks.attempt} + 1` } : {}),
+        })
         .where(and(eq(tasks.id, taskId), eq(tasks.state, from)))
         .run();
       if (res.changes !== 1) throw new Error(`Concurrent state change for task: ${taskId}`);
@@ -72,7 +84,11 @@ export class Repo {
           id: newId("evt"),
           aggregateId: taskId,
           eventType: "task.state_changed",
-          payloadJson: JSON.stringify({ from, state }),
+          payloadJson: JSON.stringify({
+            from,
+            state,
+            ...(opts.reason !== undefined ? { reason: opts.reason } : {}),
+          }),
           createdAt: ts,
         })
         .run();

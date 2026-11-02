@@ -56,11 +56,11 @@
 
 ### Sprint A — Nền tảng chạy process (không cần CLI thật)
 
-- [ ] A1. Process Manager (`spawn`, `shell:false`, stream, timeout, cancel, resolve shim Windows)
-- [ ] A2. Spike Job Object / kill tree + test không orphan → ADR-004
-- [ ] A3. Task state machine + transition guard + test
-- [ ] A4. Migration: sessions, execution_runs, artifacts, approvals
-- [ ] A5. Log sink cho stderr của sidecar (hiện `Stdio::null()`)
+- [x] A1. Process Manager (`spawn`, `shell:false`, stream, timeout, cancel, resolve shim Windows)
+- [x] A2. Spike Job Object / kill tree + test không orphan → ADR-004
+- [x] A3. Task state machine + transition guard + test
+- [x] A4. Migration: sessions, execution_runs, artifacts, approvals
+- [x] A5. Log sink cho stderr của sidecar (hiện `Stdio::null()`)
 
 ### Sprint B — Phát hiện CLI và probe
 

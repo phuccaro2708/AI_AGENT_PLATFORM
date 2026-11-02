@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import type { TaskState } from "@agent-studio/contracts";
-import { api, type Project } from "./api";
+import { api } from "./api";
 import { describeMessage, isTerminal } from "./taskLog";
 import { useTheme } from "./theme";
 import { useTaskLog } from "./useTaskLog";
@@ -11,6 +11,7 @@ export interface TaskRef {
   id: string;
   title: string;
   agentId: string;
+  projectId: string;
 }
 
 export function ThemeToggle() {
@@ -36,81 +37,6 @@ export function ThemeToggle() {
 
 export function Badge({ state }: { state: TaskState | null | undefined }) {
   return <span className={`badge ${state ?? "unknown"}`}>{state ?? "…"}</span>;
-}
-
-export function ProjectPicker({
-  projects,
-  selected,
-  onSelect,
-  onCreated,
-  onError,
-}: {
-  projects: Project[];
-  selected: string;
-  onSelect: (id: string) => void;
-  onCreated: () => void;
-  onError: (m: string) => void;
-}) {
-  const [name, setName] = useState("");
-  const [rootPath, setRootPath] = useState("");
-  const [adding, setAdding] = useState(false);
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    api.createProject(name.trim(), rootPath.trim()).then(
-      ({ projectId }) => {
-        setName("");
-        setRootPath("");
-        setAdding(false);
-        onCreated();
-        onSelect(projectId);
-      },
-      (err: unknown) => onError(msg(err)),
-    );
-  };
-  return (
-    <section className="side-section">
-      <div className="side-title">
-        <h2>Projects</h2>
-        <button className="ghost" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>
-          {adding ? "Close" : "+ New"}
-        </button>
-      </div>
-      {projects.length === 0 && !adding && <p className="muted small">No projects yet.</p>}
-      <ul className="list">
-        {projects.map((p) => (
-          <li key={p.id}>
-            <button
-              className={p.id === selected ? "row active" : "row"}
-              onClick={() => onSelect(p.id)}
-              title={p.rootPath}
-            >
-              <strong>{p.name}</strong>
-              <span className="muted path">{p.rootPath}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      {adding && (
-        <form onSubmit={submit} className="stack">
-          <input
-            aria-label="Project name"
-            placeholder="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <input
-            aria-label="Project folder"
-            placeholder="Folder, e.g. C:\work\my-app"
-            value={rootPath}
-            onChange={(e) => setRootPath(e.target.value)}
-          />
-          <button type="submit" disabled={!name.trim() || !rootPath.trim()}>
-            Add project
-          </button>
-        </form>
-      )}
-    </section>
-  );
 }
 
 export function TaskLogView({

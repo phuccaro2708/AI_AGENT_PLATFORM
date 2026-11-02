@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from "react";
-import type { TaskState } from "@agent-studio/contracts";
 import type { AdapterInfo } from "./api";
-import { Badge, TaskLogView, type TaskRef } from "./components";
+import { TaskLogView, type TaskRef } from "./components";
 
 export interface MultiRun {
   id: string;
+  projectId: string;
   goal: string;
   tasks: TaskRef[];
 }
@@ -19,9 +19,7 @@ export function MultiAgentView({
   projectName,
   canRun,
   runs,
-  states,
   selected,
-  onSelect,
   onStart,
   onError,
 }: {
@@ -29,9 +27,7 @@ export function MultiAgentView({
   projectName: string | null;
   canRun: boolean;
   runs: MultiRun[];
-  states: Record<string, TaskState>;
   selected: string | null;
-  onSelect: (id: string | null) => void;
   onStart: (goal: string, agentIds: string[]) => void;
   onError: (m: string) => void;
 }) {
@@ -94,31 +90,6 @@ export function MultiAgentView({
             </button>
           </div>
         </form>
-
-        {runs.length > 0 && (
-          <section>
-            <h2>Runs</h2>
-            <ul className="list">
-              {runs.map((r) => (
-                <li key={r.id}>
-                  <button
-                    className={r.id === selected ? "row active" : "row"}
-                    onClick={() => onSelect(r.id)}
-                  >
-                    <span>
-                      {r.goal.slice(0, 50)} <span className="muted">· {r.tasks.length} agents</span>
-                    </span>
-                    <span className="badges">
-                      {r.tasks.map((t) => (
-                        <Badge key={t.id} state={states[t.id]} />
-                      ))}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
 
         {run ? (
           <div className="columns">

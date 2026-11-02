@@ -2,13 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import type { TaskState } from "@agent-studio/contracts";
 import { AgentView } from "./AgentView";
 import { api, type AdapterInfo, type CliProbe, type Project } from "./api";
-import { ProjectPicker, ThemeToggle, msg, type TaskRef } from "./components";
+import { msg, type TaskRef } from "./components";
 import { getHealth, type Health } from "./health";
 import { MultiAgentView, type MultiRun } from "./MultiAgentView";
 import { runSelftestIfRequested } from "./selftest";
 import { onSidecarEvent } from "./sidecar";
-
-type Mode = "agent" | "multi";
+import { NewProjectDialog } from "./NewProjectDialog";
+import { Sidebar, type Mode, type Session } from "./Sidebar";
 
 export function App() {
   const [mode, setMode] = useState<Mode>("agent");
@@ -24,6 +24,7 @@ export function App() {
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [runs, setRuns] = useState<MultiRun[]>([]);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
+  const [newProject, setNewProject] = useState(false);
   const [states, setStates] = useState<Record<string, TaskState>>({});
 
   const fail = useCallback((m: string) => setError(m), []);
@@ -70,7 +71,7 @@ export function App() {
   const startAgentTask = (text: string) => {
     api.startTask(projectId, agentId, text).then(
       (id) => {
-        setTasks((t) => [{ id, title: text.slice(0, 60), agentId }, ...t]);
+        setTasks((t) => [{ id, title: text.slice(0, 60), agentId, projectId }, ...t]);
         setSelectedTask(id);
         setError(null);
       },
@@ -83,8 +84,14 @@ export function App() {
       (ids) => {
         const run: MultiRun = {
           id: ids.join("+"),
+          projectId,
           goal,
-          tasks: ids.map((id, i) => ({ id, title: goal.slice(0, 60), agentId: agentIds[i]! })),
+          tasks: ids.map((id, i) => ({
+            id,
+            title: goal.slice(0, 60),
+            agentId: agentIds[i]!,
+            projectId,
+          })),
         };
         setRuns((r) => [run, ...r]);
         setSelectedRun(run.id);
@@ -97,51 +104,49 @@ export function App() {
   const project = projects.find((p) => p.id === projectId);
   const canRun = project !== undefined;
 
+  const sessions: Session[] = [
+    ...tasks.map((t) => ({
+      id: t.id,
+      projectId: t.projectId,
+      mode: "agent" as const,
+      label: `${t.agentId}: ${t.title}`,
+      taskIds: [t.id],
+    })),
+    ...runs.map((r) => ({
+      id: r.id,
+      projectId: r.projectId,
+      mode: "multi" as const,
+      label: r.goal.slice(0, 40),
+      taskIds: r.tasks.map((t) => t.id),
+    })),
+  ];
+  const openSession = (s: Session) => {
+    setMode(s.mode);
+    setProjectId(s.projectId);
+    if (s.mode === "agent") setSelectedTask(s.id);
+    else setSelectedRun(s.id);
+  };
+  const switchMode = (m: Mode) => {
+    setMode(m);
+    if (m === "agent") setSelectedTask(null);
+    else setSelectedRun(null);
+  };
+
   return (
     <div className="shell">
-      <header className="appbar">
-        <span className="logo" aria-hidden="true">
-          A
-        </span>
-        <h1>Agent Studio</h1>
-        <span className="muted">
-          {health ? `${health.source} · v${health.version}` : "starting…"}
-        </span>
-        <span className="spacer" />
-        <ThemeToggle />
-      </header>
-      <aside className="sidebar">
-        <div className="modes" role="tablist" aria-label="Mode">
-          {(
-            [
-              ["agent", "Agent"],
-              ["multi", "Multi-agent"],
-            ] as const
-          ).map(([m, label]) => (
-            <button
-              key={m}
-              role="tab"
-              aria-selected={mode === m}
-              className={mode === m ? "mode active" : "mode"}
-              onClick={() => setMode(m)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <p className="muted small mode-hint">
-          {mode === "agent"
-            ? "Work with one agent on your machine."
-            : "A bigger project with several agents taking part."}
-        </p>
-        <ProjectPicker
-          projects={projects}
-          selected={projectId}
-          onSelect={setProjectId}
-          onCreated={refreshProjects}
-          onError={fail}
-        />
-      </aside>
+      <Sidebar
+        mode={mode}
+        onMode={switchMode}
+        projects={projects}
+        projectId={projectId}
+        onProject={setProjectId}
+        sessions={sessions}
+        states={states}
+        selected={mode === "agent" ? selectedTask : selectedRun}
+        onSession={openSession}
+        onNewProject={() => setNewProject(true)}
+        version={health ? `${health.source} · v${health.version}` : "starting…"}
+      />
       <main className="content">
         {error && (
           <p role="alert" className="error banner">
@@ -158,10 +163,7 @@ export function App() {
             onAgent={setAgentId}
             projectName={project?.name ?? null}
             canRun={canRun}
-            tasks={tasks}
-            states={states}
             selected={selectedTask}
-            onSelect={setSelectedTask}
             onStart={startAgentTask}
             onError={fail}
           />
@@ -171,14 +173,22 @@ export function App() {
             projectName={project?.name ?? null}
             canRun={canRun}
             runs={runs}
-            states={states}
             selected={selectedRun}
-            onSelect={setSelectedRun}
             onStart={startRun}
             onError={fail}
           />
         )}
       </main>
+      {newProject && (
+        <NewProjectDialog
+          onClose={() => setNewProject(false)}
+          onCreated={(id) => {
+            setNewProject(false);
+            refreshProjects();
+            setProjectId(id);
+          }}
+        />
+      )}
     </div>
   );
 }

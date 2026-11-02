@@ -167,6 +167,7 @@ fn selftest_finish(app: tauri::AppHandle, report: Value) -> Result<(), String> {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(SidecarState::default())
         .invoke_handler(tauri::generate_handler![
             system_health,

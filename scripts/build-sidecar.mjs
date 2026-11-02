@@ -26,6 +26,9 @@ await build({
     "@agent-studio/shared-utils": join(root, "packages/shared-utils/src/index.ts"),
     "@agent-studio/agent-core": join(root, "packages/agent-core/src/index.ts"),
     "@agent-studio/storage": join(root, "packages/storage/src/index.ts"),
+    "@agent-studio/process-manager": join(root, "packages/process-manager/src/index.ts"),
+    "@agent-studio/cli-probe": join(root, "packages/cli-probe/src/index.ts"),
+    "@agent-studio/adapter-claude": join(root, "packages/adapter-claude/src/index.ts"),
   },
   banner: {
     js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);",

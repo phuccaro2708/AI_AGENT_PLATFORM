@@ -265,7 +265,10 @@ mod tests {
             .unwrap_err();
         assert!(timed_out.contains("did not answer"), "{timed_out}");
         assert!(s.request("quit", None, T).is_err()); // exits without a reply
-        std::thread::sleep(Duration::from_millis(100));
+        let deadline = Instant::now() + T;
+        while s.is_alive() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20)); // the reader thread notices EOF
+        }
         assert!(!s.is_alive());
         assert_eq!(
             s.request("fast", None, T).unwrap_err(),

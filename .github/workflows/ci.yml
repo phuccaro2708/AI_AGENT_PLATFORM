@@ -34,6 +34,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # The sidecar tests spawn a tiny `node -e` stand-in, so Node must be the pinned version.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
       - run: cargo check --locked
         working-directory: apps/desktop/src-tauri
       - run: cargo test --locked

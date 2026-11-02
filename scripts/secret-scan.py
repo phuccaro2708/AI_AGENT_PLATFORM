@@ -21,7 +21,13 @@ ACCEPTED_HISTORY = {
     ("21c1ae96", ".github/workflows/ci.yml", "Secret Keyword", 60),
 }
 
-EXCLUDE = r"(pnpm-lock\.yaml|Cargo\.lock|\.png|\.ico|\.icns)$"
+# Reviewed by hand, valid at any commit: exact (file, type, line). Line 28 of the Phase 0 spike
+# report holds a generated task id (ULID) inside a JSON string, flagged only by entropy.
+ACCEPTED_ANYWHERE = {
+    ("docs/reports/phase0-windows/spike-report.json", "Base64 High Entropy String", 28),
+}
+
+EXCLUDE =r"(pnpm-lock\.yaml|Cargo\.lock|\.png|\.ico|\.icns)$"
 
 
 def scan(root, files=None):
@@ -51,8 +57,11 @@ def main():
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
-    accepted = [f for f in findings if f in ACCEPTED_HISTORY]
-    findings = [f for f in findings if f not in ACCEPTED_HISTORY]
+    def is_accepted(f):
+        return f in ACCEPTED_HISTORY or f[1:] in ACCEPTED_ANYWHERE
+
+    accepted = [f for f in findings if is_accepted(f)]
+    findings = [f for f in findings if not is_accepted(f)]
     print(f"scanned worktree + {len(shas)} commits; findings: {len(findings)} (accepted fixture hits: {len(accepted)})")
     for f in findings:
         print("  FINDING", *f)

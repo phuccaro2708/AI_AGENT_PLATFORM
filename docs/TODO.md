@@ -87,10 +87,10 @@
 
 ### Sprint E — Đóng phase
 
-- [ ] E1. Đo baseline → `docs/PERF_BUDGET.md`
-- [ ] E2. Kiểm tra trên Windows vật lý với bản release (ghi hash commit)
-- [ ] E3. `pnpm lint && typecheck && test && build` và CI xanh
-- [ ] E4. `docs/PHASE1_REPORT.md`
+- [x] E1. Đo baseline → `docs/PERF_BUDGET.md` (`scripts/perf-baseline.mjs`; một máy, chưa ép trong CI)
+- [~] E2. Bản release trên Windows vật lý: `tauri build --no-bundle` + selftest 5/5 pass tại `818431e` (cần `AGENT_STUDIO_SIDECAR_DIR`; chưa có installer). Chưa kiểm trên máy thứ hai
+- [~] E3. lint/format/typecheck/test(154)/build/cargo test/clippy pass cục bộ; CI CHƯA chạy (13 commit chưa push)
+- [x] E4. `docs/PHASE1_REPORT.md` — kết luận: Phase 1 CHƯA đóng (thiếu task Claude thật)
 
 ## Phase 2 — Multi-Agent
 

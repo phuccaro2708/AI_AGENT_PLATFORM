@@ -69,7 +69,7 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 
 **Acceptance gate**
 
-- [ ] Claude và Codex mỗi bên chạy được 1 task thật độc lập.
+- [ ] Claude và Codex mỗi bên chạy được 1 task thật độc lập. (Codex đã chạy; Claude còn thiếu — xem PHASE1_REPORT)
 - [ ] Cancel dừng cả process tree (test không còn orphan).
 - [ ] Lỗi CLI (không cài, sai version, exit ≠ 0, JSON hỏng) được báo rõ, không crash.
 - [ ] Contract tests với fixture output thật đã ghi lại của từng CLI.

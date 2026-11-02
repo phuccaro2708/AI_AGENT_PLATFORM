@@ -10,6 +10,7 @@ export default defineConfig({
       "@agent-studio/shared-utils": src("packages/shared-utils"),
       "@agent-studio/agent-core": src("packages/agent-core"),
       "@agent-studio/storage": src("packages/storage"),
+      "@agent-studio/process-manager": src("packages/process-manager"),
       "@agent-studio/orchestrator": src("services/orchestrator"),
     },
   },

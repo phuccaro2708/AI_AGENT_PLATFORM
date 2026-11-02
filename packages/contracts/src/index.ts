@@ -107,3 +107,39 @@ export const SidecarResponse = z.union([
   z.object({ id: z.number().int().nullable(), error: z.object({ message: z.string() }) }),
 ]);
 export type SidecarResponse = z.infer<typeof SidecarResponse>;
+
+// ---- Task state machine (design decision, not a CLI capability) ----
+
+/**
+ * Allowed task state transitions. Terminal states have no outgoing edges.
+ * `needs_reconciliation` is left only by an explicit human/recovery decision
+ * (requeue, or settle as completed/failed/cancelled); there is no automatic retry.
+ */
+export const TASK_TRANSITIONS: Readonly<Record<TaskState, readonly TaskState[]>> = {
+  queued: ["running", "cancelled"],
+  running: ["waiting_approval", "needs_reconciliation", "completed", "failed", "cancelled"],
+  waiting_approval: ["running", "needs_reconciliation", "failed", "cancelled"],
+  needs_reconciliation: ["queued", "completed", "failed", "cancelled"],
+  completed: [],
+  failed: [],
+  cancelled: [],
+};
+
+export function canTransition(from: TaskState, to: TaskState): boolean {
+  return TASK_TRANSITIONS[from].includes(to);
+}
+
+export function isTerminalTaskState(state: TaskState): boolean {
+  return TASK_TRANSITIONS[state].length === 0;
+}
+
+export class IllegalTransitionError extends Error {
+  constructor(
+    readonly taskId: string,
+    readonly from: TaskState,
+    readonly to: TaskState,
+  ) {
+    super(`Illegal task transition for ${taskId}: ${from} -> ${to}`);
+    this.name = "IllegalTransitionError";
+  }
+}

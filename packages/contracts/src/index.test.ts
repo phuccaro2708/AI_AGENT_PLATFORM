@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { AgentEvent, AgentMessage, TaskState, WorkflowState } from "./index.js";
+import {
+  AgentEvent,
+  AgentMessage,
+  TASK_TRANSITIONS,
+  TaskState,
+  WorkflowState,
+  canTransition,
+  isTerminalTaskState,
+} from "./index.js";
 
 const validMessage = {
   id: "m1",
@@ -48,5 +56,31 @@ describe("states", () => {
   it("match the database CHECK constraints", () => {
     expect(TaskState.options).toContain("needs_reconciliation");
     expect(WorkflowState.options).toHaveLength(6);
+  });
+});
+
+describe("task state machine", () => {
+  it("covers every TaskState and only targets valid states", () => {
+    expect(Object.keys(TASK_TRANSITIONS).sort()).toEqual([...TaskState.options].sort());
+    for (const targets of Object.values(TASK_TRANSITIONS)) {
+      for (const t of targets) expect(TaskState.options).toContain(t);
+    }
+  });
+  it("allows the happy path and rejects skips", () => {
+    expect(canTransition("queued", "running")).toBe(true);
+    expect(canTransition("running", "completed")).toBe(true);
+    expect(canTransition("queued", "completed")).toBe(false);
+    expect(canTransition("running", "queued")).toBe(false);
+  });
+  it("has terminal states with no way out", () => {
+    for (const s of ["completed", "failed", "cancelled"] as const) {
+      expect(isTerminalTaskState(s)).toBe(true);
+      for (const to of TaskState.options) expect(canTransition(s, to)).toBe(false);
+    }
+    expect(isTerminalTaskState("needs_reconciliation")).toBe(false);
+  });
+  it("never auto-retries: needs_reconciliation cannot go straight back to running", () => {
+    expect(canTransition("needs_reconciliation", "running")).toBe(false);
+    expect(canTransition("needs_reconciliation", "queued")).toBe(true);
   });
 });

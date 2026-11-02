@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { IllegalTransitionError } from "@agent-studio/contracts";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "./index.js";
 
 let dir: string;
@@ -92,11 +93,21 @@ describe("Repo", () => {
   });
   it("persists across reopen (restart)", () => {
     const { t } = seed();
+    repo.setTaskState(t, "running");
     repo.setTaskState(t, "needs_reconciliation");
     db.$client.close();
     db = openDatabase(join(dir, "test.db"));
     repo = new Repo(db);
     expect(repo.getTaskState(t)).toBe("needs_reconciliation");
+  });
+  it("rejects illegal transitions and leaves no event behind", () => {
+    const { t } = seed();
+    expect(() => repo.setTaskState(t, "completed")).toThrow(IllegalTransitionError);
+    expect(repo.getTaskState(t)).toBe("queued");
+    expect(repo.listEvents(t)).toHaveLength(0);
+    repo.setTaskState(t, "running");
+    repo.setTaskState(t, "completed");
+    expect(() => repo.setTaskState(t, "running")).toThrow(IllegalTransitionError);
   });
   it("does not leave an event behind when the state update fails", () => {
     expect(() => repo.setTaskState("nope", "running")).toThrow();

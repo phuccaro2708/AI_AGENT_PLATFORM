@@ -1,5 +1,10 @@
 import { and, asc, eq } from "drizzle-orm";
-import { AgentMessage, type TaskState } from "@agent-studio/contracts";
+import {
+  AgentMessage,
+  IllegalTransitionError,
+  canTransition,
+  type TaskState,
+} from "@agent-studio/contracts";
 import { newId } from "@agent-studio/shared-utils";
 import type { StudioDb } from "./db.js";
 import { events, messages, projects, tasks, workflows } from "./schema.js";
@@ -44,18 +49,30 @@ export class Repo {
       TaskState | undefined;
   }
 
-  /** Atomically changes task state and appends an audit event. */
+  /**
+   * Atomically changes task state (guarded by the state machine) and appends an audit event.
+   * Compare-and-set: the UPDATE only applies if the state is still the one the guard checked,
+   * so a concurrent writer cannot make an illegal transition slip through.
+   */
   setTaskState(taskId: string, state: TaskState): void {
     this.db.transaction((tx) => {
       const ts = now();
-      const res = tx.update(tasks).set({ state, updatedAt: ts }).where(eq(tasks.id, taskId)).run();
-      if (res.changes !== 1) throw new Error(`Unknown task: ${taskId}`);
+      const row = tx.select({ s: tasks.state }).from(tasks).where(eq(tasks.id, taskId)).get();
+      if (!row) throw new Error(`Unknown task: ${taskId}`);
+      const from = row.s as TaskState;
+      if (!canTransition(from, state)) throw new IllegalTransitionError(taskId, from, state);
+      const res = tx
+        .update(tasks)
+        .set({ state, updatedAt: ts })
+        .where(and(eq(tasks.id, taskId), eq(tasks.state, from)))
+        .run();
+      if (res.changes !== 1) throw new Error(`Concurrent state change for task: ${taskId}`);
       tx.insert(events)
         .values({
           id: newId("evt"),
           aggregateId: taskId,
           eventType: "task.state_changed",
-          payloadJson: JSON.stringify({ state }),
+          payloadJson: JSON.stringify({ from, state }),
           createdAt: ts,
         })
         .run();

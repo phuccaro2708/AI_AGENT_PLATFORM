@@ -2,6 +2,7 @@ import {
   ExecutableNotFoundError,
   resolveExecutable,
   runProcess,
+  unwrapNpmShim,
   type ResolvedExecutable,
 } from "@agent-studio/process-manager";
 import type {
@@ -121,11 +122,12 @@ export async function detect(
     }
     return fail({ status: "spawn_error", message: e instanceof Error ? e.message : String(e) });
   }
-  if (exe.kind === "shim") {
+  // An npm `.cmd` shim is fine when it can be mapped to `node <script>`; runProcess does the same mapping.
+  if (exe.kind === "shim" && !unwrapNpmShim(exe)) {
     return fail(
       {
         status: "shim_unsupported",
-        message: `\`${exe.path}\` is a .cmd/.bat shim. Node cannot start it safely without a shell; install the native \`.exe\` build or set the executable path explicitly.`,
+        message: `\`${exe.path}\` is a .cmd/.bat shim that cannot be mapped to \`node <script>\`. Node cannot start it safely without a shell; install the native \`.exe\` build or set the executable path explicitly.`,
       },
       { path: exe.path, kind: "shim" },
     );

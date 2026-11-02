@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -9,6 +9,7 @@ import {
   resolveExecutable,
   runProcess,
   startProcess,
+  unwrapNpmShim,
 } from "./index.js";
 
 const NODE = process.execPath;
@@ -178,6 +179,51 @@ describe("resolveExecutable (simulated Windows)", () => {
   });
   it("throws when missing", () => {
     expect(() => resolveExecutable("nope", opts)).toThrow(ExecutableNotFoundError);
+  });
+  it("ignores an extensionless npm sh-shim and picks the .cmd next to it (Legion layout)", () => {
+    const legion = {
+      platform: "win32" as const,
+      env: { PATH: "C:\\npm", PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      isFile: (p: string) => ["c:\\npm\\codex", "c:\\npm\\codex.cmd"].includes(p.toLowerCase()),
+    };
+    const r = resolveExecutable("codex", legion);
+    expect(r.path.toLowerCase()).toBe("c:\\npm\\codex.cmd");
+    expect(r.kind).toBe("shim");
+  });
+});
+
+describe("unwrapNpmShim", () => {
+  const body = (js: string) =>
+    `@ECHO off\r\nGOTO start\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\n` +
+    `endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\${js}" %*\r\n`;
+  const mk = (js: string, create = true) => {
+    const dir = tmp();
+    const cmd = join(dir, "codex.cmd");
+    writeFileSync(cmd, body(js));
+    if (create) {
+      mkdirSync(join(dir, "node_modules", "x", "bin"), { recursive: true });
+      writeFileSync(join(dir, "node_modules", "x", "bin", "codex.js"), "");
+    }
+    return { dir, cmd };
+  };
+  it("maps an npm .cmd shim to node + its script", () => {
+    const { dir, cmd } = mk("node_modules\\x\\bin\\codex.js");
+    const t = unwrapNpmShim({ path: cmd, kind: "shim" });
+    expect(t?.kind).toBe("exe");
+    expect(t?.path).toBe(process.execPath);
+    expect(t?.prefixArgs).toEqual([join(dir, "node_modules", "x", "bin", "codex.js")]);
+  });
+  it("refuses a script outside the shim directory", () => {
+    const { cmd } = mk("..\\evil.js", false);
+    expect(unwrapNpmShim({ path: cmd, kind: "shim" })).toBeUndefined();
+  });
+  it("refuses a missing script and non-npm shims", () => {
+    const { cmd } = mk("node_modules\\x\\bin\\codex.js", false);
+    expect(unwrapNpmShim({ path: cmd, kind: "shim" })).toBeUndefined();
+    const dir = tmp();
+    const other = join(dir, "a.cmd");
+    writeFileSync(other, "@echo off\r\necho hi\r\n");
+    expect(unwrapNpmShim({ path: other, kind: "shim" })).toBeUndefined();
   });
 });
 

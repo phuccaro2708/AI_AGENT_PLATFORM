@@ -104,6 +104,38 @@ describe("Claude help fixture (REAL output captured from claude 2.1.316)", () =>
   });
 });
 
+describe("REAL fixtures captured on the Legion (2026-11-01)", () => {
+  it("claude 2.1.314: same capabilities as 2.1.316", async () => {
+    const r = await probeClaude({
+      executable: EXE,
+      run: scripted({
+        "--version": ok(fixture("claude/2.1.314/version.txt")),
+        "--help": ok(fixture("claude/2.1.314/help.txt")),
+      }),
+    });
+    expect(r).toMatchObject({ status: "ok", version: "2.1.314 (Claude Code)" });
+    expect(r.capabilities).toEqual(claudeCapabilitiesFromHelp(fixture("claude/2.1.316/help.txt")));
+  });
+  it("codex-cli 0.165.0: app-server, exec --json, resume are reported", async () => {
+    const r = await probeCodex({
+      executable: EXE,
+      run: scripted({
+        "--version": ok(fixture("codex/0.165.0/version.txt")),
+        "--help": ok(fixture("codex/0.165.0/help.txt")),
+        "exec --help": ok(fixture("codex/0.165.0/exec-help.txt")),
+      }),
+    });
+    expect(r).toMatchObject({ provider: "codex", status: "ok", version: "codex-cli 0.165.0" });
+    expect(r.capabilities).toMatchObject({
+      execSubcommand: true,
+      appServerSubcommand: true,
+      resumeSubcommand: true,
+      execJson: true,
+      execSandbox: true,
+    });
+  });
+});
+
 describe("error reporting (B4): never throws, always explains", () => {
   it("not installed", async () => {
     const r = await probeClaude({ env: { PATH: "" } });

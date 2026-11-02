@@ -1,5 +1,5 @@
-import { accessSync, constants, statSync } from "node:fs";
-import { delimiter, isAbsolute, join, win32 } from "node:path";
+import { accessSync, constants, readFileSync, statSync } from "node:fs";
+import { delimiter, dirname, isAbsolute, join, relative, resolve, win32 } from "node:path";
 
 export type ExecutableKind = "exe" | "shim";
 
@@ -7,6 +7,8 @@ export interface ResolvedExecutable {
   path: string;
   /** `shim` = a `.cmd`/`.bat` script on Windows. It is NOT spawnable with `shell:false`. */
   kind: ExecutableKind;
+  /** Arguments that must precede the caller's own (set by `unwrapNpmShim`: the script for `node`). */
+  prefixArgs?: string[];
 }
 
 export class ExecutableNotFoundError extends Error {
@@ -46,10 +48,12 @@ function defaultIsFile(path: string, platform: NodeJS.Platform): boolean {
   }
 }
 
-function classify(path: string, platform: NodeJS.Platform): ExecutableKind {
+/** `undefined` = not something Windows can start (e.g. npm's extensionless sh-shim next to `foo.cmd`). */
+function classify(path: string, platform: NodeJS.Platform): ExecutableKind | undefined {
   if (platform !== "win32") return "exe";
   const ext = win32.extname(path).toLowerCase();
-  return ext === ".cmd" || ext === ".bat" ? "shim" : "exe";
+  if (ext === ".cmd" || ext === ".bat") return "shim";
+  return ext === ".exe" || ext === ".com" ? "exe" : undefined;
 }
 
 /**
@@ -72,8 +76,8 @@ export function resolveExecutable(command: string, opts: ResolveOptions = {}): R
   const tryBase = (base: string): ResolvedExecutable | undefined => {
     for (const suffix of suffixes) {
       const candidate = base + suffix;
-      if (isFile(candidate, platform))
-        return { path: candidate, kind: classify(candidate, platform) };
+      const kind = classify(candidate, platform);
+      if (kind && isFile(candidate, platform)) return { path: candidate, kind };
     }
     return undefined;
   };
@@ -95,6 +99,40 @@ export function resolveExecutable(command: string, opts: ResolveOptions = {}): R
     if (found) return found;
   }
   throw new ExecutableNotFoundError(command);
+}
+
+/**
+ * Maps an npm-generated `.cmd` shim to `node <script.js>` so it can run with `shell:false`.
+ * Only reads the shim text; never executes it. Returns `undefined` unless the shim has the
+ * npm form `"%_prog%" "%dp0%\<script>.js"` and the script is an existing file inside the shim's directory.
+ */
+export function unwrapNpmShim(shim: ResolvedExecutable): ResolvedExecutable | undefined {
+  if (shim.kind !== "shim") return undefined;
+  let text: string;
+  try {
+    text = readFileSync(shim.path, "utf8");
+  } catch {
+    return undefined;
+  }
+  const m = /"%_prog%"\s+"%dp0%[\\/]+([^"%]+\.js)"/i.exec(text);
+  if (!m?.[1]) return undefined;
+  const dir = dirname(shim.path);
+  const script = resolve(dir, ...m[1].split(/[\\/]+/));
+  const rel = relative(dir, script);
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return undefined;
+  try {
+    if (!statSync(script).isFile()) return undefined;
+  } catch {
+    return undefined;
+  }
+  const local = join(dir, "node.exe"); // npm's shim prefers a node.exe sitting next to it
+  let node = process.execPath;
+  try {
+    if (statSync(local).isFile()) node = local;
+  } catch {
+    // no local node: use the running one
+  }
+  return { path: node, kind: "exe", prefixArgs: [script] };
 }
 
 function envGet(env: Record<string, string | undefined>, key: string): string | undefined {

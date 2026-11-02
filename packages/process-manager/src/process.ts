@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import { killTree } from "./kill-tree.js";
-import { UnsupportedShimError, resolveExecutable } from "./resolve.js";
+import { UnsupportedShimError, resolveExecutable, unwrapNpmShim } from "./resolve.js";
 
 export interface RunOptions {
   command: string;
@@ -66,19 +66,22 @@ export function startProcess(opts: RunOptions): RunningProcess {
   if (opts.signal?.aborted) return failed("cancelled");
 
   let file: string;
+  let prefix: string[];
   try {
     const resolved = resolveExecutable(opts.command, {
       ...(opts.env ? { env: opts.env } : {}),
       ...(opts.cwd ? { cwd: opts.cwd } : {}),
     });
-    if (resolved.kind === "shim") throw new UnsupportedShimError(resolved.path);
-    file = resolved.path;
+    const target = resolved.kind === "shim" ? unwrapNpmShim(resolved) : resolved;
+    if (!target) throw new UnsupportedShimError(resolved.path);
+    file = target.path;
+    prefix = target.prefixArgs ?? [];
   } catch (err) {
     return failed("spawn_error", err instanceof Error ? err.message : String(err));
   }
 
   const posix = process.platform !== "win32";
-  const child = spawn(file, [...(opts.args ?? [])], {
+  const child = spawn(file, [...prefix, ...(opts.args ?? [])], {
     shell: false,
     windowsHide: true,
     detached: posix, // own process group so the whole tree can be signalled

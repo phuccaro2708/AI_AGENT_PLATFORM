@@ -3,5 +3,5 @@ dist
 target
 coverage
 pnpm-lock.yaml
-src-tauri/gen
+**/src-tauri/gen
 sidecar-dist

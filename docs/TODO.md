@@ -64,10 +64,10 @@
 
 ### Sprint B — Phát hiện CLI và probe
 
-- [ ] B1. Detection + probe Claude Code (version, flags thực tế)
-- [ ] B2. Detection + probe Codex (version, `app-server`, `exec --json`)
-- [ ] B3. Fixture output thật → `tests/contracts/fixtures`; cập nhật ASSUMPTIONS; lưu `agents.capabilities`
-- [ ] B4. Lỗi CLI (chưa cài, sai version, exit ≠ 0, JSON hỏng) báo rõ, không crash
+- [~] B1. Detection + probe Claude Code (version, flags thực tế) — `packages/cli-probe`; đã chạy thật với `claude` 2.1.316 trong container Linux (không phải Legion); chưa probe trên Legion
+- [~] B2. Detection + probe Codex (version, `app-server`, `exec --json`) — code xong, test chỉ bằng help **giả lập**; `codex` chưa cài trong container nên chưa có output thật
+- [~] B3. (chỉ có fixture `claude --help`/`--version`; chưa có output stream-json hay Codex; đã có bảng `agents` lưu capabilities) Fixture output thật → `tests/contracts/fixtures`; cập nhật ASSUMPTIONS; lưu `agents.capabilities`
+- [x] B4. Lỗi CLI (chưa cài, sai version, exit ≠ 0, JSON hỏng) báo rõ, không crash
 
 ### Sprint C — Adapter
 

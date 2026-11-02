@@ -148,4 +148,30 @@ describe("Repo", () => {
     expect(() => repo.setTaskState("nope", "running")).toThrow();
     expect(repo.listEvents("nope")).toHaveLength(0);
   });
+
+  it("stores the latest agent probe per provider (upsert) and rejects unknown status", () => {
+    repo.saveAgentProbe({
+      provider: "claude",
+      status: "ok",
+      version: "2.1.316",
+      capabilities: { print: true },
+      probedAt: "2026-01-01T00:00:00.000Z",
+    });
+    repo.saveAgentProbe({
+      provider: "claude",
+      status: "exit_nonzero",
+      capabilities: {},
+      error: { step: "--version" },
+      probedAt: "2026-01-02T00:00:00.000Z",
+    });
+    expect(repo.getAgentProbe("claude")).toMatchObject({
+      status: "exit_nonzero",
+      version: undefined,
+      error: { step: "--version" },
+    });
+    expect(repo.getAgentProbe("codex")).toBeUndefined();
+    expect(() =>
+      repo.saveAgentProbe({ provider: "x", status: "weird", capabilities: {}, probedAt: "t" }),
+    ).toThrow();
+  });
 });

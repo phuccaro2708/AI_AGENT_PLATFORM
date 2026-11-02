@@ -7,7 +7,7 @@ import {
 } from "@agent-studio/contracts";
 import { newId } from "@agent-studio/shared-utils";
 import type { StudioDb } from "./db.js";
-import { events, executionRuns, messages, projects, tasks, workflows } from "./schema.js";
+import { agents, events, executionRuns, messages, projects, tasks, workflows } from "./schema.js";
 
 const now = () => new Date().toISOString();
 
@@ -77,6 +77,46 @@ export class Repo {
         })
         .run();
     });
+  }
+
+  /** Upserts the latest probe result for a provider (plain data; storage does not depend on cli-probe). */
+  saveAgentProbe(p: {
+    provider: string;
+    status: string;
+    path?: string;
+    version?: string;
+    capabilities: Record<string, boolean>;
+    error?: unknown;
+    probedAt: string;
+  }): void {
+    const row = {
+      provider: p.provider,
+      status: p.status,
+      executablePath: p.path ?? null,
+      version: p.version ?? null,
+      capabilitiesJson: JSON.stringify(p.capabilities),
+      errorJson: p.error === undefined ? null : JSON.stringify(p.error),
+      probedAt: p.probedAt,
+    };
+    this.db
+      .insert(agents)
+      .values(row)
+      .onConflictDoUpdate({ target: agents.provider, set: row })
+      .run();
+  }
+
+  getAgentProbe(provider: string) {
+    const r = this.db.select().from(agents).where(eq(agents.provider, provider)).get();
+    if (!r) return undefined;
+    return {
+      provider: r.provider,
+      status: r.status,
+      path: r.executablePath ?? undefined,
+      version: r.version ?? undefined,
+      capabilities: JSON.parse(r.capabilitiesJson) as Record<string, boolean>,
+      error: r.errorJson === null ? undefined : (JSON.parse(r.errorJson) as unknown),
+      probedAt: r.probedAt,
+    };
   }
 
   /** Records the launch of a process for a task attempt; returns the run id. */

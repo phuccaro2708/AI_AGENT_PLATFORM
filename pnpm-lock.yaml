@@ -67,6 +67,12 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/cli-probe:
+    dependencies:
+      '@agent-studio/process-manager':
+        specifier: workspace:*
+        version: link:../process-manager
+
   packages/contracts:
     dependencies:
       zod:

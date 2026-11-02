@@ -180,3 +180,23 @@ export const approvals = sqliteTable(
     check("approvals_state_check", sql`${t.state} IN ('pending','approved','denied','expired')`),
   ],
 );
+
+/** Latest probe result per provider CLI (one row per provider; B3). Capabilities are what `--help` showed, not guarantees. */
+export const agents = sqliteTable(
+  "agents",
+  {
+    provider: text("provider").primaryKey(),
+    status: text("status").notNull(),
+    executablePath: text("executable_path"),
+    version: text("version"),
+    capabilitiesJson: text("capabilities_json").notNull(),
+    errorJson: text("error_json"),
+    probedAt: text("probed_at").notNull(),
+  },
+  (t) => [
+    check(
+      "agents_status_check",
+      sql`${t.status} IN ('ok','not_installed','shim_unsupported','spawn_error','timeout','exit_nonzero','version_unparsable')`,
+    ),
+  ],
+);

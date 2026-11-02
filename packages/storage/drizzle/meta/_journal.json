@@ -15,6 +15,13 @@
       "when": 1793584251906,
       "tag": "0001_yielding_wasp",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793585269763,
+      "tag": "0002_agents",
+      "breakpoints": true
     }
   ]
 }

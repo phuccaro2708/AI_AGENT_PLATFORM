@@ -10,6 +10,42 @@
 - **Hướng mở rộng (2026-11-02):** thêm Phase 7–10 trong `docs/ROADMAP.md` (ngang AionUi về trải nghiệm, hơn ở an toàn/tin cậy/multi-agent có cấu trúc/nhẹ). Chỉ bắt đầu sau Phase 2.
 - Chưa có PR; nhánh làm việc `claude/loving-lovelace-32lh71`.
 
+## Đối chiếu với ROADMAP (2026-11-02, commit `982232a`)
+
+Bằng chứng cục bộ: `pnpm test` 17 file / 165 test pass; lint, format, typecheck, build xanh (lần chạy gần nhất khi làm UI). **CI thật (GitHub Actions) KHÔNG xanh** cho các commit Phase 1 đã push: run `41520802510` và `41521937556` fail; run của `982232a` (`41524725428`) chưa xong tại thời điểm ghi.
+
+### Đã làm (có bằng chứng)
+
+- **Phase 0:** PASS có hạn chế (xem PHASE0_REPORT).
+- **Phase 1, đạt:** Process Manager + Job Object (A1–A5); probe Claude/Codex bằng fixture thật (B1–B3, B4 một phần); `ClaudeAdapter` và `CodexAdapter` chạy task thật mỗi bên một lần (C2, C3); contract suite dùng chung (C1); `needs_reconciliation` (C4); IPC sidecar + cầu nối Tauri + event stream (D1, D2); phục hồi task khi khởi động (D4, phía backend); baseline hiệu năng (E1).
+- **Ngoài ROADMAP (làm theo yêu cầu người dùng, không tính vào acceptance gate):** làm lại UI — theme sáng/tối, sidebar kiểu Claude Code, trang Settings + biệt danh hiển thị, bố cục 3 cột (header, Inspector thu gọn được), composer "task trước", trạng thái rỗng 3 bước, thẻ lỗi có hành động (Retry / Show details / Dismiss). Đây là phần lấn sang Phase 5/7 về hình thức nhưng chỉ có giao diện, chưa kèm backend tương ứng.
+- Mode "Multi-agent" hiện tại = cùng một mục tiêu gửi cho ≥ 2 agent, chạy độc lập song song, **không điều phối** (điều phối thật là Phase 2/9).
+
+### Chưa làm / chưa đạt
+
+**Chặn việc đóng Phase 1**
+
+- [ ] CI xanh trên commit hiện tại. Hai nguyên nhân đã thấy trong log run `41521937556`: (1) job _Tauri shell_: 3/7 test Rust trong `sidecar.rs` fail trên runner Windows (`pushed_events_reach_the_callback_and_errors_become_err`, `a_request_times_out_and_a_dead_sidecar_fails_waiters_and_later_calls`, `replies_match_by_id_even_when_they_finish_out_of_order`) dù pass 7/7 trên máy Legion — chưa điều tra, nghi test phụ thuộc thời gian/sidecar giả; (2) job _Security_: secret scan báo 23 phát hiện so với 7 đã chấp nhận, toàn bộ ở `docs/reports/phase0-windows/spike-report.json` (Base64 High Entropy) — cần xác nhận là dữ liệu spike vô hại rồi thêm vào danh sách chấp nhận trong `scripts/secret-scan.py`, hoặc bỏ file khỏi repo. Không được coi là "xanh" khi chưa chạy lại.
+- [ ] Hủy một CLI thật đang chạy tool; bấm Cancel trong app Tauri thật.
+- [ ] Chưa kiểm trong app Tauri thật: các thay đổi UI sau `818431e`, nút Browse… (plugin dialog, quyền `dialog:allow-open`), bản release trên máy thứ hai.
+- [ ] Cập nhật `docs/PHASE1_REPORT.md` bằng số CI thật sau khi sửa hai lỗi trên.
+
+**Nợ kỹ thuật Phase 1 (nêu trong báo cáo, chưa làm)**
+
+- [ ] `tasks.list` — danh sách session hiện chỉ nằm trong bộ nhớ, mất khi mở lại app (chuyển sang Phase 7).
+- [ ] UI phê duyệt (approval) — chưa có; chuyển sang Phase 2/7.
+- [ ] Policy cho `projects.rootPath`; test nhánh lỗi của `JobObject::spawn`; project lạ `spike-6844` chưa rõ nguồn gốc.
+- [ ] Claude: tool ghi/phê duyệt, `--include-partial-messages`, hủy giữa chừng chưa kiểm với CLI thật. Codex: `turn.failed`, item khác, resume, app-server + approval, ép read-only chưa kiểm (ghi trong ASSUMPTIONS).
+- [ ] `cargo audit` cho plugin dialog; ẩn adapter `stub` ngoài chế độ dev; chưa kiểm bố cục hẹp (< 800 px).
+- [ ] Hai cảnh báo `pnpm audit` mức moderate và hai cảnh báo `cargo audit` (từ Phase 0) vẫn mở.
+
+**Giao diện đã vẽ nhưng backend chưa hỗ trợ (cố ý không giả lập)**
+
+- Danh sách file thay đổi, tab Plan/Files, nhánh git / lần mở gần nhất, mở log từ thẻ lỗi, "Diagnose", sửa đường dẫn project, command palette, remote agent.
+- Ô "Logs" trong Inspector chỉ là khung xem tool_call/tool_result **chỉ đọc**, không phải terminal; `node-pty` vẫn chưa spike (Phase 5).
+
+**Các phase sau:** Phase 2–10 chưa bắt đầu (toàn bộ checklist bên dưới còn `[ ]`). Thứ tự đã chốt: 2 → 7 → 8 → 9. Lưu ý cho Phase 2: bảng ngữ cảnh chung và vai là mức tối thiểu của Phase 2, chưa có dòng code nào.
+
 ## Phase 0 — Foundation (HOÀN THÀNH, có hạn chế)
 
 ### Repo & tooling
@@ -52,7 +88,7 @@
 - [ ] Hai cảnh báo `pnpm audit` mức moderate (dev-only) và hai cảnh báo `cargo audit` (transitive)
 - [ ] Spike `node-pty` trên Windows
 
-## Phase 1 — Single-Agent MVP (backlog đã đề xuất, chưa bắt đầu)
+## Phase 1 — Single-Agent MVP (đang làm, chưa đóng)
 
 Điều kiện cần quyết định trước: CLI nào đã cài/đăng nhập trên Legion; chi phí test thật (ưu tiên fixture); Job Object ở Rust hay `taskkill /T` (ADR-004).
 
@@ -89,7 +125,7 @@
 
 - [x] E1. Đo baseline → `docs/PERF_BUDGET.md` (`scripts/perf-baseline.mjs`; một máy, chưa ép trong CI)
 - [~] E2. Bản release trên Windows vật lý: `tauri build --no-bundle` + selftest 5/5 pass tại `818431e` (cần `AGENT_STUDIO_SIDECAR_DIR`; chưa có installer). Chưa kiểm trên máy thứ hai
-- [~] E3. lint/format/typecheck/test(156)/build/cargo test/clippy pass cục bộ; CI CHƯA chạy (13 commit chưa push)
+- [~] E3. lint/format/typecheck/test(165)/build/cargo test/clippy pass cục bộ. CI đã chạy sau khi push nhưng **đỏ** (3 test Rust sidecar fail trên runner Windows; secret scan 23 vs 7 phát hiện) — xem mục "Đối chiếu với ROADMAP"
 - [x] E4. `docs/PHASE1_REPORT.md` — kết luận: Phase 1 CHƯA đóng (thiếu task Claude thật)
 
 ## Phase 2 — Multi-Agent

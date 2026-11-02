@@ -28,7 +28,14 @@ Nhánh `claude/loving-lovelace-32lh71`. Trạng thái đo: commit `818431e` (và
 | Selftest bản release, `AGENT_STUDIO_SIDECAR_DIR` trỏ `sidecar-dist` | 5/5 lần exit 0, `ok=true`, task stub `completed`; không còn sidecar sau khi thoát |
 | Kill cứng app đang chạy                                             | không còn sidecar                                                                 |
 
-**CI (GitHub Actions): chưa chạy** cho các commit hiện tại, vì 13 commit chưa được push. Kết quả CI xanh gần nhất trong tài liệu là của Phase 0 (run 6). Chưa có số CI nào cho Phase 1.
+**Cập nhật 2026-11-02 (commit `982232a`):** `pnpm test` hiện 17 file, 165 test pass (gồm test cho UI/biệt danh). Các thay đổi giao diện sau `818431e` (theme, sidebar, Settings, bố cục 3 cột, composer, thẻ lỗi) chỉ được kiểm trong trình duyệt với sidecar giả và bằng bản release chạy tay; chưa có test tự động trong app Tauri thật.
+
+**CI (GitHub Actions): ĐỎ.** Đã push và chạy. Run `41520802510` (`edd080e`) và `41521937556` (`0459386`) đều fail; run `41524725428` (`982232a`) chưa xong khi ghi. Các job TypeScript (ubuntu + windows) và Windows desktop spike **xanh**. Hai job fail:
+
+1. _Tauri shell (Rust check + test, Windows)_: `cargo test --locked` — 3/7 test trong `src/sidecar.rs` fail trên runner (kể cả `a_request_times_out…` ở `assert!(!s.is_alive())`), dù 7/7 pass trên máy Legion. Chưa điều tra nguyên nhân; nghi test phụ thuộc thời gian hoặc process giả.
+2. _Security_: secret scan báo 23 phát hiện, chỉ 7 được chấp nhận; toàn bộ phát hiện mới nằm ở `docs/reports/phase0-windows/spike-report.json` (Base64 High Entropy String). Chưa xác nhận bản chất dữ liệu; chưa thêm vào danh sách chấp nhận.
+
+Vì vậy tiêu chí "CI pass" của quy trình làm việc **chưa đạt** cho Phase 1.
 
 ## Đã làm trong Phase 1
 
@@ -46,7 +53,7 @@ Sidecar khởi động nguội p50 122 ms; RSS rảnh 53 MiB; stub tới message
 
 1. (Đã xong) task Claude thật qua adapter; còn nợ: tool ghi và phê duyệt, `--include-partial-messages`, hủy giữa chừng.
 2. Hủy một CLI thật đang chạy tool; bấm Cancel trong app Tauri thật.
-3. Push để CI chạy trên Windows/Ubuntu; ghi số run vào báo cáo này.
+3. Sửa hai lỗi CI nêu trên (3 test Rust sidecar trên runner; secret scan), push lại, ghi số run xanh vào báo cáo này.
 4. Release chỉ chạy được với `AGENT_STUDIO_SIDECAR_DIR` hoặc thư mục `sidecar` cạnh exe; chưa có đóng gói tài nguyên/installer (Phase 5). Chưa kiểm bản release trên máy thứ hai.
 5. Còn nợ: `tasks.list`, hộp thoại chọn thư mục, UI phê duyệt, policy cho `projects.rootPath`, test nhánh lỗi của `JobObject::spawn`, project lạ `spike-6844` trong DB mới chưa rõ nguyên nhân.
 6. Codex chưa dùng `app-server`, resume và approval; adapter không khai các khả năng đó.

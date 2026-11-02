@@ -155,11 +155,20 @@ mod tests {
             "grandchild ping.exe never appeared"
         );
         let grandchild = grandchild.unwrap();
-        assert!(pid_alive(grandchild), "grandchild should be running before the job closes");
+        assert!(
+            pid_alive(grandchild),
+            "grandchild should be running before the job closes"
+        );
 
         drop(job);
 
-        assert!(wait_for(|| child.try_wait().ok().flatten().is_some(), 10), "child still running");
-        assert!(wait_for(|| !pid_alive(grandchild), 10), "grandchild still running");
+        assert!(
+            wait_for(|| child.try_wait().ok().flatten().is_some(), 10),
+            "child still running"
+        );
+        assert!(
+            wait_for(|| !pid_alive(grandchild), 10),
+            "grandchild still running"
+        );
     }
 }

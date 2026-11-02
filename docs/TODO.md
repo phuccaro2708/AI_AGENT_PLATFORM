@@ -78,8 +78,8 @@
 
 ### Sprint D — IPC và UI
 
-- [~] D1. IPC: agents.detect/list/capabilities, projects.create/list, workflows.create/start, tasks.cancel, logs.query — xong ở sidecar (`SidecarRequest`, test bằng StubAdapter + adapter chậm cho cancel); `cwd` lấy từ project root, UI không gửi. CHƯA: cầu nối lệnh Tauri (Rust) tới sidecar, adapter thật (C2/C3), policy cho `rootPath`
-- [~] D2. Event stream tới UI + backpressure — xong phía sidecar: `task.message`/`task.state` đẩy trên stdout (`SidecarEvent`), bỏ `task.message` khi stdout > 1 MiB (client bù bằng `logs.query`), listener lỗi không ảnh hưởng task. CHƯA: chuyển tiếp qua Tauri event channel (Rust), kiểm tra với tiến trình sidecar thật
+- [~] D1. IPC: agents.detect/list/capabilities, projects.create/list, workflows.create/start, tasks.cancel, logs.query — xong ở sidecar (`SidecarRequest`, test bằng StubAdapter + adapter chậm cho cancel); `cwd` lấy từ project root, UI không gửi. Cầu nối Tauri: `sidecar_call` (allowlist) + event `sidecar://event`, reader thread, test Rust với sidecar giả (7 test, clippy sạch). CHƯA: chạy trong app thật với sidecar đóng gói, quyền `event:listen` chưa kiểm ở runtime, policy cho `rootPath`
+- [~] D2. Event stream tới UI + backpressure — xong phía sidecar: `task.message`/`task.state` đẩy trên stdout (`SidecarEvent`), bỏ `task.message` khi stdout > 1 MiB (client bù bằng `logs.query`), listener lỗi không ảnh hưởng task. Cầu nối Tauri xong (xem D1). CHƯA: chạy trong app thật với sidecar đóng gói, UI (D3)
 - [ ] D3. UI: Projects, Agents, New Task, Output stream, Cancel
 - [~] D4. Crash detection khi khởi động → `needs_reconciliation` — xong phía backend: `Repo.recoverInterruptedTasks()` chạy trong constructor `SidecarService` (task `running`/`waiting_approval` → `needs_reconciliation`, không tự chạy lại, `attempt` giữ nguyên; `health` trả `recoveredTasks`). Test: storage + sidecar (khởi động lại trên cùng DB). CHƯA: UI hiển thị/giải quyết (cần D1/D3), kiểm tra với process thật bị kill giữa chừng
 

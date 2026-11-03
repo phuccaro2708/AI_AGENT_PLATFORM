@@ -174,6 +174,20 @@ fn path_text(p: PathBuf) -> Result<String, String> {
         .map_err(|_| "the chosen folder has a name that is not valid text".to_string())
 }
 
+/// Where the folder dialog opens: the D: drive when this machine has one, otherwise the system's
+/// default. It is only a starting point; any folder can still be picked and the project policy
+/// decides what is acceptable.
+fn start_directory() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        let d = PathBuf::from(r"D:\");
+        if d.is_dir() {
+            return Some(d);
+        }
+    }
+    None
+}
+
 /// Native folder picker, opened from the native side so the webview needs no dialog permission.
 /// Returns `None` when the person cancels. The path is only a suggestion: the sidecar's project
 /// policy decides whether it can be a project folder.
@@ -181,10 +195,11 @@ fn path_text(p: PathBuf) -> Result<String, String> {
 async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
     let picked = tauri::async_runtime::spawn_blocking(move || {
-        app.dialog()
-            .file()
-            .set_title("Choose project folder")
-            .blocking_pick_folder()
+        let mut dialog = app.dialog().file().set_title("Choose project folder");
+        if let Some(start) = start_directory() {
+            dialog = dialog.set_directory(start);
+        }
+        dialog.blocking_pick_folder()
     })
     .await
     .map_err(|e| e.to_string())?;

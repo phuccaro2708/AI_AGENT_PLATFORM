@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNotNull, lt, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, lt, lte, sql } from "drizzle-orm";
 import {
   AgentMessage,
   IllegalTransitionError,
@@ -73,7 +73,7 @@ export class Repo {
     return id;
   }
 
-  createTask(workflowId: string, agentId?: string): string {
+  createTask(workflowId: string, agentId?: string, opts: { priority?: number } = {}): string {
     const id = newId("task");
     const ts = now();
     this.db
@@ -83,11 +83,81 @@ export class Repo {
         workflowId,
         agentId: agentId ?? null,
         state: "queued",
+        priority: opts.priority ?? 0,
         createdAt: ts,
         updatedAt: ts,
       })
       .run();
     return id;
+  }
+
+  getTask(taskId: string) {
+    return this.db.select().from(tasks).where(eq(tasks.id, taskId)).get();
+  }
+
+  /** Queued tasks whose dependencies are all completed: highest priority first, then oldest. */
+  listReadyTasks(limit: number): string[] {
+    return this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.state, "queued"),
+          sql`NOT EXISTS (SELECT 1 FROM task_dependencies d JOIN tasks dep ON dep.id = d.dependency_id
+            WHERE d.task_id = ${tasks.id} AND dep.state <> 'completed')`,
+        ),
+      )
+      .orderBy(desc(tasks.priority), asc(tasks.createdAt), asc(tasks.id))
+      .limit(limit)
+      .all()
+      .map((r) => r.id);
+  }
+
+  /** Queued tasks that can never run because a dependency ended `failed` or `cancelled`. */
+  listTasksBlockedByFailure(): string[] {
+    return this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.state, "queued"),
+          sql`EXISTS (SELECT 1 FROM task_dependencies d JOIN tasks dep ON dep.id = d.dependency_id
+            WHERE d.task_id = ${tasks.id} AND dep.state IN ('failed','cancelled'))`,
+        ),
+      )
+      .orderBy(asc(tasks.createdAt), asc(tasks.id))
+      .all()
+      .map((r) => r.id);
+  }
+
+  /** queued -> running with a lease, atomically. False when the task is no longer queued. */
+  claimTask(taskId: string, leaseUntil: string): boolean {
+    return this.tx((r) => {
+      if (r.getTaskState(taskId) !== "queued") return false;
+      r.setTaskState(taskId, "running");
+      r.db.update(tasks).set({ leaseExpiresAt: leaseUntil }).where(eq(tasks.id, taskId)).run();
+      return true;
+    });
+  }
+
+  /** Heartbeat. False when the task is not running (e.g. already reconciled). */
+  extendLease(taskId: string, leaseUntil: string): boolean {
+    const res = this.db
+      .update(tasks)
+      .set({ leaseExpiresAt: leaseUntil })
+      .where(and(eq(tasks.id, taskId), eq(tasks.state, "running")))
+      .run();
+    return res.changes === 1;
+  }
+
+  /** Running tasks whose lease ran out: their owner is presumed dead. */
+  listExpiredLeases(nowIso: string): string[] {
+    return this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.state, "running"), lt(tasks.leaseExpiresAt, nowIso)))
+      .all()
+      .map((r) => r.id);
   }
 
   listProjects() {
@@ -134,6 +204,8 @@ export class Repo {
         .set({
           state,
           updatedAt: ts,
+          // A lease only means something while a worker owns the task.
+          ...(state === "running" || state === "waiting_approval" ? {} : { leaseExpiresAt: null }),
           ...(opts.incrementAttempt ? { attempt: sql`${tasks.attempt} + 1` } : {}),
         })
         .where(and(eq(tasks.id, taskId), eq(tasks.state, from)))

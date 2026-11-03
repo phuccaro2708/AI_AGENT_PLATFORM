@@ -48,6 +48,56 @@ describe("task dependencies", () => {
   });
 });
 
+describe("ready set, claim and lease", () => {
+  it("ready = queued with every dependency completed, by priority then age", () => {
+    const a = repo.createTask(wf);
+    const b = repo.createTask(wf, undefined, { priority: 5 });
+    const c = repo.createTask(wf, undefined, { priority: 9 });
+    repo.addDependency(c, a);
+    expect(repo.listReadyTasks(10)).toEqual([b, a]);
+    repo.setTaskState(a, "running");
+    repo.setTaskState(a, "completed");
+    expect(repo.listReadyTasks(10)).toEqual([c, b]);
+    expect(repo.listReadyTasks(1)).toEqual([c]);
+  });
+
+  it("a dependency that is failed or cancelled blocks; needs_reconciliation only waits", () => {
+    const a = repo.createTask(wf);
+    const b = repo.createTask(wf);
+    const x = repo.createTask(wf);
+    const y = repo.createTask(wf);
+    repo.addDependency(x, a);
+    repo.addDependency(y, b);
+    repo.setTaskState(a, "running");
+    repo.setTaskState(a, "failed");
+    repo.setTaskState(b, "running");
+    repo.setTaskState(b, "needs_reconciliation");
+    expect(repo.listTasksBlockedByFailure()).toEqual([x]);
+    expect(repo.listReadyTasks(10)).not.toContain(x);
+    expect(repo.listReadyTasks(10)).not.toContain(y);
+  });
+
+  it("claim is atomic: only a queued task can be claimed, once", () => {
+    const t = repo.createTask(wf);
+    expect(repo.claimTask(t, "2026-01-01T00:01:00.000Z")).toBe(true);
+    expect(repo.claimTask(t, "2026-01-01T00:02:00.000Z")).toBe(false);
+    expect(repo.getTaskState(t)).toBe("running");
+    expect(repo.getTask(t)?.leaseExpiresAt).toBe("2026-01-01T00:01:00.000Z");
+  });
+
+  it("extends a lease only while running, lists expired ones, and clears it when the task ends", () => {
+    const t = repo.createTask(wf);
+    expect(repo.extendLease(t, "2026-01-01T00:05:00.000Z")).toBe(false);
+    repo.claimTask(t, "2026-01-01T00:01:00.000Z");
+    expect(repo.listExpiredLeases("2026-01-01T00:00:59.000Z")).toEqual([]);
+    expect(repo.listExpiredLeases("2026-01-01T00:01:01.000Z")).toEqual([t]);
+    expect(repo.extendLease(t, "2026-01-01T00:05:00.000Z")).toBe(true);
+    expect(repo.listExpiredLeases("2026-01-01T00:01:01.000Z")).toEqual([]);
+    repo.setTaskState(t, "completed");
+    expect(repo.getTask(t)?.leaseExpiresAt).toBeNull();
+  });
+});
+
 describe("outbox", () => {
   const enqueue = (taskId: string, messageId: string, at = "2026-01-01T00:00:00.000Z") =>
     repo.enqueueOutbox({

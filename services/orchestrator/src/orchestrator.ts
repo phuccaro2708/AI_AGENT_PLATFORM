@@ -1,4 +1,9 @@
-import { AgentEvent, type AgentMessage, type TaskState } from "@agent-studio/contracts";
+import {
+  AgentEvent,
+  TaskPermissions,
+  type AgentMessage,
+  type TaskState,
+} from "@agent-studio/contracts";
 import type { AdapterRegistry } from "@agent-studio/agent-core";
 import type { Logger } from "@agent-studio/shared-utils";
 import { newId } from "@agent-studio/shared-utils";
@@ -55,16 +60,121 @@ export class Orchestrator {
 
     const taskId = this.repo.createTask(opts.workflowId, opts.agentId);
     opts.onCreated?.(taskId);
+    this.repo.setTaskState(taskId, "running");
+    this.notify(() => this.hooks.onState?.(taskId, "running"));
+    return this.drive({
+      taskId,
+      workflowId: opts.workflowId,
+      agentId: opts.agentId,
+      prompt: opts.prompt,
+      cwd: opts.cwd,
+      correlationId: newId("corr"),
+      signal: opts.signal ?? new AbortController().signal,
+    });
+  }
+
+  /**
+   * Creates a `queued` task for the scheduler. The prompt (and permissions) are persisted as the task's
+   * `task.request` message, so the task survives a restart and can be executed later by `execute`.
+   */
+  enqueue(opts: {
+    workflowId: string;
+    agentId: string;
+    prompt: string;
+    priority?: number;
+    permissions?: TaskPermissions;
+    /** Task ids that must complete first. A cycle is rejected. */
+    dependsOn?: readonly string[];
+  }): string {
+    if (!this.registry.get(opts.agentId)) throw new Error(`Unknown agent: ${opts.agentId}`);
     const correlationId = newId("corr");
-    const signal = opts.signal ?? new AbortController().signal;
+    const { taskId, stored } = this.repo.tx((r) => {
+      const id = r.createTask(opts.workflowId, opts.agentId, {
+        ...(opts.priority !== undefined ? { priority: opts.priority } : {}),
+      });
+      for (const dep of opts.dependsOn ?? []) r.addDependency(id, dep);
+      const message = r.appendMessageAuto({
+        id: newId("msg"),
+        schemaVersion: 1,
+        workflowId: opts.workflowId,
+        taskId: id,
+        correlationId,
+        fromAgent: "orchestrator",
+        toAgent: opts.agentId,
+        type: "task.request",
+        payload: {
+          prompt: opts.prompt,
+          ...(opts.permissions ? { permissions: opts.permissions } : {}),
+        },
+        createdAt: new Date().toISOString(),
+      });
+      return { taskId: id, stored: message };
+    });
+    this.notify(() => this.hooks.onMessage?.(stored));
+    return taskId;
+  }
+
+  /**
+   * Runs a task that a scheduler already claimed (state `running`). A task that cannot even be
+   * prepared (missing request, unknown agent) has not touched anything, so it is safely `failed`.
+   */
+  async execute(taskId: string, opts: { signal?: AbortSignal } = {}): Promise<RunResult> {
+    const task = this.repo.getTask(taskId);
+    if (!task) throw new Error(`Unknown task: ${taskId}`);
+    if (task.state !== "running") throw new Error(`Task ${taskId} is ${task.state}, not running`);
+    const request = this.repo.listMessages(taskId).find((m) => m.type === "task.request");
+    const payload = request?.payload as { prompt?: unknown; permissions?: unknown } | undefined;
+    const root = this.repo.getWorkflowRoot(task.workflowId);
+    const parsedPermissions = TaskPermissions.safeParse(payload?.permissions);
+    const problem = !request
+      ? "task has no task.request message"
+      : typeof payload?.prompt !== "string"
+        ? "task.request has no prompt"
+        : !task.agentId || !this.registry.get(task.agentId)
+          ? `unknown agent: ${String(task.agentId)}`
+          : !root
+            ? "workflow has no project root"
+            : undefined;
+    if (problem !== undefined || !request || !task.agentId || !root) {
+      const reason = problem ?? "task cannot be prepared";
+      this.repo.setTaskState(taskId, "failed", { reason });
+      this.notify(() => this.hooks.onState?.(taskId, "failed", reason));
+      return { taskId, finalState: "failed", reason, events: [] };
+    }
+    return this.drive({
+      taskId,
+      workflowId: task.workflowId,
+      agentId: task.agentId,
+      prompt: payload?.prompt as string,
+      cwd: root.rootPath,
+      ...(parsedPermissions.success ? { permissions: parsedPermissions.data } : {}),
+      correlationId: request.correlationId,
+      signal: opts.signal ?? new AbortController().signal,
+    });
+  }
+
+  /** Shared core: the task is already `running`; run the adapter, persist events, settle the state. */
+  private async drive(ctx: {
+    taskId: string;
+    workflowId: string;
+    agentId: string;
+    prompt: string;
+    cwd: string;
+    permissions?: TaskPermissions;
+    correlationId: string;
+    signal: AbortSignal;
+  }): Promise<RunResult> {
+    const { taskId, correlationId, signal } = ctx;
+    const adapter = this.registry.get(ctx.agentId);
+    if (!adapter) throw new Error(`Unknown agent: ${ctx.agentId}`);
     const record = (type: AgentMessage["type"], payload: unknown) => {
       const base = {
         id: newId("msg"),
         schemaVersion: 1 as const,
-        workflowId: opts.workflowId,
+        workflowId: ctx.workflowId,
         taskId,
         correlationId,
-        fromAgent: opts.agentId,
+        fromAgent: ctx.agentId,
         toAgent: "orchestrator",
         type,
         payload,
@@ -75,16 +185,15 @@ export class Orchestrator {
       this.notify(() => this.hooks.onMessage?.(stored));
     };
 
-    this.repo.setTaskState(taskId, "running");
-    this.notify(() => this.hooks.onState?.(taskId, "running"));
-    record("task.accepted", { prompt: opts.prompt });
+    record("task.accepted", { prompt: ctx.prompt });
     const events: AgentEvent[] = [];
     let abnormalEnd: string | undefined;
     try {
       for await (const raw of adapter.execute({
         id: taskId,
-        prompt: opts.prompt,
-        cwd: opts.cwd,
+        prompt: ctx.prompt,
+        cwd: ctx.cwd,
+        ...(ctx.permissions ? { permissions: ctx.permissions } : {}),
         signal,
       })) {
         const parsed = AgentEvent.safeParse(raw);

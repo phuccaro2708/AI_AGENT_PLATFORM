@@ -272,7 +272,12 @@ async function resumeMode(impl, rev) {
       running && before.tasks[0]?.state === "needs_reconciliation" && final === "completed" ? 0 : 1;
   } finally {
     svc.close();
-    rmSync(dir, { recursive: true, force: true });
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch (e) {
+      // Windows can keep the worktree directory locked for a moment; the verdict is already printed.
+      console.error(`cleanup skipped: ${e.code ?? e}`);
+    }
   }
 }
 

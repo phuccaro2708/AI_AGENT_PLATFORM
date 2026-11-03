@@ -191,7 +191,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [x] `tasks.resolveReconciliation` (quyết định tường minh + ghi chú bắt buộc; `requeue` mới tăng `attempt`)
 - [x] Peer Review engine resume sau restart và sau quyết định reconciliation (`resumeAll`/`resume`); giới hạn: `maxRounds` tùy chỉnh không được lưu qua restart
 - [x] UI: thẻ "Needs your decision" (diff trước, không quyết định mặc định, requeue cần xác nhận)
-- [ ] Kiểm với CLI thật: `node scripts/e2e-peer-review.mjs resume <impl> <rev>` (script đã viết, CHƯA chạy, tốn token)
+- [ ] Kiểm với CLI thật: `node scripts/e2e-peer-review.mjs resume <impl> <rev>` (script đã viết, đã chạy 2026-11-03 với claude→codex: kill → needs_reconciliation → requeue → workflow completed; một lần thoát mã 1 chỉ do dọn thư mục tạm bị EPERM, đã sửa)
 - [ ] Chạy UI trong app Tauri thật
 
 ### Còn lại của Phase 7

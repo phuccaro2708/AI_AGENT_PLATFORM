@@ -1,11 +1,17 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ReviewResultPayload, type AgentMessage } from "@agent-studio/contracts";
+import {
+  AgentEvent,
+  ReviewResultPayload,
+  type AgentMessage,
+  type TaskState,
+} from "@agent-studio/contracts";
 import { newId } from "@agent-studio/shared-utils";
 import type { Repo } from "@agent-studio/storage";
 import type { ContextBoard } from "./context-board.js";
 import type { Orchestrator, RunResult } from "./orchestrator.js";
+import type { FinalState } from "./outcome.js";
 
 /** The slice of `GitWorktrees` the engine needs; kept structural so tests can use a plain directory. */
 export interface Workspaces {
@@ -41,8 +47,10 @@ type Step = {
  * messages. A reviewer's read-only status is enforced by CLI flags where the CLI supports them, and is
  * CHECKED here after the run (detect, not prevent): a reviewer that changed the worktree fails the workflow.
  *
- * Step bookkeeping is in memory, so a restart mid-workflow leaves the workflow `running` with settled tasks
- * (resume is not implemented yet; see docs/ASSUMPTIONS.md).
+ * Step bookkeeping is in memory, but it can be rebuilt from the database (`resume`): tasks of a workflow
+ * alternate implementer, reviewer, implementer, ... in creation order. A task that ended in
+ * `needs_reconciliation` is never continued by the engine; the workflow waits until a person decides.
+ * Not persisted: a custom `maxRounds` (a resumed workflow uses the default).
  */
 export class PeerReviewEngine {
   private readonly repo: Repo;
@@ -105,9 +113,12 @@ export class PeerReviewEngine {
     this.enqueueImplement(opts.workflowId, 1);
   }
 
-  /** Wire into `OrchestratorHooks.resolveCwd`: each implementer task gets its own worktree. */
+  /** Wire into `OrchestratorHooks.resolveCwd`: the first implementer task gets a worktree. */
   async resolveCwd(ctx: { taskId: string; workflowId: string }): Promise<string | undefined> {
     if (this.steps.get(ctx.taskId)?.kind !== "implement") return undefined;
+    // A requeued implementer continues in the worktree the earlier attempt left behind.
+    const existing = this.worktreeOfWorkflow(ctx.workflowId);
+    if (existing && existing.state === "active") return existing.path;
     const wt = await this.workspaces.create(ctx.workflowId, ctx.taskId);
     const id = this.repo.createWorktree({
       workflowId: ctx.workflowId,
@@ -125,6 +136,8 @@ export class PeerReviewEngine {
     const step = this.steps.get(taskId);
     if (!step) return;
     this.steps.delete(taskId);
+    // Side effects unknown: wait for a person (`resume` runs after the decision), never fail or retry here.
+    if (result?.finalState === "needs_reconciliation") return;
     try {
       if (!result || result.finalState !== "completed") {
         this.fail(step.workflowId, `${step.kind} task ${result?.finalState ?? "did not finish"}`);
@@ -135,6 +148,52 @@ export class PeerReviewEngine {
     } catch (err) {
       this.fail(step.workflowId, `workflow engine error: ${String(err)}`);
     }
+  }
+
+  /**
+   * Re-attaches the engine to a `running` workflow after a restart or after a person settled a
+   * `needs_reconciliation` task. Waiting tasks get their step back; if the newest task already
+   * ended (and nothing follows it) the workflow continues from there. Safe to call repeatedly.
+   */
+  async resume(workflowId: string): Promise<void> {
+    if (this.repo.getWorkflowState(workflowId) !== "running") return;
+    const tasks = this.repo.listTasks(workflowId);
+    if (tasks.length === 0) return;
+    const steps = tasks.map((_t, i) => this.rebuildStep(workflowId, tasks, i));
+    tasks.forEach((t, i) => {
+      if (!this.steps.has(t.id) && !isSettled(t.state as TaskState)) this.steps.set(t.id, steps[i]!);
+    });
+    const last = tasks.at(-1)!;
+    const state = last.state as TaskState;
+    if (this.steps.has(last.id) || !isSettled(state) || state === "needs_reconciliation") return;
+    this.steps.set(last.id, steps.at(-1)!);
+    await this.onSettled(last.id, this.resultOf(last.id, state as FinalState));
+  }
+
+  /** Resumes every `running` workflow; call once at startup. */
+  async resumeAll(): Promise<void> {
+    for (const id of this.repo.listWorkflowIdsByState("running")) await this.resume(id);
+  }
+
+  private rebuildStep(workflowId: string, tasks: { id: string }[], index: number): Step {
+    const kind = index % 2 === 0 ? "implement" : "review";
+    const step: Step = { kind, workflowId, round: Math.floor(index / 2) + 1 };
+    if (kind === "review") {
+      const request = this.repo
+        .listMessages(tasks[index - 1]!.id)
+        .find((m) => m.type === "review.request");
+      const artifacts = (request?.payload as { artifacts?: unknown } | undefined)?.artifacts;
+      if (Array.isArray(artifacts)) step.snapshot = JSON.stringify(artifacts);
+    }
+    return step;
+  }
+
+  private resultOf(taskId: string, finalState: FinalState): RunResult {
+    const events = this.repo.listMessages(taskId).flatMap((m) => {
+      const parsed = AgentEvent.safeParse(m.payload);
+      return parsed.success && m.type.startsWith("task.") ? [parsed.data] : [];
+    });
+    return { taskId, finalState, events };
   }
 
   private roleInstructions(workflowId: string, roleName: string) {
@@ -306,6 +365,9 @@ export class PeerReviewEngine {
     });
   }
 }
+
+const isSettled = (s: TaskState) =>
+  s === "completed" || s === "failed" || s === "cancelled" || s === "needs_reconciliation";
 
 function texts(result: RunResult): string[] {
   return result.events.flatMap((e) => (e.type === "text" ? [e.content] : []));

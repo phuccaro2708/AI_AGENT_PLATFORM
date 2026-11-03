@@ -199,6 +199,20 @@ export class Repo {
     if (res.changes !== 1) throw new Error(`Workflow ${workflowId} changed concurrently`);
   }
 
+  getTaskWorkflowId(taskId: string): string | undefined {
+    return this.db.select({ w: tasks.workflowId }).from(tasks).where(eq(tasks.id, taskId)).get()?.w;
+  }
+
+  listWorkflowIdsByState(state: WorkflowState): string[] {
+    return this.db
+      .select({ id: workflows.id })
+      .from(workflows)
+      .where(eq(workflows.state, state))
+      .orderBy(asc(workflows.createdAt))
+      .all()
+      .map((r) => r.id);
+  }
+
   listTasks(workflowId: string) {
     return this.db
       .select()

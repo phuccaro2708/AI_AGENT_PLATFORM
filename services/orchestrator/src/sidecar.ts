@@ -124,6 +124,11 @@ export class SidecarService {
       orchestrator: this.orchestrator,
       onSettled: (id, result) => this.engine.onSettled(id, result),
     });
+    // Workflows left `running` by a previous exit need the scheduler again (it starts lazily otherwise).
+    if (this.repo.listWorkflowIdsByState("running").length > 0) {
+      this.scheduler.start(opts.schedulerIntervalMs);
+    }
+    void this.engine.resumeAll().catch((err) => log.error({ err: String(err) }, "resume failed"));
     this.approvals = new ApprovalService({ repo: this.repo });
     this.artifacts = new ArtifactRegistry(this.repo, workspaces);
   }
@@ -295,6 +300,12 @@ export class SidecarService {
           if (state === undefined) return fail(req.id, `Unknown task: ${taskId}`);
           // Only an explicit user decision gets here; `requeue` is the one path that re-runs work.
           this.orchestrator.resolveReconciliation(taskId, decision, note);
+          // The decision may unblock a workflow (e.g. `completed` hands over to the reviewer).
+          const wf = this.repo.getTaskWorkflowId(taskId);
+          if (wf) {
+            this.scheduler.start(this.opts.schedulerIntervalMs); // a requeued task needs a running scheduler
+            await this.engine.resume(wf);
+          }
           const next = this.repo.getTaskState(taskId);
           if (next !== undefined) {
             this.opts.onEvent?.({

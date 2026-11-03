@@ -27,3 +27,7 @@ Workspace packages expose `types` → `src/index.ts` (so typecheck/tests need no
 ## Not in Phase 0
 
 Scheduler, router/outbox, DAG, worktrees, policy engine, real adapters, sidecar packaging (spike pending, see `DECISIONS.md` ADR-001).
+
+## Phase 2: điều phối nhiều agent
+
+Sidecar giữ thêm: `Scheduler` (lease, DAG, concurrency), `MessageRouter` (outbox/inbox bền, at-least-once + dedupe), `PeerReviewEngine` (implementer → reviewer, vòng `request_changes`), `ContextBoard` (lọc theo vai), `ApprovalService`, `ArtifactRegistry` và `ProjectWorkspaces` (git worktree riêng cho mỗi workflow). Task đang chạy mà lease hết hạn hoặc tiến trình chết → `needs_reconciliation`, không bao giờ tự chạy lại. Worktree và approval không phải sandbox. Chi tiết và ngoại lệ: `docs/PHASE2_REPORT.md`, `docs/ASSUMPTIONS.md`.

@@ -59,7 +59,7 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 
 **Việc làm ngoài phạm vi Phase 1 (theo yêu cầu người dùng):** làm lại UI (theme sáng/tối, sidebar, Settings, bố cục 3 cột, composer, thẻ lỗi). Mode "Multi-agent" hiện chỉ gửi cùng mục tiêu cho ≥ 2 agent chạy độc lập, chưa điều phối (điều phối thật: Phase 2/9). Không giả lập tính năng backend chưa có.
 
-**Bước tiếp theo: Phase 2** (thứ tự đã chốt 2 → 7 → 8 → 9).
+**Phase 2: ĐÓNG (2026-11-03), có ngoại lệ** — xem `docs/PHASE2_REPORT.md`. **Bước tiếp theo: Phase 7** (thứ tự đã chốt 2 → 7 → 8 → 9).
 
 - Process Manager: spawn `shell:false`, resolve shim `.cmd`/`.exe` trên Windows, stream stdout/stderr, timeout, cancel (kill process tree qua Job Object / `taskkill /T`).
 - CLI detection + **compatibility probe** (version, flags thực tế) cho Claude Code và Codex; lưu kết quả vào `agents.capabilities`.
@@ -92,13 +92,13 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 - Artifact registry (path + hash), diff viewer, message timeline.
 - Approval Center cơ bản (`approvals.resolve`).
 
-**Acceptance gate**
+**Acceptance gate** (đạt 2026-11-03, có ngoại lệ: xem `docs/PHASE2_REPORT.md`)
 
-- [ ] Workflow thật "implement → review" chạy không cần copy tay giữa terminal.
-- [ ] Kill app giữa chừng → restart không mất message đã commit; duplicate được xử lý an toàn.
-- [ ] 2 agent song song trên 2 worktree không ghi đè nhau.
-- [ ] Task side-effect không rõ → `needs_reconciliation`, không auto-retry.
-- [ ] Gán vai cho agent trong một workflow thật; agent chỉ nhận đúng phần bảng ngữ cảnh mà vai được thấy (test).
+- [x] Workflow thật "implement → review" chạy không cần copy tay giữa terminal.
+- [x] Kill app giữa chừng → restart không mất message đã commit; duplicate được xử lý an toàn.
+- [x] 2 agent song song trên 2 worktree không ghi đè nhau.
+- [x] Task side-effect không rõ → `needs_reconciliation`, không auto-retry.
+- [x] Gán vai cho agent trong một workflow thật; agent chỉ nhận đúng phần bảng ngữ cảnh mà vai được thấy (test).
 
 ## Phase 3 — Gemini & Local AI (1–2 tuần)
 

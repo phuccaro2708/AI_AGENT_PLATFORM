@@ -1,0 +1,37 @@
+# PHASE 2 REPORT
+
+Nhánh `claude/repo-current-status-acfd51`. Các bước 1–8 đã commit; bước 9 (e2e thật + báo cáo) là bản này.
+
+**Kết luận: PHASE 2 ĐÓNG (2026-11-03), có ngoại lệ ghi rõ.** Đường găng Peer Review (implement → review) chạy thật với Claude 2.1.316 và Codex 0.165.0 qua sidecar, không copy tay. Các ngoại lệ không bị che nằm ở cuối.
+
+## Acceptance gate (ROADMAP.md)
+
+| Tiêu chí                                                             | Trạng thái           | Bằng chứng / lý do                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Workflow thật "implement → review" không copy tay                    | **ĐẠT, có giới hạn** | `node scripts/e2e-peer-review.mjs run claude codex`: workflow `completed` sau 43 s; Claude (implementer, ghi `hello.txt` trong worktree riêng) → Codex (reviewer, đọc worktree) → `review.result`; diff chứa `+hello`; checkout chính sạch; bảng ngữ cảnh có `goal`, `artifact`. Chạy qua `SidecarService` thật, **chưa** bấm qua UI trong app Tauri                                             |
+| Kill giữa chừng → restart không mất message, duplicate xử lý an toàn | **ĐẠT, có giới hạn** | `... kill claude codex`: SIGKILL tiến trình đang chạy implementer thật; restart trên cùng DB → task `needs_reconciliation`, 2 message đã commit còn nguyên, không chạy lại sau 3 s. Duplicate/crash của router: test fault-injection `router.test.ts` (adapter giả). Giới hạn: workflow vẫn `running` sau restart (engine chưa resume), không có tiến trình `claude` mồ côi nào được kiểm cụ thể |
+| 2 agent song song trên 2 worktree không ghi đè nhau                  | **ĐẠT**              | `... two claude codex`: hai workflow cùng project, 2 worktree khác nhau, diff `one.txt`/`two.txt` không lẫn, cả hai `completed`, checkout chính sạch. Ghi chú: cùng cặp agent, hai workflow chạy với concurrency scheduler mặc định 2                                                                                                                                                            |
+| Task side-effect không rõ → `needs_reconciliation`, không auto-retry | **ĐẠT**              | Test scheduler/orchestrator (`executions` = 1 sau lease hết hạn/restart) và lần kill thật ở trên                                                                                                                                                                                                                                                                                                 |
+| Gán vai; agent chỉ nhận phần bảng được thấy (test)                   | **ĐẠT**              | `context-board.test.ts`, `workflow-engine.test.ts` (reviewer chỉ thấy `goal`+`artifact`, implementer `goal, plan, decision`); e2e thật cho thấy board có đúng các loại mục                                                                                                                                                                                                                       |
+
+## Kiểm tra tự động (2026-11-03)
+
+| Lệnh                                                           | Kết quả                                              |
+| -------------------------------------------------------------- | ---------------------------------------------------- |
+| `pnpm lint` / `pnpm format` / `pnpm typecheck` / `pnpm build`  | pass                                                 |
+| `pnpm test`                                                    | 31 file, 284 test pass, 0 skip                       |
+| `cargo test --locked` (src-tauri)                              | 7 pass                                               |
+| `cargo clippy --locked -- -D warnings`                         | sạch                                                 |
+| `node scripts/e2e-peer-review.mjs run\|kill\|two claude codex` | 3/3 exit 0 (CLI thật; tốn token, không chạy trên CI) |
+
+CI trên GitHub chưa được chạy cho các commit Phase 2 trong phiên này.
+
+## Ngoại lệ và nợ (chuyển sang phase sau, xem ASSUMPTIONS.md)
+
+- Chưa chạy luồng này qua UI trong app Tauri; UI Peer Review chỉ được kiểm bằng typecheck/build/test logic.
+- Engine không resume sau restart: task bị gián đoạn → `needs_reconciliation` nhưng workflow ở `running`, người dùng chưa có UI giải quyết reconciliation (Phase 7).
+- Supervisor và Parallel Workers chưa làm (R9); chỉ Peer Review.
+- Approval từ CLI thật chưa quan sát; Approval Center chỉ xử lý approval do orchestrator tạo. Chưa có timer hết hạn.
+- Quyền theo vai: cờ CLI + cwd + kiểm tra sau chạy (phát hiện, không ngăn). Ánh xạ tool ghi của Claude và read-only của Codex mới được thấy hoạt động trong một lần chạy đơn giản; chưa thử đối kháng. Worktree không phải sandbox.
+- Spike S4 (hủy khi đang ghi), perf-baseline sau bước 3 (R11), concurrency theo settings, `createDag`/`roles.upsert` IPC: chưa làm.
+- Chi phí chạy thật không đo chính xác (prompt rất ngắn, repo tạm).

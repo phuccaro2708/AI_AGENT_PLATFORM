@@ -21,3 +21,7 @@ No external repository code was consulted or copied in Phase 0. Tool/library ver
 ## Rejected
 
 _None._
+
+## Phase 2
+
+Không tham khảo repo công khai mới trong Phase 2; tài liệu và hành vi CLI lấy từ chính Claude Code 2.1.316 và codex-cli 0.165.0 chạy trên máy này (`scripts/e2e-peer-review.mjs`). Không sao chép code ngoài.

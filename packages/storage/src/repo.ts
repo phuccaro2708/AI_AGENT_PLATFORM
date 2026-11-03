@@ -11,9 +11,21 @@ import { agents, events, executionRuns, messages, projects, tasks, workflows } f
 
 const now = () => new Date().toISOString();
 
+/** What Repo needs from a database: satisfied by `StudioDb` and by a drizzle transaction handle. */
+export type RepoDb = Pick<StudioDb, "select" | "insert" | "update" | "delete" | "transaction">;
+
 /** Thin repository layer. State change + event are written in ONE transaction. */
 export class Repo {
-  constructor(private readonly db: StudioDb) {}
+  constructor(private readonly db: RepoDb) {}
+
+  /**
+   * Runs `fn` in one transaction against a Repo bound to it; any throw rolls everything back.
+   * Synchronous on purpose (better-sqlite3): never hold a transaction across an `await`.
+   * Nested Repo calls (e.g. `setTaskState`) join this transaction as savepoints.
+   */
+  tx<T>(fn: (repo: Repo) => T): T {
+    return this.db.transaction((tx) => fn(new Repo(tx as unknown as RepoDb)));
+  }
 
   createProject(name: string, rootPath: string): string {
     const id = newId("prj");
@@ -212,6 +224,23 @@ export class Repo {
         createdAt: msg.createdAt,
       })
       .run();
+  }
+
+  /**
+   * Appends a message with the next sequence for its task (`MAX(sequence)+1`, computed inside the
+   * same transaction as the insert). Unlike a caller-held counter this survives requeue/restart.
+   */
+  appendMessageAuto(input: Omit<AgentMessage, "sequence">): AgentMessage {
+    return this.tx((r) => {
+      const row = r.db
+        .select({ m: sql<number | null>`max(${messages.sequence})` })
+        .from(messages)
+        .where(eq(messages.taskId, input.taskId))
+        .get();
+      const sequence = (row?.m ?? -1) + 1;
+      r.appendMessage(input, sequence);
+      return AgentMessage.parse({ ...input, sequence });
+    });
   }
 
   listMessages(taskId: string): AgentMessage[] {

@@ -57,7 +57,6 @@ export class Orchestrator {
     opts.onCreated?.(taskId);
     const correlationId = newId("corr");
     const signal = opts.signal ?? new AbortController().signal;
-    let sequence = 0;
     const record = (type: AgentMessage["type"], payload: unknown) => {
       const base = {
         id: newId("msg"),
@@ -71,9 +70,9 @@ export class Orchestrator {
         payload,
         createdAt: new Date().toISOString(),
       };
-      const seq = sequence++;
-      this.repo.appendMessage(base, seq);
-      this.notify(() => this.hooks.onMessage?.({ ...base, sequence: seq }));
+      // Sequence comes from the DB so a requeued task continues its log instead of colliding.
+      const stored = this.repo.appendMessageAuto(base);
+      this.notify(() => this.hooks.onMessage?.(stored));
     };
 
     this.repo.setTaskState(taskId, "running");

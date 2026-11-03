@@ -26,6 +26,22 @@ Nhánh `claude/repo-current-status-acfd51`. Các bước 1–8 đã commit; bư�
 
 CI GitHub: lần chạy đầu (`64532f8`) đỏ vì (1) `scripts/build-sidecar.mjs` thiếu alias `git-worktrees`, (2) `samePath` sai trên Windows do thư mục temp dùng tên 8.3 (đã sửa ở `5d8a92a`, `8789e93`), rồi (3) secret scan báo giả tên nhánh giả trong test (đã duyệt tay, `c74b924`). **Run `41690761288` ở `c74b924`: 5/5 job xanh** (Security mất ~32 phút vì quét 83 commit).
 
+## Đối chiếu từng hạng mục ROADMAP Phase 2
+
+| Hạng mục ROADMAP                                                             | Trạng thái                    | Ghi chú                                                                  |
+| ---------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------ |
+| Durable Message Router (outbox/inbox, ack, dedupe, retry, DLQ, backpressure) | Xong                          | `router.test.ts` (fault injection, adapter giả)                          |
+| Transaction state + outbox                                                   | Xong                          | `Repo.tx`                                                                |
+| Task DAG + scheduler (priority, dependency, lease, concurrency 2)            | Xong, có giới hạn             | concurrency chưa từ settings; chưa có IPC `createDag`                    |
+| `packages/git-worktrees`                                                     | Xong                          | CI Windows đã bắt một lỗi đường dẫn 8.3 và đã sửa                        |
+| Workflow engine: Supervisor + Peer Review + Parallel Workers                 | **Một phần: chỉ Peer Review** | Supervisor/Parallel Workers dời Phase 9 (rủi ro R9)                      |
+| Handoff Claude implement → Codex review                                      | Xong                          | e2e thật 43 s                                                            |
+| Vai cho agent                                                                | Xong                          | chưa có IPC `roles.upsert`                                               |
+| Bảng ngữ cảnh chung + lọc theo vai                                           | Xong                          | có test                                                                  |
+| Artifact registry, Diff Viewer, Message Timeline                             | Xong                          | UI chưa kiểm trong app Tauri                                             |
+| Approval Center cơ bản (`approvals.resolve`)                                 | **Một phần**                  | không có đường production tạo approval; chưa timer expiry                |
+| Ngoài ROADMAP nhưng đã làm                                                   |                               | Peer Review UI thay chế độ multi-agent giả; restore run qua `tasks.list` |
+
 ## Ngoại lệ và nợ (chuyển sang phase sau, xem ASSUMPTIONS.md)
 
 - Chưa chạy luồng này qua UI trong app Tauri; UI Peer Review chỉ được kiểm bằng typecheck/build/test logic.

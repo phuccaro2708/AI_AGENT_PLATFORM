@@ -17,8 +17,8 @@
 
 ### Nợ kỹ thuật còn mở (không chặn phase nào đã đóng)
 
-- [ ] `tasks.list` — session chỉ nằm trong bộ nhớ, mất khi mở lại app (Phase 7).
-- [ ] UI phê duyệt (Phase 2 cơ bản, Phase 7 đầy đủ).
+- [x] `tasks.list` — Peer Review khôi phục sau restart (id run lưu ở localStorage). Session chế độ Agent đơn vẫn chỉ nằm trong bộ nhớ (Phase 7).
+- [~] UI phê duyệt: cơ bản xong (Phase 2); đầy đủ + nguồn approval thật: Phase 4/7.
 - [ ] Policy cho `projects.rootPath` (Phase 4/7); test nhánh lỗi của `JobObject::spawn`.
 - [ ] Nút Browse… (plugin dialog, quyền `dialog:allow-open`), Settings, theme, bố cục hẹp (< 800 px) chưa kiểm trong app Tauri thật.
 - [ ] `cargo audit` cho plugin dialog; ẩn adapter `stub` ngoài chế độ dev.
@@ -114,24 +114,26 @@
 - [x] E3. lint/format/typecheck/test (168)/build/cargo test (7)/clippy pass; CI xanh 5/5 ở run `41551598060` (commit `63d7ef5`)
 - [x] E4. `docs/PHASE1_REPORT.md` — kết luận: Phase 1 ĐÓNG (2026-11-02) có ba ngoại lệ
 
-## Phase 2 — Multi-Agent
+## Phase 2 — Multi-Agent (đóng 2026-11-03, có ngoại lệ: docs/PHASE2_REPORT.md)
 
-- [ ] Outbox/inbox + delivery ledger + migration
-- [ ] Router: sequence per task, ack, dedupe, retry backoff+jitter, dead-letter, backpressure
-- [ ] Transaction: state change + outbox atomic (test crash giữa chừng)
-- [ ] Task DAG: cycle detection, ready-set, priority, lease/heartbeat
-- [ ] Scheduler giới hạn concurrency (mặc định 2, cấu hình)
-- [ ] `git-worktrees`: create/remove/list, branch naming, dirty check, conflict detect, cleanup khi hủy
-- [ ] Workflow engine: Supervisor, Peer Review, Parallel Workers
-- [ ] Message types: `task.*`, `review.*`, approval.request, agent.message
-- [ ] Vai (role) trong workflow: hướng dẫn, quyền, agent cho phép; gán agent vào vai theo cấu hình lượt chạy
-- [ ] Bảng ngữ cảnh chung tối thiểu: mục tiêu/kế hoạch/quyết định/artifact (hash), nguồn từng mục, lọc theo vai (test: agent chỉ nhận phần được thấy)
-- [ ] Workflow mẫu Claude implement → Codex review (e2e thật)
-- [ ] Artifact registry (hash) + Diff Viewer
-- [ ] Approval Center (`approvals.resolve`), expiry
-- [ ] Message Timeline + Task Board UI
-- [ ] Tests: kill giữa chừng, duplicate delivery, 2 agent song song
-- [ ] PHASE2_REPORT.md → **gắn tag MVP**
+- [x] Outbox/inbox + delivery ledger + migration
+- [x] Router: sequence per task, ack, dedupe, retry backoff+jitter, dead-letter, backpressure
+- [x] Transaction: state change + outbox atomic (test crash giữa chừng)
+- [x] Task DAG: cycle detection, ready-set, priority, lease/heartbeat (chưa có IPC `createDag`)
+- [~] Scheduler giới hạn concurrency (mặc định 2; chưa đọc từ settings)
+- [x] `git-worktrees`: create/remove/list, branch naming, dirty check, conflict detect, cleanup khi hủy (S4 hủy khi đang ghi với CLI thật: chưa)
+- [~] Workflow engine: Peer Review xong; **Supervisor, Parallel Workers chưa làm (Phase 9)**; engine chưa resume sau restart
+- [~] Message types: `task.*`, `review.*`, `approval.request` xong; `agent.message` chưa dùng
+- [x] Vai (role) trong workflow: hướng dẫn, quyền, agent cho phép; gán agent vào vai theo cấu hình lượt chạy (chưa có IPC `roles.upsert`)
+- [x] Bảng ngữ cảnh chung tối thiểu: lọc theo vai, có test
+- [x] Workflow mẫu Claude implement → Codex review (e2e thật, `scripts/e2e-peer-review.mjs`; chưa qua UI trong app Tauri)
+- [x] Artifact registry (hash) + Diff Viewer
+- [~] Approval Center (`approvals.resolve`), expiry: có UI/IPC/service, **chưa có đường production tạo approval, chưa có timer hết hạn**
+- [x] Message Timeline + Task Board UI (chưa kiểm trong app thật; poll, không có push)
+- [x] Tests: kill giữa chừng (thật), duplicate delivery (fake), 2 agent song song (thật)
+- [x] PHASE2_REPORT.md → tag `mvp-phase2`
+
+Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết reconciliation (Phase 7); Supervisor/Parallel Workers (Phase 9); đường tạo approval từ CLI thật (Phase 4); perf-baseline sau bước 3 (R11).
 
 ## Phase 3 — Gemini & Local AI
 

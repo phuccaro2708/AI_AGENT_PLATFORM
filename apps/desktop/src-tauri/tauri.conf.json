@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Agent Studio",
+  "productName": "Team workspace",
   "version": "0.0.0",
   "identifier": "dev.agentstudio.desktop",
   "build": {
@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "Agent Studio", "width": 1100, "height": 720 }],
+    "windows": [{ "title": "Team workspace", "width": 1100, "height": 720 }],
     "security": {
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost"
     }

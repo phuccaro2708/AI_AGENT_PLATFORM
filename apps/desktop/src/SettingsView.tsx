@@ -76,7 +76,7 @@ export function SettingsView({
 
       <div className="card">
         <h2>About</h2>
-        <p className="muted small">Agent Studio · {version}</p>
+        <p className="muted small">Team workspace · {version}</p>
         <p className="muted small">
           Everything is stored on this computer. Agents run through their own CLIs, never from the
           UI.

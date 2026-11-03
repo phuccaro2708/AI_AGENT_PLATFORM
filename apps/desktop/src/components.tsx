@@ -64,7 +64,7 @@ export function TaskLogView({
       {variant === "card" && log.state === "needs_reconciliation" && (
         <p role="status" className="warn">
           The outcome could not be verified (a tool may have been running). Check the project before
-          running this again; Agent Studio will not retry it automatically.
+          running this again; Team workspace will not retry it automatically.
         </p>
       )}
       <ol className="log" aria-live="polite">

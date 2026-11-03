@@ -202,6 +202,20 @@ export const agents = sqliteTable(
 );
 
 /**
+ * User-chosen way to launch a CLI agent (Phase 7B). A row exists only after a successful probe, so
+ * what is stored is what was verified. Holds NO secrets: `env_json` is for plain settings; secret
+ * values live in the OS credential store.
+ */
+export const agentSettings = sqliteTable("agent_settings", {
+  provider: text("provider").primaryKey(),
+  command: text("command").notNull(),
+  argsJson: text("args_json").notNull(),
+  envJson: text("env_json").notNull(),
+  verifiedAt: text("verified_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+/**
  * Router outbox: written in the SAME transaction as the state change that produced the message, then
  * delivered at-least-once. `message_id` is UNIQUE so re-enqueueing the same message is a no-op (dedupe).
  */

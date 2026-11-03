@@ -105,6 +105,13 @@ export type TaskState = z.infer<typeof TaskState>;
 
 // ---- Sidecar IPC (newline-delimited JSON over stdin/stdout) ----
 
+/** Launch settings for a CLI agent. Deep checks (flags, env names, executable) happen in the sidecar. */
+export const AgentLaunchSettingsInput = z.object({
+  command: z.string().trim().min(1).max(1024),
+  args: z.array(z.string().max(512)).max(32).default([]),
+  env: z.record(z.string().max(128), z.string().max(1024)).default({}),
+});
+
 export const SidecarRequest = z.discriminatedUnion("method", [
   z.object({ id: z.number().int(), method: z.literal("health") }),
   z.object({
@@ -128,6 +135,29 @@ export const SidecarRequest = z.discriminatedUnion("method", [
     id: z.number().int(),
     method: z.literal("agents.capabilities"),
     params: z.object({ provider: z.enum(["claude", "codex"]) }),
+  }),
+  // ---- Phase 7B: how each CLI agent is launched. Settings take effect only after a good probe. ----
+  z.object({
+    id: z.number().int(),
+    method: z.literal("agents.getSettings"),
+    params: z.object({ provider: z.enum(["claude", "codex"]) }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("agents.setSettings"),
+    // `settings: null` goes back to the CLI's defaults.
+    params: z.object({
+      provider: z.enum(["claude", "codex"]),
+      settings: AgentLaunchSettingsInput.nullable(),
+    }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("agents.probe"),
+    params: z.object({
+      provider: z.enum(["claude", "codex"]),
+      settings: AgentLaunchSettingsInput,
+    }),
   }),
   z.object({
     id: z.number().int(),

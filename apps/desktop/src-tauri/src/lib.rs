@@ -57,6 +57,9 @@ const ALLOWED_METHODS: &[&str] = &[
     "agents.list",
     "agents.detect",
     "agents.capabilities",
+    "agents.getSettings",
+    "agents.setSettings",
+    "agents.probe",
     "projects.create",
     "projects.list",
     "workflows.create",
@@ -255,6 +258,9 @@ mod tests {
             "tasks.history",
             "logs.search",
             "tasks.resolveReconciliation",
+            "agents.getSettings",
+            "agents.setSettings",
+            "agents.probe",
         ] {
             assert!(is_allowed(m), "{m:?}");
         }

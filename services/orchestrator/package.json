@@ -22,6 +22,7 @@
     "@agent-studio/cli-probe": "workspace:*",
     "@agent-studio/contracts": "workspace:*",
     "@agent-studio/git-worktrees": "workspace:*",
+    "@agent-studio/process-manager": "workspace:*",
     "@agent-studio/shared-utils": "workspace:*",
     "@agent-studio/storage": "workspace:*",
     "zod": "4.6.7"

@@ -18,6 +18,26 @@ export interface CliProbe {
   path?: string;
 }
 
+export type Provider = "claude" | "codex";
+export interface AgentLaunchSettings {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+}
+export interface SavedAgentSettings extends AgentLaunchSettings {
+  provider: string;
+  verifiedAt: string;
+  updatedAt: string;
+}
+/** Outcome of probing (or saving) launch settings. `reason` is set when `ok` is false. */
+export interface SettingsOutcome {
+  ok: boolean;
+  reason?: string;
+  resolvedPath?: string;
+  probe?: CliProbe;
+  settings?: SavedAgentSettings | null;
+}
+
 export type WorkflowState = "pending" | "running" | "completed" | "failed" | "cancelled" | string;
 export interface WorkflowTask {
   id: string;
@@ -79,6 +99,16 @@ export const api = {
     call<{ projectId: string }>("projects.create", { name, rootPath }),
   agents: () => call<{ adapters: AdapterInfo[]; cli: CliProbe[] }>("agents.list"),
   detect: () => call<{ results: CliProbe[] }>("agents.detect", {}),
+  agentSettings: (provider: Provider) =>
+    call<{ settings: SavedAgentSettings | null }>("agents.getSettings", { provider }).then(
+      (r) => r.settings,
+    ),
+  /** Checks and probes the settings without saving them. */
+  probeAgent: (provider: Provider, settings: AgentLaunchSettings) =>
+    call<SettingsOutcome>("agents.probe", { provider, settings }),
+  /** Saves only after a successful probe; `null` restores the CLI's defaults. */
+  saveAgentSettings: (provider: Provider, settings: AgentLaunchSettings | null) =>
+    call<SettingsOutcome>("agents.setSettings", { provider, settings }),
   /** One workflow per task for now; the sidecar runs it in the project's root. */
   async startTask(projectId: string, agentId: string, prompt: string): Promise<string> {
     const { workflowId } = await call<{ workflowId: string }>("workflows.create", { projectId });

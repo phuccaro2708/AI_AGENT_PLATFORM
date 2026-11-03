@@ -8,6 +8,12 @@ export class AdapterRegistry {
     this.adapters.set(adapter.id, adapter);
   }
 
+  /** Swaps the adapter with the same id (new launch settings). Tasks already running keep the old one. */
+  replace(adapter: AgentAdapter): void {
+    if (!this.adapters.has(adapter.id)) throw new Error(`Adapter not registered: ${adapter.id}`);
+    this.adapters.set(adapter.id, adapter);
+  }
+
   get(id: string): AgentAdapter | undefined {
     return this.adapters.get(id);
   }

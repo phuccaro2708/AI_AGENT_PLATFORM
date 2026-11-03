@@ -11,6 +11,7 @@ import { newId } from "@agent-studio/shared-utils";
 import type { StudioDb } from "./db.js";
 import {
   agents,
+  agentSettings,
   approvals,
   artifacts,
   contextItems,
@@ -485,6 +486,51 @@ export class Repo {
       .limit(limit)
       .all()
       .map((r) => AgentMessage.parse(JSON.parse(r.payloadJson)));
+  }
+
+  /** Settings that passed a probe; `undefined` means "launch the CLI with its defaults". */
+  getAgentSettings(provider: string) {
+    const r = this.db
+      .select()
+      .from(agentSettings)
+      .where(eq(agentSettings.provider, provider))
+      .get();
+    if (!r) return undefined;
+    return {
+      provider: r.provider,
+      command: r.command,
+      args: JSON.parse(r.argsJson) as string[],
+      env: JSON.parse(r.envJson) as Record<string, string>,
+      verifiedAt: r.verifiedAt,
+      updatedAt: r.updatedAt,
+    };
+  }
+
+  saveAgentSettings(s: {
+    provider: string;
+    command: string;
+    args: string[];
+    env: Record<string, string>;
+    verifiedAt: string;
+  }): void {
+    const row = {
+      provider: s.provider,
+      command: s.command,
+      argsJson: JSON.stringify(s.args),
+      envJson: JSON.stringify(s.env),
+      verifiedAt: s.verifiedAt,
+      updatedAt: now(),
+    };
+    this.db
+      .insert(agentSettings)
+      .values(row)
+      .onConflictDoUpdate({ target: agentSettings.provider, set: row })
+      .run();
+  }
+
+  /** Back to the CLI's defaults. */
+  clearAgentSettings(provider: string): void {
+    this.db.delete(agentSettings).where(eq(agentSettings.provider, provider)).run();
   }
 
   listAgentProbes() {

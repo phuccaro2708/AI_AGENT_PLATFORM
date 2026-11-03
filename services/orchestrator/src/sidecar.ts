@@ -5,9 +5,15 @@ import {
   type SidecarResponse,
 } from "@agent-studio/contracts";
 import { AdapterRegistry, StubAdapter, type AgentAdapter } from "@agent-studio/agent-core";
+import { checkAgentSettings, type AgentLaunchSettings } from "./agent-settings.js";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAdapter } from "@agent-studio/adapter-codex";
-import { probeClaude, probeCodex, type ProbeResult } from "@agent-studio/cli-probe";
+import {
+  probeClaude,
+  probeCodex,
+  type ProbeOptions,
+  type ProbeResult,
+} from "@agent-studio/cli-probe";
 import { createLogger, type Logger } from "@agent-studio/shared-utils";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
 import { dirname, join } from "node:path";
@@ -29,7 +35,7 @@ export interface SidecarOptions {
   /** Receives server-pushed events (the transport decides how to deliver / drop them). */
   onEvent?: (event: SidecarEvent) => void;
   /** Test seam: replaces the real CLI probes. */
-  probes?: Partial<Record<"claude" | "codex", () => Promise<ProbeResult>>>;
+  probes?: Partial<Record<"claude" | "codex", (o?: ProbeOptions) => Promise<ProbeResult>>>;
   /** Where agent worktrees are created. Default: `worktrees` next to the database (keep it short on Windows). */
   worktreesDir?: string;
   /** How often the scheduler looks for ready tasks once a workflow has started. Default 500. */
@@ -66,7 +72,7 @@ export class SidecarService {
   /** Phase 0 spike workflow for `runStub`; created on first use so a normal start adds no project. */
   private spikeWorkflowId: string | undefined;
   private readonly recoveredTasks: number;
-  private readonly probes: Record<"claude" | "codex", () => Promise<ProbeResult>>;
+  private readonly probes: Record<"claude" | "codex", (o?: ProbeOptions) => Promise<ProbeResult>>;
   /** Tasks currently executing in this process. */
   private readonly active = new Map<string, { abort: AbortController; done: Promise<void> }>();
 
@@ -87,13 +93,53 @@ export class SidecarService {
     return r.ok ? null : `Project folder unusable: ${r.reason}`;
   }
 
+  /**
+   * The CLI adapter for a provider, launched as the stored (already probed) settings say, or with
+   * defaults. The child gets the sidecar's environment plus the configured variables.
+   */
+  private buildCliAdapter(
+    provider: "claude" | "codex",
+    s?: { command: string; args: string[]; env: Record<string, string> },
+  ): AgentAdapter {
+    const o = s
+      ? {
+          command: s.command,
+          extraArgs: s.args,
+          ...(Object.keys(s.env).length > 0 ? { env: { ...process.env, ...s.env } } : {}),
+        }
+      : {};
+    return provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o);
+  }
+
+  /** `agents.detect`: probes the CLI the way it will actually be launched. */
+  private probeStored(provider: "claude" | "codex") {
+    const s = this.repo.getAgentSettings(provider);
+    return s ? this.probeWith(provider, s.command, s.env) : this.probes[provider]();
+  }
+
+  /**
+   * Validates and probes proposed settings without storing anything. A program that merely prints a
+   * version and exits 0 is not accepted: the probe must have seen at least one real CLI capability.
+   */
+  private async tryAgentSettings(provider: "claude" | "codex", input: AgentLaunchSettings) {
+    const checked = checkAgentSettings(input);
+    if (!checked.ok) return { ok: false as const, reason: checked.reason };
+    const probe = await this.probeWith(provider, checked.resolvedPath, checked.settings.env);
+    const looksLikeTheCli = Object.values(probe.capabilities).some(Boolean);
+    return { ok: probe.status === "ok" && looksLikeTheCli, probe, checked, looksLikeTheCli };
+  }
+
+  private probeWith(provider: "claude" | "codex", executable: string, env: Record<string, string>) {
+    return this.probes[provider]({ executable, env: { ...process.env, ...env } });
+  }
+
   constructor(
     private readonly opts: SidecarOptions,
     private readonly log: Logger,
   ) {
     this.probes = {
-      claude: () => probeClaude(),
-      codex: () => probeCodex(),
+      claude: (o) => probeClaude(o),
+      codex: (o) => probeCodex(o),
       ...opts.probes,
     };
     this.db = openDatabase(
@@ -112,8 +158,8 @@ export class SidecarService {
     }
     this.recoveredTasks = recovered.length;
     this.registry.register(new StubAdapter());
-    this.registry.register(new ClaudeAdapter());
-    this.registry.register(new CodexAdapter());
+    this.registry.register(this.buildCliAdapter("claude", this.repo.getAgentSettings("claude")));
+    this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
     for (const a of opts.extraAdapters ?? []) this.registry.register(a);
     this.orchestrator = new Orchestrator(this.registry, this.repo, log, {
       onMessage: (message) =>
@@ -250,6 +296,55 @@ export class SidecarService {
         }
         case "agents.capabilities":
           return ok(req.id, { probe: this.repo.getAgentProbe(req.params.provider) ?? null });
+        case "agents.getSettings":
+          return ok(req.id, { settings: this.repo.getAgentSettings(req.params.provider) ?? null });
+        case "agents.probe": {
+          const r = await this.tryAgentSettings(req.params.provider, req.params.settings);
+          if ("reason" in r) return ok(req.id, { ok: false, reason: r.reason });
+          return ok(req.id, { ok: r.ok, resolvedPath: r.checked.resolvedPath, probe: r.probe });
+        }
+        case "agents.setSettings": {
+          const { provider, settings } = req.params;
+          if (settings === null) {
+            this.repo.clearAgentSettings(provider);
+            this.registry.replace(this.buildCliAdapter(provider));
+            return ok(req.id, { ok: true, settings: null });
+          }
+          const r = await this.tryAgentSettings(provider, settings);
+          if ("reason" in r) return ok(req.id, { ok: false, reason: r.reason });
+          if (!r.ok) {
+            // Not saved: a setting that cannot start the CLI must not replace one that works.
+            return ok(req.id, {
+              ok: false,
+              reason:
+                r.probe.error?.message ??
+                (r.probe.status === "ok"
+                  ? `This program does not look like the ${provider} CLI (its help shows none of the expected options)`
+                  : `The probe reported ${r.probe.status}`),
+              probe: r.probe,
+            });
+          }
+          this.repo.saveAgentSettings({
+            provider,
+            ...r.checked.settings,
+            verifiedAt: r.probe.probedAt,
+          });
+          this.repo.saveAgentProbe({
+            provider: r.probe.provider,
+            status: r.probe.status,
+            ...(r.probe.path !== undefined ? { path: r.probe.path } : {}),
+            ...(r.probe.version !== undefined ? { version: r.probe.version } : {}),
+            capabilities: r.probe.capabilities,
+            probedAt: r.probe.probedAt,
+          });
+          this.registry.replace(this.buildCliAdapter(provider, r.checked.settings));
+          return ok(req.id, {
+            ok: true,
+            resolvedPath: r.checked.resolvedPath,
+            settings: this.repo.getAgentSettings(provider) ?? null,
+            probe: r.probe,
+          });
+        }
         case "projects.create": {
           const checked = checkProjectRoot(req.params.rootPath, this.rootPolicy);
           if (!checked.ok) return fail(req.id, checked.reason);

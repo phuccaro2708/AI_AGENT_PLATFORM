@@ -73,6 +73,11 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
       };
     case "agents.detect":
       return { results: [{ provider: "claude", status: "not_installed" }] };
+    case "agents.getSettings":
+      return { settings: null };
+    case "agents.probe":
+    case "agents.setSettings":
+      return { ok: false, reason: "Agent settings need the desktop app" };
     case "workflows.create":
       return { workflowId: id("wf") };
     case "workflows.start": {

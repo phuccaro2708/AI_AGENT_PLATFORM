@@ -165,6 +165,9 @@ importers:
       '@agent-studio/git-worktrees':
         specifier: workspace:*
         version: link:../../packages/git-worktrees
+      '@agent-studio/process-manager':
+        specifier: workspace:*
+        version: link:../../packages/process-manager
       '@agent-studio/shared-utils':
         specifier: workspace:*
         version: link:../../packages/shared-utils

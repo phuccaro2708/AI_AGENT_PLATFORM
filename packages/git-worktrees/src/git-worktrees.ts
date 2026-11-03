@@ -1,5 +1,5 @@
 import { realpathSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { runProcess } from "@agent-studio/process-manager";
 
 export class GitError extends Error {
@@ -76,15 +76,26 @@ export interface MergeCheck {
   conflicts: string[];
 }
 
+/** Real path of the nearest existing ancestor plus the rest, so a deleted path still compares by long name. */
+function realPathOrAncestor(p: string): string {
+  const rest: string[] = [];
+  let cur = p;
+  for (;;) {
+    try {
+      return join(realpathSync.native(cur), ...rest.reverse());
+    } catch {
+      const parent = dirname(cur);
+      if (parent === cur) return p;
+      rest.push(basename(cur));
+      cur = parent;
+    }
+  }
+}
+
 /** Compares paths the way the OS does (git prints forward slashes; Windows is case-insensitive). */
 export function samePath(a: string, b: string): boolean {
   const norm = (p: string) => {
-    let r = resolve(p);
-    try {
-      r = realpathSync.native(r); // CI temp dirs use 8.3 short names; git prints the long form
-    } catch {
-      // a path that no longer exists is compared as written
-    }
+    const r = realPathOrAncestor(resolve(p));
     return process.platform === "win32" ? r.toLowerCase() : r;
   };
   return norm(a) === norm(b);

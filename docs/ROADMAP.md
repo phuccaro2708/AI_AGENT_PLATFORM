@@ -1,4 +1,4 @@
-# ROADMAP — Agent Studio
+# ROADMAP — Agent Workspace
 
 Ước lượng cho 1 developer có AI hỗ trợ; không phải cam kết. Mỗi phase chỉ đóng khi đạt **Acceptance gate**. Chi tiết việc cần làm: `docs/TODO.md`.
 
@@ -162,7 +162,7 @@ Tham chiếu: AionUi/AionCore (Apache-2.0, chỉ đọc ý tưởng, không sao 
 - **Giao thức agent:** native CLI trước; **ACP là adapter bổ sung ở Phase 8**, kèm compatibility test, không thay lõi.
 - **Khác biệt cần thắng:** (1) an toàn và kiểm soát, (2) độ tin cậy, (3) multi-agent có cấu trúc, (4) nhẹ và nhanh.
 
-AionUi thiên về hội thoại tự do, nhiều agent và nhiều kênh (YOLO mode, chat nhóm, WebUI, kênh nhắn tin). Agent Studio thiên về **tác vụ có thể kiểm chứng**: mỗi việc có trạng thái bền, quyền rõ ràng và bằng chứng kết quả.
+AionUi thiên về hội thoại tự do, nhiều agent và nhiều kênh (YOLO mode, chat nhóm, WebUI, kênh nhắn tin). Agent Workspace thiên về **tác vụ có thể kiểm chứng**: mỗi việc có trạng thái bền, quyền rõ ràng và bằng chứng kết quả.
 
 | Điểm hơn           | Cam kết đo được                                                                                                                      |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |

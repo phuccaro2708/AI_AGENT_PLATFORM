@@ -33,12 +33,12 @@ Bundle sizes on Windows: `node.exe` 88.2 MB, `sidecar.mjs` 1.1 MB, `better_sqlit
 
 ## 3. Visual check
 
-The user's screenshot showed the window "Agent Studio" with "Runtime: tauri", "App: agent-studio", "Version: 0.0.0". (Image not stored in the repo.)
+The user's screenshot showed the window "Agent Workspace" with "Runtime: tauri", "App: agent-studio", "Version: 0.0.0". (Image not stored in the repo.)
 
 ## 4. Process cleanup
 
 - After the selftest run `Get-Process agent-studio, node` listed only pids 24100 and 24320. Sidecar pid 27296 was **not** listed.
-- After closing the window from the second run, `Get-Process agent-studio` returned nothing. `Get-CimInstance Win32_Process` showed pids 24100 and 24320 are `rea-agents\scripts\rea.mjs mcp` (parent 5168), an unrelated tool, not Agent Studio.
+- After closing the window from the second run, `Get-Process agent-studio` returned nothing. `Get-CimInstance Win32_Process` showed pids 24100 and 24320 are `rea-agents\scripts\rea.mjs mcp` (parent 5168), an unrelated tool, not Agent Workspace.
 - Observation only: WebView2 printed `Failed to unregister class Chrome_WidgetWin_0. Error = 1412` at exit; no effect on results was seen.
 
 ## Limits of this verification

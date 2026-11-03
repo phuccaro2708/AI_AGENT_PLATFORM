@@ -21,7 +21,7 @@ export function Header({
       <span className="logo" aria-hidden="true">
         A
       </span>
-      <strong className="app-title">Team workspace</strong>
+      <strong className="app-title">Agent Workspace</strong>
       <nav className="crumb" aria-label="Breadcrumb">
         {project && <span className="muted">{project} /</span>}
         <span className="crumb-session">{session}</span>

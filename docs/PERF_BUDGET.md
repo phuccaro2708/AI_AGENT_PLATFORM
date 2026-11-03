@@ -1,4 +1,4 @@
-# PERF BUDGET — Agent Studio (baseline Phase 1)
+# PERF BUDGET — Agent Workspace (baseline Phase 1)
 
 Đo ngày 2026-11-02 tại commit `818431e` (script `scripts/perf-baseline.mjs` thêm sau commit này), trên một máy duy nhất: AMD Ryzen 7 260, 15 GB RAM, Windows 11 Home, bản **release** (`tauri build --no-bundle`), Node đóng gói trong sidecar v24.18.0. Đây là **baseline một máy, một lần chạy**, chưa có phương sai giữa các lần chạy khác nhau hay giữa các máy; không dùng để so với sản phẩm khác.
 

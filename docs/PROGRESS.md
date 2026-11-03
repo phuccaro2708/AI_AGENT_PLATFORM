@@ -48,4 +48,4 @@ Kiểm: lint, typecheck, 357 test, build, prettier; `cargo test` 12 qua + 1 bỏ
 
 ## Đổi tên hiển thị
 
-- Tên hiển thị của app đổi từ "Agent Studio" sang "Team workspace" (productName, tiêu đề cửa sổ, `index.html`, Header, About). Giữ nguyên `identifier` `dev.agentstudio.desktop`, tên package `@agent-studio/*` và service Credential Manager `agent-studio`, vì đổi chúng sẽ làm mất dữ liệu và secret đã lưu của người dùng hiện có.
+- Tên hiển thị của app đổi từ "Agent Studio" sang "Team workspace" (`cb1ed4d`), rồi chốt là **"Agent Workspace"** và đồng bộ ở giao diện (productName, tiêu đề cửa sổ, `index.html`, Header, About, thông báo) lẫn tài liệu (README, CLAUDE.md, docs/). Giữ nguyên `identifier` `dev.agentstudio.desktop`, tên package `@agent-studio/*` và service Credential Manager `agent-studio`, vì đổi chúng sẽ làm mất dữ liệu và secret đã lưu của người dùng hiện có.

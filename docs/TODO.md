@@ -1,4 +1,4 @@
-# TODO — Agent Studio
+# TODO — Agent Workspace
 
 Đánh dấu `[x]` khi xong **và đã kiểm chứng**. Ngữ cảnh/acceptance: `docs/ROADMAP.md`.
 

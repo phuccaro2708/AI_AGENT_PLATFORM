@@ -1,4 +1,4 @@
-# Agent Studio
+# Agent Workspace
 
 Desktop platform (Windows-first, local-first) cho phép Claude Code, Codex, Gemini CLI và Local AI (Ollama) phối hợp, chạy song song trên Git worktree riêng và kiểm tra chéo kết quả, có human-in-the-loop.
 

@@ -1,4 +1,4 @@
-# CLAUDE.md — Agent Studio
+# CLAUDE.md — Agent Workspace
 
 Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy đủ: `docs/ARCHITECTURE.md` (sẽ tạo ở Phase 0). Kế hoạch: `docs/ROADMAP.md`, việc cần làm: `docs/TODO.md`.
 

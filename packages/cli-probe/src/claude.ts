@@ -2,7 +2,7 @@ import { detect, hasFlag, helpOf } from "./probe.js";
 import type { ProbeOptions, ProbeResult } from "./types.js";
 
 /**
- * Capabilities Agent Studio would need from Claude Code, each tied to what `claude --help` prints.
+ * Capabilities Agent Workspace would need from Claude Code, each tied to what `claude --help` prints.
  * Only the presence of a flag/value in help text is checked here; behaviour (event shapes, resume
  * semantics) is NOT verified by this probe and stays in docs/ASSUMPTIONS.md until fixture-tested.
  */

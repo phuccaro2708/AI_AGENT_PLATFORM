@@ -316,7 +316,7 @@ pub fn run() {
             selftest_finish
         ])
         .build(tauri::generate_context!())
-        .expect("error while building Team workspace")
+        .expect("error while building Agent Workspace")
         .run(|app, event| {
             if let RunEvent::Exit = event {
                 if let Some(state) = app.try_state::<SidecarState>() {

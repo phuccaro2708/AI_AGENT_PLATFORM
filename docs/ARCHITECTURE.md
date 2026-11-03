@@ -1,4 +1,4 @@
-# ARCHITECTURE — Agent Studio (Phase 0)
+# ARCHITECTURE — Agent Workspace (Phase 0)
 
 Windows-first, local-first desktop platform. Phase 0 delivers the foundation only; no real CLI agent is integrated yet.
 

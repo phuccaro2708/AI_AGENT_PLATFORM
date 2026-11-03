@@ -4,7 +4,7 @@ import { isAbsolute, parse, relative, resolve, sep } from "node:path";
 
 /**
  * Policy for `projects.rootPath` (Phase 7B). An agent works inside this folder, so a path that is
- * too broad (a drive root, the home folder, system folders) or that holds Agent Studio's own data
+ * too broad (a drive root, the home folder, system folders) or that holds Agent Workspace's own data
  * is refused. This is a guard against picking the wrong folder, not a sandbox: an agent that runs
  * in a valid root can still reach other places the CLI itself allows.
  */
@@ -88,11 +88,11 @@ export function checkProjectRoot(raw: string, ctx: RootPolicyContext): RootCheck
   }
   const db = real(ctx.dbPath) ?? resolve(ctx.dbPath);
   if (isInside(db, path)) {
-    return { ok: false, reason: "This folder contains Agent Studio's own database" };
+    return { ok: false, reason: "This folder contains Agent Workspace's own database" };
   }
   const wt = real(ctx.worktreesDir) ?? resolve(ctx.worktreesDir);
   if (isInside(path, wt) || isInside(wt, path)) {
-    return { ok: false, reason: "This folder overlaps Agent Studio's worktrees folder" };
+    return { ok: false, reason: "This folder overlaps Agent Workspace's worktrees folder" };
   }
   return { ok: true, path };
 }

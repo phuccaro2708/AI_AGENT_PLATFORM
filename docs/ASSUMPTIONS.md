@@ -115,3 +115,12 @@ Repo git tạm ngoài repo dự án, prompt rất ngắn. Chưa lưu fixture; ch
 - The sidecar has no "list workflows" method, so the UI remembers run ids (workflow, project, goal, agents) in `localStorage` and restores tasks and state with `tasks.list` after a restart. Clearing site data forgets the runs, not the work.
 - Task roles on the board are derived from creation order (implement, review, implement, ...), which holds for Peer Review only.
 - No production code path creates an approval yet (`ApprovalService.request` is only called from tests), so the Approval Center is empty in real runs.
+
+## Phase 7B: folder picker, root policy, agent settings, secrets
+
+- **Not run in the real Tauri app yet:** the Browse button, Settings → Agents and the Secrets section were verified with typecheck, build, logic tests and `cargo test` only. The real Credential Manager round-trip passes as an opt-in test (`cargo test -- --ignored`), not in CI.
+- **A good probe means "looks like the CLI":** settings are saved only if the probe succeeds and at least one known capability is true. A program that merely prints a version (for example `node`) is refused. This is a guard against mistakes, not proof that the program is the genuine CLI.
+- **Args are a denylist, env is an allowlist.** The denylist can miss a new flag a CLI adds later; the env allowlist cannot. Permissions, tools, sandbox and working folder still come from the task, and the adapters apply them after the user's extra arguments.
+- **Secrets reach the agent environment.** A CLI that echoes its environment would write the value into the task log. Values are kept out of the database, sidecar logs and IPC responses (tested), but not out of whatever a CLI prints itself.
+- **Secrets are Windows only** (`keyring-core` 1.0.1 and `windows-native-keyring-store` 1.1.0, both recent releases). `cargo audit` is not installed, so no advisory scan was run.
+- **Changing a secret restarts the sidecar** and is refused while tasks are queued or running; the check is racy by a few milliseconds between the check and the restart.

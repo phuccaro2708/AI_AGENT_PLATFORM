@@ -194,15 +194,21 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [ ] Kiểm với CLI thật: `node scripts/e2e-peer-review.mjs resume <impl> <rev>` (script đã viết, đã chạy 2026-11-03 với claude→codex: kill → needs_reconciliation → requeue → workflow completed; một lần thoát mã 1 chỉ do dọn thư mục tạm bị EPERM, đã sửa)
 - [ ] Chạy UI trong app Tauri thật
 
+### 7B — Thư mục, settings agent, secrets (code xong 2026-11-03)
+
+- [x] Policy cho `projects.rootPath` (tồn tại, canonical, không quá rộng, không trùng)
+- [x] Hộp thoại chọn thư mục là lệnh native; webview không còn quyền dialog
+- [x] Cấu hình agent theo provider (command/args/env), chỉ có hiệu lực sau probe tốt; env là allowlist
+- [x] Secrets trong Windows Credential Manager, chỉ ghi từ UI, tiêm vào sidecar khi spawn theo provider
+- [x] UI Settings → Agents
+- [ ] Chạy 7B trong app Tauri thật (Browse, Agents, Secrets); `cargo audit` khi có công cụ
+
 ### Còn lại của Phase 7
 
-- [ ] Hộp thoại chọn thư mục qua backend
-- [ ] Settings → Agents (command/args/env, probe, secrets vào Credential Manager)
 - [ ] Approval UI đầy đủ (một lần / trong phạm vi / từ chối) + nhật ký quyết định
 - [ ] Tailwind/shadcn, dark/light, phím tắt
 - [ ] Preset "assistant" cục bộ, export/import
 - [ ] E2E "cài đặt → project → task thật" không đụng terminal
-- [ ] Policy cho `projects.rootPath`
 - [ ] PHASE7_REPORT.md
 
 ## Phase 8 — Mở rộng agent: ACP, MCP, Skills

@@ -55,9 +55,65 @@ export class Orchestrator {
 
     const taskId = this.repo.createTask(opts.workflowId, opts.agentId);
     opts.onCreated?.(taskId);
+    return this.execute(taskId, { ...opts, markRunning: true });
+  }
+
+  /**
+   * Runs a task that already exists and was moved to `running` by the Scheduler (it holds the lease).
+   * Messages continue after the ones already stored (e.g. the `task.request`).
+   */
+  executeScheduled(
+    taskId: string,
+    opts: {
+      workflowId: string;
+      agentId: string;
+      prompt: string;
+      cwd: string;
+      signal?: AbortSignal;
+    },
+  ): Promise<RunResult> {
+    if (this.repo.getTaskState(taskId) !== "running")
+      throw new Error(`Task ${taskId} is not running; claim it through the Scheduler first`);
+    return this.execute(taskId, { ...opts, markRunning: false });
+  }
+
+  /** Terminal failure for a task that never reached the adapter (e.g. its worktree could not be made). */
+  failBeforeStart(taskId: string, workflowId: string, agentId: string, reason: string): void {
+    const seq = this.repo.nextMessageSequence(taskId);
+    const base = {
+      id: newId("msg"),
+      schemaVersion: 1 as const,
+      workflowId,
+      taskId,
+      correlationId: newId("corr"),
+      fromAgent: agentId,
+      toAgent: "orchestrator",
+      type: "task.failed" as const,
+      payload: { type: "error", message: reason },
+      createdAt: new Date().toISOString(),
+    };
+    this.repo.appendMessage(base, seq);
+    this.notify(() => this.hooks.onMessage?.({ ...base, sequence: seq }));
+    this.repo.setTaskState(taskId, "failed", { reason });
+    this.notify(() => this.hooks.onState?.(taskId, "failed", reason));
+  }
+
+  private async execute(
+    taskId: string,
+    opts: {
+      workflowId: string;
+      agentId: string;
+      prompt: string;
+      cwd: string;
+      signal?: AbortSignal;
+      markRunning: boolean;
+    },
+  ): Promise<RunResult> {
+    const adapter = this.registry.get(opts.agentId);
+    if (!adapter) throw new Error(`Unknown agent: ${opts.agentId}`);
     const correlationId = newId("corr");
     const signal = opts.signal ?? new AbortController().signal;
-    let sequence = 0;
+    let sequence = this.repo.nextMessageSequence(taskId);
     const record = (type: AgentMessage["type"], payload: unknown) => {
       const base = {
         id: newId("msg"),
@@ -76,7 +132,7 @@ export class Orchestrator {
       this.notify(() => this.hooks.onMessage?.({ ...base, sequence: seq }));
     };
 
-    this.repo.setTaskState(taskId, "running");
+    if (opts.markRunning) this.repo.setTaskState(taskId, "running");
     this.notify(() => this.hooks.onState?.(taskId, "running"));
     record("task.accepted", { prompt: opts.prompt });
     const events: AgentEvent[] = [];

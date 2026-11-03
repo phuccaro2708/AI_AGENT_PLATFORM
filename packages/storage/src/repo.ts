@@ -467,6 +467,16 @@ export class Repo {
     );
   }
 
+  /** Next free per-task sequence (0 for a task without messages). */
+  nextMessageSequence(taskId: string): number {
+    const r = this.db
+      .select({ m: sql<number | null>`max(${messages.sequence})` })
+      .from(messages)
+      .where(eq(messages.taskId, taskId))
+      .get();
+    return r?.m == null ? 0 : r.m + 1;
+  }
+
   listMessages(taskId: string): AgentMessage[] {
     return this.db
       .select()

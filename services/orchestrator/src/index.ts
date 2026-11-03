@@ -8,3 +8,5 @@ export { Router, backoffMs } from "./router.js";
 export type { DeliveryHandler, RouterOptions, TickResult } from "./router.js";
 export { Scheduler } from "./scheduler.js";
 export type { SchedulerOptions, SchedulerTick } from "./scheduler.js";
+export { TaskRunner } from "./runner.js";
+export type { TaskRunnerDeps } from "./runner.js";

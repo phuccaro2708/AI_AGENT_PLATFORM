@@ -56,6 +56,17 @@ Ba prompt rất nhỏ, `-s read-only`, `--ephemeral` (2 lần đầu), thư mụ
 - Resume (`codex exec resume <id>`), approval và `app-server` chưa dùng: `capabilities()` không khai `session_resume`/`approval`; `task.sessionId` bị bỏ qua.
 - Hủy giữa chừng khi codex đang chạy tool: chưa thử với CLI thật (test dùng CLI giả).
 
+## Evidence: spike quyền ghi cho Phase 2 (2026-11-03, Windows 11, Claude 2.1.316, codex-cli 0.165.0, git 2.55.0)
+
+Repo git tạm ngoài repo dự án, prompt rất ngắn. Chưa lưu fixture; chạy lại bằng tay nếu cần đối chiếu.
+
+- QUAN SÁT (git worktree): hai worktree song song sửa cùng file không ghi đè nhau; `worktree remove` từ chối khi còn thay đổi (cần `--force`); nhánh trùng tên bị từ chối; worktree bị xóa tay còn `prunable` cho tới khi `git worktree prune`; `worktree add` tới đường dẫn rất dài báo `not a git repository` dù đã `core.longpaths true` → đặt worktree ở thư mục ngắn.
+- QUAN SÁT (Codex, máy này: `config.toml` có `sandbox_mode = "workspace-write"`, `[windows] sandbox = "elevated"`): `-s read-only` **vẫn cho phép ghi** `written.txt` trong cwd (exit 0, tệp được tạo); cùng cờ chặn ghi ra ngoài cwd (`exit_code` 1). `-s workspace-write` ghi được cả trong cwd lẫn **ra ngoài cwd** (`../outside-*.txt` được tạo). Kết luận: không dựa vào `-s read-only` để ép vai chỉ đọc trên Windows; cần kiểm tra sau chạy (so trạng thái worktree) và coi quyền là "phát hiện", không phải "ngăn chặn".
+- QUAN SÁT (Codex): có item `error` top-level ở đầu luồng (cảnh báo hook của plugin người dùng) trong lúc task vẫn thành công → parser không được coi mọi `error` là thất bại task.
+- QUAN SÁT (Claude, `--safe-mode`): `--tools Read` thì model không dùng được Write (không có `tool_use`, không ghi tệp). `--tools Write,Read` ghi được ngay ở chế độ mặc định của `-p`, không có phê duyệt, `permission_denials` rỗng; ghi được cả **ra ngoài cwd** (`../outside.txt`). `--permission-mode acceptEdits` cho cùng kết quả. Cơ chế approval chưa thử (chỉ thử khi không có prompt tương tác).
+- QUAN SÁT (Claude): `tool_use.id` khớp `tool_result.tool_use_id` trong stream-json → có thể ghép cặp theo id (R1).
+- CHƯA làm: S4 (hủy giữa lúc ghi bằng CLI thật) vì tìm tiến trình theo command line để kill bị chặn; bằng chứng hủy khi tool đang chạy của Phase 1 vẫn là bằng chứng gần nhất. Cũng chưa thử: Codex `turn.failed`, `exec resume`, approval của cả hai CLI, xóa worktree khi tiến trình còn giữ handle.
+
 ## Assumptions of multi-agent context sharing (Phase 2/9) — chưa kiểm chứng
 
 - Mỗi CLI giữ phiên riêng (Claude `--resume <session_id>` đã kiểm chứng; Codex resume chưa dùng). Không có bộ nhớ dùng chung giữa Claude và Codex: "ngữ cảnh chung" chỉ là văn bản do Agent Studio đưa vào prompt của từng lần chạy.

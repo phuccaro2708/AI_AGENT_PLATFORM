@@ -93,6 +93,14 @@ export class Scheduler {
     return result;
   }
 
+  /** Aborts a task this scheduler is running; false when it is not running here. */
+  cancel(taskId: string): boolean {
+    const r = this.running.get(taskId);
+    if (!r) return false;
+    r.abort.abort();
+    return true;
+  }
+
   /** Extends the lease of every task this scheduler is running. */
   heartbeat(): void {
     for (const id of this.running.keys()) this.repo.extendLease(id, this.leaseUntil());

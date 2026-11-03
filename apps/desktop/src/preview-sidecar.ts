@@ -101,6 +101,18 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
         .slice(0, Number(p.limit ?? 200));
       return { messages, nextAfterSequence: messages.at(-1)?.sequence ?? p.afterSequence };
     }
+    case "tasks.list":
+      return { workflowState: "pending", tasks: [] };
+    case "roles.list":
+      return { roles: [] };
+    case "context.list":
+      return { items: [] };
+    case "approvals.list":
+      return { approvals: [] };
+    case "artifacts.list":
+      return { artifacts: [] };
+    case "worktrees.list":
+      return { worktrees: [] };
     default:
       throw new Error(`preview: unsupported ${method}`);
   }

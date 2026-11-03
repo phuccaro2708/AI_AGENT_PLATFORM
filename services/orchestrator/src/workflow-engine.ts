@@ -51,6 +51,7 @@ export class PeerReviewEngine {
   private readonly workspaces: Workspaces;
   private readonly maxRounds: number;
   private readonly steps = new Map<string, Step>();
+  private readonly roundLimits = new Map<string, number>();
 
   constructor(opts: {
     repo: Repo;
@@ -90,7 +91,9 @@ export class PeerReviewEngine {
     });
   }
 
-  start(opts: { workflowId: string; goal: string }): void {
+  start(opts: { workflowId: string; goal: string; maxRounds?: number }): void {
+    // State first: a workflow that is not `pending` must be refused before anything is written.
+    this.repo.setWorkflowState(opts.workflowId, "running");
     this.board.add({
       workflowId: opts.workflowId,
       kind: "goal",
@@ -98,7 +101,7 @@ export class PeerReviewEngine {
       source: "verified",
       createdBy: "user",
     });
-    this.repo.setWorkflowState(opts.workflowId, "running");
+    if (opts.maxRounds !== undefined) this.roundLimits.set(opts.workflowId, opts.maxRounds);
     this.enqueueImplement(opts.workflowId, 1);
   }
 
@@ -229,7 +232,7 @@ export class PeerReviewEngine {
       this.repo.setWorkflowState(step.workflowId, "completed");
       return;
     }
-    if (step.round >= this.maxRounds) {
+    if (step.round >= (this.roundLimits.get(step.workflowId) ?? this.maxRounds)) {
       this.fail(step.workflowId, `changes still requested after ${step.round} round(s)`);
       return;
     }

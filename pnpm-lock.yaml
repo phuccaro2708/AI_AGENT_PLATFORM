@@ -165,6 +165,9 @@ importers:
       '@agent-studio/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@agent-studio/git-worktrees':
+        specifier: workspace:*
+        version: link:../../packages/git-worktrees
       '@agent-studio/shared-utils':
         specifier: workspace:*
         version: link:../../packages/shared-utils

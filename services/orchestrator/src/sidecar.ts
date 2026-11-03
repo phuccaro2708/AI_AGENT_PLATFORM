@@ -5,7 +5,14 @@ import { CodexAdapter } from "@agent-studio/adapter-codex";
 import { probeClaude, probeCodex, type ProbeResult } from "@agent-studio/cli-probe";
 import { createLogger, type Logger } from "@agent-studio/shared-utils";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
+import { dirname, join } from "node:path";
+import { ApprovalService } from "./approvals.js";
+import { ArtifactRegistry } from "./artifacts.js";
+import { ContextBoard } from "./context-board.js";
 import { Orchestrator } from "./orchestrator.js";
+import { Scheduler } from "./scheduler.js";
+import { PeerReviewEngine } from "./workflow-engine.js";
+import { ProjectWorkspaces } from "./workspaces.js";
 
 export interface SidecarOptions {
   dbPath: string;
@@ -17,6 +24,10 @@ export interface SidecarOptions {
   onEvent?: (event: SidecarEvent) => void;
   /** Test seam: replaces the real CLI probes. */
   probes?: Partial<Record<"claude" | "codex", () => Promise<ProbeResult>>>;
+  /** Where agent worktrees are created. Default: `worktrees` next to the database (keep it short on Windows). */
+  worktreesDir?: string;
+  /** How often the scheduler looks for ready tasks once a workflow has started. Default 500. */
+  schedulerIntervalMs?: number;
 }
 
 const ok = (id: number, result: unknown) => ({
@@ -34,6 +45,10 @@ export class SidecarService {
   private readonly repo: Repo;
   private readonly registry = new AdapterRegistry();
   private readonly orchestrator: Orchestrator;
+  private readonly scheduler: Scheduler;
+  private readonly engine: PeerReviewEngine;
+  private readonly approvals: ApprovalService;
+  private readonly artifacts: ArtifactRegistry;
   /** Phase 0 spike workflow for `runStub`; created on first use so a normal start adds no project. */
   private spikeWorkflowId: string | undefined;
   private readonly recoveredTasks: number;
@@ -79,7 +94,25 @@ export class SidecarService {
         }),
       onState: (taskId, state, reason) =>
         opts.onEvent?.({ event: "task.state", taskId, state, ...(reason ? { reason } : {}) }),
+      resolveCwd: (ctx) => this.engine.resolveCwd(ctx),
     });
+    const workspaces = new ProjectWorkspaces(
+      this.repo,
+      opts.worktreesDir ?? join(dirname(opts.dbPath), "worktrees"),
+    );
+    this.engine = new PeerReviewEngine({
+      repo: this.repo,
+      orchestrator: this.orchestrator,
+      board: new ContextBoard(this.repo),
+      workspaces,
+    });
+    this.scheduler = new Scheduler({
+      repo: this.repo,
+      orchestrator: this.orchestrator,
+      onSettled: (id, result) => this.engine.onSettled(id, result),
+    });
+    this.approvals = new ApprovalService({ repo: this.repo });
+    this.artifacts = new ArtifactRegistry(this.repo, workspaces);
   }
 
   private spikeWorkflow(): string {
@@ -223,6 +256,9 @@ export class SidecarService {
         case "tasks.cancel": {
           const state = this.repo.getTaskState(req.params.taskId);
           if (state === undefined) return fail(req.id, `Unknown task: ${req.params.taskId}`);
+          if (this.scheduler.cancel(req.params.taskId)) {
+            return ok(req.id, { requested: true, state });
+          }
           const live = this.active.get(req.params.taskId);
           if (live) {
             live.abort.abort(); // the adapter reports "cancelled"; the orchestrator settles the state
@@ -251,6 +287,50 @@ export class SidecarService {
             nextAfterSequence: messages.at(-1)?.sequence ?? afterSequence,
           });
         }
+        case "tasks.list": {
+          const workflowState = this.repo.getWorkflowState(req.params.workflowId);
+          if (!workflowState) return fail(req.id, `Unknown workflow: ${req.params.workflowId}`);
+          return ok(req.id, { workflowState, tasks: this.repo.listTasks(req.params.workflowId) });
+        }
+        case "workflows.startPeerReview": {
+          const p = req.params;
+          if (!this.repo.getWorkflowState(p.workflowId)) {
+            return fail(req.id, `Unknown workflow: ${p.workflowId}`);
+          }
+          for (const agent of [p.implementerAgent, p.reviewerAgent]) {
+            if (!this.registry.get(agent)) return fail(req.id, `Unknown agent: ${agent}`);
+          }
+          this.engine.defineRoles(p.workflowId, {
+            implementerAgent: p.implementerAgent,
+            reviewerAgent: p.reviewerAgent,
+          });
+          this.engine.start({
+            workflowId: p.workflowId,
+            goal: p.goal,
+            ...(p.maxRounds !== undefined ? { maxRounds: p.maxRounds } : {}),
+          });
+          this.scheduler.start(this.opts.schedulerIntervalMs);
+          return ok(req.id, { workflowId: p.workflowId, state: "running" });
+        }
+        case "roles.list":
+          return ok(req.id, { roles: this.repo.listRoles(req.params.workflowId) });
+        case "context.list":
+          return ok(req.id, { items: this.repo.listContextItems(req.params.workflowId) });
+        case "approvals.list": {
+          this.approvals.expireDue();
+          return ok(req.id, { approvals: this.repo.listApprovals(req.params.state) });
+        }
+        case "approvals.resolve": {
+          this.approvals.expireDue();
+          this.approvals.resolve(req.params.approvalId, req.params.decision, req.params.note);
+          return ok(req.id, { resolved: true });
+        }
+        case "artifacts.list":
+          return ok(req.id, { artifacts: this.artifacts.verify(req.params.taskId) });
+        case "artifacts.diff":
+          return ok(req.id, await this.artifacts.diff(req.params.taskId));
+        case "worktrees.list":
+          return ok(req.id, { worktrees: this.repo.listWorktrees(req.params.workflowId) });
         case "shutdown":
           return { response: { id: req.id, result: { ok: true } }, shutdown: true };
       }
@@ -265,6 +345,7 @@ export class SidecarService {
   }
 
   close(): void {
+    this.scheduler.stop();
     for (const a of this.active.values()) a.abort.abort();
     if (this.db.$client.open) this.db.$client.close();
   }

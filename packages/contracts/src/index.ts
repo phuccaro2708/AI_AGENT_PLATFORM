@@ -163,6 +163,64 @@ export const SidecarRequest = z.discriminatedUnion("method", [
       limit: z.number().int().min(1).max(1000).default(200),
     }),
   }),
+  // ---- Phase 2. Read-mostly: the UI never picks `cwd`, worktrees or permissions. ----
+  z.object({
+    id: z.number().int(),
+    method: z.literal("tasks.list"),
+    params: z.object({ workflowId: z.string().min(1) }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("workflows.startPeerReview"),
+    params: z.object({
+      workflowId: z.string().min(1),
+      implementerAgent: z.string().min(1),
+      reviewerAgent: z.string().min(1),
+      goal: z.string().min(1).max(100_000),
+      maxRounds: z.number().int().min(1).max(5).optional(),
+    }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("roles.list"),
+    params: z.object({ workflowId: z.string().min(1) }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("context.list"),
+    params: z.object({ workflowId: z.string().min(1) }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("approvals.list"),
+    params: z
+      .object({ state: z.enum(["pending", "approved", "denied", "expired"]).optional() })
+      .default({}),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("approvals.resolve"),
+    params: z.object({
+      approvalId: z.string().min(1),
+      decision: z.enum(["approved", "denied"]),
+      note: z.string().max(2000).optional(),
+    }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("artifacts.list"),
+    params: z.object({ taskId: z.string().min(1) }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("artifacts.diff"),
+    params: z.object({ taskId: z.string().min(1) }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("worktrees.list"),
+    params: z.object({ workflowId: z.string().min(1) }),
+  }),
   z.object({ id: z.number().int(), method: z.literal("shutdown") }),
 ]);
 export type SidecarRequest = z.infer<typeof SidecarRequest>;

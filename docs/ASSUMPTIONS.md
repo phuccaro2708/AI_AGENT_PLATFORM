@@ -99,3 +99,11 @@ Repo git tạm ngoài repo dự án, prompt rất ngắn. Chưa lưu fixture; ch
 - **Chưa nối với CLI thật:** chưa quan sát cơ chế xin quyền của Claude/Codex, nên chưa có agent nào phát approval thật. Hiện chỉ orchestrator/UI tạo approval (ví dụ "cho phép merge worktree"). Dịch vụ chưa gắn timer `expireDue` và chưa nằm trong sidecar.
 - **Hạn chế:** trả lời approval của task đã bị hủy sẽ báo lỗi và approval đó vẫn `pending` cho tới khi quá hạn (khi đó `expireDue` chỉ đánh dấu approval, không đụng task).
 - **Artifact:** hash sha256 đăng ký khi task kết thúc (bước 5); `ArtifactRegistry.verify` băm lại trong worktree (`ok`/`changed`/`missing`, đường dẫn thoát khỏi worktree bị coi là `missing`, không đọc). `GitWorktrees.diff` trả diff so với HEAD kèm file untracked, không stage gì, cắt ở `maxBytes`; đã test trên git thật (Windows).
+
+## IPC Phase 2 (bước 7)
+
+- **Method mới (UI gọi được):** `tasks.list`, `workflows.startPeerReview`, `roles.list`, `context.list`, `approvals.list`, `approvals.resolve`, `artifacts.list`, `artifacts.diff`, `worktrees.list`. UI không gửi `cwd`, quyền hay worktree; sidecar tự chọn. `approvals.request` cố ý KHÔNG có: chỉ orchestrator tạo approval.
+- **Chưa có:** `workflows.createDag`, `roles.upsert`/gán vai tùy biến (vai Peer Review được định nghĩa cố định trong `defineRoles`), và `SidecarEvent` mới (workflow/approval/worktree). UI khôi phục trạng thái bằng truy vấn (`tasks.list` là nguồn sự thật), không có push cho workflow.
+- **Scheduler khởi động lười:** chỉ chạy sau `workflows.startPeerReview` đầu tiên của tiến trình; `approvals.list/resolve` quét hết hạn khi được gọi (chưa có timer). Số task chạy song song vẫn mặc định 2, chưa đọc từ `settings`.
+- **Hạn chế còn lại:** restart giữa chừng vẫn để workflow `running` mà engine không tự tiếp tục (bookkeeping bước trong bộ nhớ); hủy một task `queued` của engine bằng `tasks.cancel` không báo cho engine nên workflow có thể kẹt `running`; project không phải repo git → task implementer `failed` kèm lý do, workflow `failed`.
+- **Đã kiểm chứng bằng test:** `SidecarService` + git worktree thật + adapter giả chạy trọn implement → review (cùng cwd, thư mục chính không bị đổi, `artifacts.diff` có nội dung). Chưa chạy với CLI Claude/Codex thật.

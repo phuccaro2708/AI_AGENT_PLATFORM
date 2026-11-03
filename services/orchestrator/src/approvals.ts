@@ -16,6 +16,12 @@ export interface ApprovalCenterOptions {
   /** Lease given back to the task when it resumes. Default 60 s. */
   leaseMs?: number;
   now?: () => Date;
+  /** Told about every new request and every decision (the sidecar turns these into pushed events). */
+  onChange?: (c: {
+    approvalId: string;
+    taskId: string;
+    state: "pending" | ApprovalDecision;
+  }) => void;
 }
 
 /**
@@ -31,6 +37,7 @@ export class ApprovalCenter {
   private readonly ttlMs: number;
   private readonly leaseMs: number;
   private readonly now: () => Date;
+  private readonly onChange: ApprovalCenterOptions["onChange"];
   private readonly waiters = new Map<string, (d: ApprovalDecision) => void>();
 
   constructor(
@@ -40,6 +47,7 @@ export class ApprovalCenter {
     this.ttlMs = opts.ttlMs ?? 600_000;
     this.leaseMs = opts.leaseMs ?? 60_000;
     this.now = opts.now ?? (() => new Date());
+    this.onChange = opts.onChange;
   }
 
   request(
@@ -72,6 +80,7 @@ export class ApprovalCenter {
       },
       this.repo.nextMessageSequence(taskId),
     );
+    this.notify(id, taskId, "pending");
     return { id, decision };
   }
 
@@ -119,7 +128,17 @@ export class ApprovalCenter {
     if (final) {
       this.waiters.get(id)?.(final);
       this.waiters.delete(id);
+      const taskId = this.repo.getApproval(id)?.taskId;
+      if (taskId) this.notify(id, taskId, final);
     }
     return final;
+  }
+
+  private notify(approvalId: string, taskId: string, state: "pending" | ApprovalDecision): void {
+    try {
+      this.onChange?.({ approvalId, taskId, state });
+    } catch {
+      // a throwing listener must never affect the decision
+    }
   }
 }

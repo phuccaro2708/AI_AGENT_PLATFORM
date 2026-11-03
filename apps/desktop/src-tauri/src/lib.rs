@@ -63,6 +63,12 @@ const ALLOWED_METHODS: &[&str] = &[
     "workflows.start",
     "tasks.cancel",
     "logs.query",
+    "workflows.runPeerReview",
+    "workflows.runSupervised",
+    "workflows.state",
+    "context.list",
+    "approvals.list",
+    "approvals.resolve",
 ];
 
 fn is_allowed(method: &str) -> bool {
@@ -199,6 +205,7 @@ mod tests {
     #[test]
     fn only_ui_methods_are_allowed() {
         assert!(is_allowed("workflows.start") && is_allowed("logs.query"));
+        assert!(is_allowed("approvals.resolve") && is_allowed("workflows.runSupervised"));
         for m in [
             "shutdown",
             "runStub",

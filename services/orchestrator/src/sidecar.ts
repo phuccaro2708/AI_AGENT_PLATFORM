@@ -5,7 +5,13 @@ import { CodexAdapter } from "@agent-studio/adapter-codex";
 import { probeClaude, probeCodex, type ProbeResult } from "@agent-studio/cli-probe";
 import { createLogger, type Logger } from "@agent-studio/shared-utils";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
+import { GitWorktrees } from "@agent-studio/git-worktrees";
+import { ApprovalCenter } from "./approvals.js";
 import { Orchestrator } from "./orchestrator.js";
+import { ROLE_PRESETS } from "./role-presets.js";
+import { TaskRunner } from "./runner.js";
+import { Scheduler } from "./scheduler.js";
+import { WorkflowEngine } from "./workflow-engine.js";
 
 export interface SidecarOptions {
   dbPath: string;
@@ -38,6 +44,13 @@ export class SidecarService {
   private spikeWorkflowId: string | undefined;
   private readonly recoveredTasks: number;
   private readonly probes: Record<"claude" | "codex", () => Promise<ProbeResult>>;
+  readonly approvals: ApprovalCenter;
+  private readonly runner: TaskRunner;
+  private readonly engine: WorkflowEngine;
+  /** Multi-agent pattern runs in flight, by workflow: one at a time per workflow. */
+  private readonly patterns = new Map<string, Promise<void>>();
+  private readonly expiryTimer: NodeJS.Timeout;
+  private closed = false;
   /** Tasks currently executing in this process. */
   private readonly active = new Map<string, { abort: AbortController; done: Promise<void> }>();
 
@@ -80,6 +93,60 @@ export class SidecarService {
       onState: (taskId, state, reason) =>
         opts.onEvent?.({ event: "task.state", taskId, state, ...(reason ? { reason } : {}) }),
     });
+    const worktreesFor = (root: string) => new GitWorktrees({ repoRoot: root });
+    this.runner = new TaskRunner({
+      orchestrator: this.orchestrator,
+      repo: this.repo,
+      scheduler: new Scheduler(this.repo),
+      registry: this.registry,
+      log,
+      worktreesFor,
+    });
+    this.engine = new WorkflowEngine({ runner: this.runner, repo: this.repo, worktreesFor });
+    this.approvals = new ApprovalCenter(this.repo, {
+      onChange: (c) => opts.onEvent?.({ event: "approval.changed", ...c }),
+    });
+    // Requests nobody answered must lapse even if no one is looking at the UI.
+    this.expiryTimer = setInterval(() => {
+      try {
+        this.approvals.expireDue();
+      } catch (err) {
+        log.error({ err: String(err) }, "approval expiry sweep failed");
+      }
+    }, 5000);
+    this.expiryTimer.unref();
+  }
+
+  private startPattern(
+    workflowId: string,
+    pattern: "peer_review" | "supervised",
+    run: () => Promise<string>,
+  ): void {
+    const done = run()
+      .then(
+        (outcome) => ({ outcome }),
+        (err: unknown) => {
+          this.log.error({ workflowId, pattern, err: String(err) }, "workflow pattern failed");
+          this.repo.setWorkflowState(workflowId, "failed");
+          return { outcome: "error", error: String(err) };
+        },
+      )
+      .then((r) => {
+        if (!this.closed)
+          this.opts.onEvent?.({ event: "workflow.finished", workflowId, pattern, ...r });
+      })
+      .catch((err: unknown) => this.log.error({ err: String(err) }, "pattern bookkeeping failed"))
+      .finally(() => this.patterns.delete(workflowId));
+    this.patterns.set(workflowId, done);
+  }
+
+  /** Rejects unknown agents and a second concurrent pattern on the same workflow (before anything runs). */
+  private checkPattern(workflowId: string, agentIds: string[]): string | undefined {
+    if (!this.repo.getWorkflowRoot(workflowId)) return `Unknown workflow: ${workflowId}`;
+    if (this.patterns.has(workflowId))
+      return `A pattern is already running on workflow ${workflowId}`;
+    const bad = agentIds.find((a) => !this.registry.get(a));
+    return bad ? `Unknown agent: ${bad}` : undefined;
   }
 
   private spikeWorkflow(): string {
@@ -251,6 +318,59 @@ export class SidecarService {
             nextAfterSequence: messages.at(-1)?.sequence ?? afterSequence,
           });
         }
+        case "workflows.runPeerReview": {
+          const p = req.params;
+          const err = this.checkPattern(p.workflowId, [p.implementerAgentId, p.reviewerAgentId]);
+          if (err) return fail(req.id, err);
+          this.startPattern(p.workflowId, "peer_review", async () => {
+            const r = await this.engine.runPeerReview({
+              workflowId: p.workflowId,
+              goal: p.goal,
+              implementer: { role: ROLE_PRESETS.implementer, agentId: p.implementerAgentId },
+              reviewer: { role: ROLE_PRESETS.reviewer, agentId: p.reviewerAgentId },
+            });
+            return r.outcome;
+          });
+          return ok(req.id, { started: true });
+        }
+        case "workflows.runSupervised": {
+          const p = req.params;
+          const err = this.checkPattern(p.workflowId, [p.supervisorAgentId, ...p.workerAgentIds]);
+          if (err) return fail(req.id, err);
+          this.startPattern(p.workflowId, "supervised", async () => {
+            const r = await this.engine.runSupervised({
+              workflowId: p.workflowId,
+              goal: p.goal,
+              supervisor: { role: ROLE_PRESETS.supervisor, agentId: p.supervisorAgentId },
+              workerRole: ROLE_PRESETS.worker,
+              workerAgents: p.workerAgentIds,
+              ...(p.maxSubtasks !== undefined ? { maxSubtasks: p.maxSubtasks } : {}),
+            });
+            return r.outcome;
+          });
+          return ok(req.id, { started: true });
+        }
+        case "workflows.state": {
+          const state = this.repo.getWorkflowState(req.params.workflowId);
+          if (state === undefined)
+            return fail(req.id, `Unknown workflow: ${req.params.workflowId}`);
+          return ok(req.id, { state, patternRunning: this.patterns.has(req.params.workflowId) });
+        }
+        case "context.list": {
+          if (this.repo.getWorkflowState(req.params.workflowId) === undefined) {
+            return fail(req.id, `Unknown workflow: ${req.params.workflowId}`);
+          }
+          // Entries are agent-written text: the UI must render them as plain text.
+          return ok(req.id, { entries: this.repo.listContextEntries(req.params.workflowId) });
+        }
+        case "approvals.list":
+          return ok(req.id, { approvals: this.approvals.listPending(req.params.taskId) });
+        case "approvals.resolve": {
+          const p = req.params;
+          // The identity is fixed here: until real authentication exists, any UI caller is "user:local".
+          const resolved = this.approvals.resolve(p.approvalId, p.decision, "user:local", p.reason);
+          return ok(req.id, { resolved });
+        }
         case "shutdown":
           return { response: { id: req.id, result: { ok: true } }, shutdown: true };
       }
@@ -262,9 +382,13 @@ export class SidecarService {
   /** Resolves when every background task has settled (tests, graceful shutdown). */
   async idle(): Promise<void> {
     await Promise.all([...this.active.values()].map((a) => a.done));
+    await Promise.all([...this.patterns.values()]);
   }
 
   close(): void {
+    this.closed = true;
+    clearInterval(this.expiryTimer);
+    this.runner.cancelAll();
     for (const a of this.active.values()) a.abort.abort();
     if (this.db.$client.open) this.db.$client.close();
   }

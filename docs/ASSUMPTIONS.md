@@ -89,3 +89,10 @@ Ba prompt rất nhỏ, `-s read-only`, `--ephemeral` (2 lần đầu), thư mụ
 - Prompt của từng subtask do agent giám sát viết, nên là đường khuếch đại prompt injection: nội dung đó chỉ giới hạn ở 4000 ký tự, agent hợp lệ và worktree riêng; kiểm soát thật sự vẫn là chế độ read-only của adapter và approval (Phase 4).
 - Subtask có từ 2 phụ thuộc trở lên bắt đầu từ HEAD của dự án, không gộp nhánh; nó chỉ biết kết quả của các phụ thuộc qua bảng ngữ cảnh (path+hash, báo cáo). Việc merge nhánh là quyết định của con người.
 - Worker chạy theo từng lớp (chờ cả lớp xong) cho đơn giản; chưa tận dụng song song tối đa giữa các lớp.
+
+## Sidecar multi-agent (Phase 2) — chưa kiểm chứng
+
+- Chưa chạy qua app Tauri thật (cần sidecar đóng gói); mới kiểm bằng `SidecarService.handle` và test Rust cho allowlist.
+- `approvals.resolve` gắn `user:local` cho mọi người gọi: chưa có xác thực. Chỉ an toàn chừng nào chỉ UI cục bộ gọi được.
+- Role dùng preset cố định, `access` chỉ là khai báo; pattern chạy bằng adapter read-only hiện có nên implementer chưa thực sự ghi file (ghi + approval là Phase 4).
+- Tắt sidecar giữa lúc pattern chạy: task bị hủy best-effort, kết quả pattern có thể thành `error` và không đẩy event.

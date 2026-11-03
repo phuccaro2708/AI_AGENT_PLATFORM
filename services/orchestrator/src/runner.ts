@@ -109,6 +109,11 @@ export class TaskRunner {
     return this.d.repo.getTaskState(taskId);
   }
 
+  /** Aborts every task running in this process (shutdown); they settle asynchronously. */
+  cancelAll(): void {
+    for (const a of this.active.values()) a.abort.abort();
+  }
+
   /** Settles when a task started by this runner finishes; undefined if it is not running here. */
   whenDone(taskId: string): Promise<void> | undefined {
     return this.active.get(taskId)?.done;

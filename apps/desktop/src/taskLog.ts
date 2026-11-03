@@ -18,8 +18,11 @@ export function mergeMessages(log: TaskLog, incoming: AgentMessage[]): TaskLog {
   return { ...log, messages: [...bySeq.values()].sort((a, b) => a.sequence - b.sequence) };
 }
 
+/** Only `task.message` / `task.state` belong to a task log; other pushed events are ignored here. */
 export function applyEvent(log: TaskLog, e: SidecarEvent): TaskLog {
-  return e.event === "task.message" ? mergeMessages(log, [e.message]) : { ...log, state: e.state };
+  if (e.event === "task.message") return mergeMessages(log, [e.message]);
+  if (e.event === "task.state") return { ...log, state: e.state };
+  return log;
 }
 
 /** Number of messages 0..n-1 held without a hole; a push may have been dropped beyond that. */

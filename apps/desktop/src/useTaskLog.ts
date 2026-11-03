@@ -62,6 +62,7 @@ export function useTaskLog(taskId: string | null): { log: TaskLog; error: string
 
     // Subscribe before the first query so nothing falls between the two.
     const unsub = onSidecarEvent((e) => {
+      if (e.event !== "task.message" && e.event !== "task.state") return;
       if (e.taskId !== taskId) return;
       const next = applyEvent(ref.current, e);
       set(next);

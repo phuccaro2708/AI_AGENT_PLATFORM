@@ -144,6 +144,53 @@ export const SidecarRequest = z.discriminatedUnion("method", [
       limit: z.number().int().min(1).max(1000).default(200),
     }),
   }),
+  // ---- Phase 2: multi-agent patterns, shared context, approvals. Agents/roles are chosen by id; role
+  // instructions and `cwd` are never sent by the UI. `resolvedBy` is fixed by the sidecar. ----
+  z.object({
+    id: z.number().int(),
+    method: z.literal("workflows.runPeerReview"),
+    params: z.object({
+      workflowId: z.string().min(1),
+      goal: z.string().min(1).max(100_000),
+      implementerAgentId: z.string().min(1),
+      reviewerAgentId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("workflows.runSupervised"),
+    params: z.object({
+      workflowId: z.string().min(1),
+      goal: z.string().min(1).max(100_000),
+      supervisorAgentId: z.string().min(1),
+      workerAgentIds: z.array(z.string().min(1)).min(1).max(8),
+      maxSubtasks: z.number().int().min(1).max(16).optional(),
+    }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("workflows.state"),
+    params: z.object({ workflowId: z.string().min(1) }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("context.list"),
+    params: z.object({ workflowId: z.string().min(1) }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("approvals.list"),
+    params: z.object({ taskId: z.string().min(1).optional() }).default({}),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("approvals.resolve"),
+    params: z.object({
+      approvalId: z.string().min(1),
+      decision: z.enum(["approved", "denied"]),
+      reason: z.string().max(2000).optional(),
+    }),
+  }),
   z.object({ id: z.number().int(), method: z.literal("shutdown") }),
 ]);
 export type SidecarRequest = z.infer<typeof SidecarRequest>;
@@ -165,6 +212,19 @@ export const SidecarEvent = z.discriminatedUnion("event", [
     taskId: z.string(),
     state: TaskState,
     reason: z.string().optional(),
+  }),
+  z.object({
+    event: z.literal("approval.changed"),
+    approvalId: z.string(),
+    taskId: z.string(),
+    state: z.enum(["pending", "approved", "denied", "expired"]),
+  }),
+  z.object({
+    event: z.literal("workflow.finished"),
+    workflowId: z.string(),
+    pattern: z.enum(["peer_review", "supervised"]),
+    outcome: z.string(),
+    error: z.string().optional(),
   }),
 ]);
 export type SidecarEvent = z.infer<typeof SidecarEvent>;

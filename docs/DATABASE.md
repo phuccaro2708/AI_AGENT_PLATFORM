@@ -13,4 +13,12 @@ Tables: `projects`, `workflows`, `tasks`, `task_dependencies`, `messages`, `even
 - Phase 1 (migration `0001`): `sessions` (task/agent ↔ provider native session id), `execution_runs` (pid, exit code, signal, timestamps; `Repo.startRun/finishRun`), `artifacts` (path + 64-char sha256), `approvals` (`pending|approved|denied|expired`).
 - Timestamps are ISO-8601 text.
 
-Deferred (needed before multi-agent concurrency): `agents`, `worktrees`, outbox/delivery ledger.
+Phase 2 (migration `0003`):
+
+- `outbox` — router queue, written in the same transaction as the state change (`Repo.tx`). `message_id` UNIQUE = dedupe; `status` pending/delivered/dead_letter, `attempts`, `next_attempt_at` (retry), `last_error`.
+- `inbox` — delivery ledger, PK `(message_id, consumer)`: `receiveInbox` returns false for a duplicate, `ackInbox` records the ack.
+- `worktrees` — one per task (`task_id`, `path`, `branch` UNIQUE); state creating/active/removing/removed/orphaned. A worktree is not a sandbox.
+- `workflow_roles` — role per workflow (`instructions`, `permissions` read-only|workspace-write, allowed agents, the run's `agent_id`); `assignRoleAgent` rejects agents outside the allowed list.
+- `context_items` — shared board entries (goal/plan/decision/artifact) with `source` verified|agent_reported and optional path + 64-char sha256.
+- `Repo`: `addDependency` rejects self, direct and transitive cycles (`DependencyCycleError`); `artifacts` and `approvals` now have methods (`resolveApproval` works once, `expireApprovals`); `appendMessageAuto` derives the sequence inside the transaction.
+- Not yet used by the orchestrator: these are the storage layer for the router, scheduler and workflow engine (steps 2–5).

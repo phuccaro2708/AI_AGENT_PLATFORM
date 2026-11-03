@@ -200,3 +200,117 @@ export const agents = sqliteTable(
     ),
   ],
 );
+
+/**
+ * Router outbox: written in the SAME transaction as the state change that produced the message, then
+ * delivered at-least-once. `message_id` is UNIQUE so re-enqueueing the same message is a no-op (dedupe).
+ */
+export const outbox = sqliteTable(
+  "outbox",
+  {
+    id: text("id").primaryKey(),
+    messageId: text("message_id").notNull().unique(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id),
+    toAgent: text("to_agent").notNull(),
+    payloadJson: text("payload_json").notNull(),
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: text("next_attempt_at").notNull(),
+    lastError: text("last_error"),
+    createdAt: text("created_at").notNull(),
+    deliveredAt: text("delivered_at"),
+  },
+  (t) => [
+    index("idx_outbox_due").on(t.status, t.nextAttemptAt),
+    check("outbox_status_check", sql`${t.status} IN ('pending','delivered','dead_letter')`),
+  ],
+);
+
+/** Delivery ledger on the receiving side: one row per (message, consumer) makes handlers idempotent. */
+export const inbox = sqliteTable(
+  "inbox",
+  {
+    messageId: text("message_id").notNull(),
+    consumer: text("consumer").notNull(),
+    receivedAt: text("received_at").notNull(),
+    ackedAt: text("acked_at"),
+  },
+  (t) => [primaryKey({ columns: [t.messageId, t.consumer] })],
+);
+
+/** One git worktree per task. A worktree is NOT a security sandbox (CLAUDE.md principle 5). */
+export const worktrees = sqliteTable(
+  "worktrees",
+  {
+    id: text("id").primaryKey(),
+    workflowId: text("workflow_id")
+      .notNull()
+      .references(() => workflows.id),
+    taskId: text("task_id")
+      .notNull()
+      .unique()
+      .references(() => tasks.id),
+    path: text("path").notNull().unique(),
+    branch: text("branch").notNull().unique(),
+    baseRef: text("base_ref").notNull(),
+    state: text("state").notNull().default("creating"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_worktrees_workflow").on(t.workflowId),
+    check(
+      "worktrees_state_check",
+      sql`${t.state} IN ('creating','active','removing','removed','orphaned')`,
+    ),
+  ],
+);
+
+/** A role inside one workflow run; `agent_id` is the run's assignment, never hard-coded by agent name. */
+export const workflowRoles = sqliteTable(
+  "workflow_roles",
+  {
+    id: text("id").primaryKey(),
+    workflowId: text("workflow_id")
+      .notNull()
+      .references(() => workflows.id),
+    name: text("name").notNull(),
+    instructions: text("instructions").notNull(),
+    permissions: text("permissions").notNull(),
+    allowedAgentsJson: text("allowed_agents_json").notNull(),
+    agentId: text("agent_id"),
+  },
+  (t) => [
+    unique("workflow_roles_name_unique").on(t.workflowId, t.name),
+    check(
+      "workflow_roles_permissions_check",
+      sql`${t.permissions} IN ('read-only','workspace-write')`,
+    ),
+  ],
+);
+
+/** Shared context board entry (goal / plan / decision / artifact) with provenance. */
+export const contextItems = sqliteTable(
+  "context_items",
+  {
+    id: text("id").primaryKey(),
+    workflowId: text("workflow_id")
+      .notNull()
+      .references(() => workflows.id),
+    kind: text("kind").notNull(),
+    content: text("content").notNull(),
+    path: text("path"),
+    sha256: text("sha256"),
+    source: text("source").notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    index("idx_context_items_workflow").on(t.workflowId, t.kind),
+    check("context_items_kind_check", sql`${t.kind} IN ('goal','plan','decision','artifact')`),
+    check("context_items_source_check", sql`${t.source} IN ('verified','agent_reported')`),
+    check("context_items_sha256_check", sql`${t.sha256} IS NULL OR length(${t.sha256}) = 64`),
+  ],
+);

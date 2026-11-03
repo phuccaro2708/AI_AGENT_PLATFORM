@@ -22,6 +22,13 @@
       "when": 1793585269763,
       "tag": "0002_agents",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793721029908,
+      "tag": "0003_phase2_router_worktrees_board",
+      "breakpoints": true
     }
   ]
 }

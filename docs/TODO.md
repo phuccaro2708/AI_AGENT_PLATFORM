@@ -185,7 +185,17 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 
 ## Phase 7 — Ngang AionUi về trải nghiệm cốt lõi (sau Phase 2)
 
-- [ ] `tasks.list` + lịch sử task, lọc, tìm kiếm log
+### 7A — Nợ Phase 2 + lịch sử task (code xong 2026-11-03)
+
+- [x] `tasks.history` + `logs.search` (lọc project/agent/state, phân trang; tìm log bằng LIKE trên `payload_json`, chưa có index, chưa benchmark) — tab History trong UI
+- [x] `tasks.resolveReconciliation` (quyết định tường minh + ghi chú bắt buộc; `requeue` mới tăng `attempt`)
+- [x] Peer Review engine resume sau restart và sau quyết định reconciliation (`resumeAll`/`resume`); giới hạn: `maxRounds` tùy chỉnh không được lưu qua restart
+- [x] UI: thẻ "Needs your decision" (diff trước, không quyết định mặc định, requeue cần xác nhận)
+- [ ] Kiểm với CLI thật: `node scripts/e2e-peer-review.mjs resume <impl> <rev>` (script đã viết, CHƯA chạy, tốn token)
+- [ ] Chạy UI trong app Tauri thật
+
+### Còn lại của Phase 7
+
 - [ ] Hộp thoại chọn thư mục qua backend
 - [ ] Settings → Agents (command/args/env, probe, secrets vào Credential Manager)
 - [ ] Approval UI đầy đủ (một lần / trong phạm vi / từ chối) + nhật ký quyết định

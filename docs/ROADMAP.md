@@ -172,6 +172,8 @@ AionUi thiên về hội thoại tự do, nhiều agent và nhiều kênh (YOLO 
 
 ### Phase 7 — Ngang AionUi về trải nghiệm cốt lõi (2–3 tuần, sau Phase 2)
 
+**Tiến độ:** lát 7A (lịch sử task, tìm log, engine resume, UI giải quyết reconciliation) đã có code và test; còn kiểm với CLI thật và trong app Tauri. 7B–7D chưa bắt đầu.
+
 Lấp khoảng trống UX so với AionUi, nhưng theo cách task-centric.
 
 - Lịch sử: `tasks.list`, lọc theo project/agent/trạng thái, mở lại log và kết quả; tìm kiếm trong log.

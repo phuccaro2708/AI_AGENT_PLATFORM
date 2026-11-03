@@ -2,6 +2,7 @@
 //   node scripts/e2e-peer-review.mjs run <implementer> <reviewer>   full Peer Review in a temp repo
 //   node scripts/e2e-peer-review.mjs two <implementer> <reviewer>   two workflows at once, two worktrees
 //   node scripts/e2e-peer-review.mjs kill <implementer> <reviewer>  kill the process mid-run, restart on the same DB
+//   node scripts/e2e-peer-review.mjs resume <implementer> <reviewer> kill, restart, resolve reconciliation, workflow continues
 // Needs `pnpm build` first. Prints a JSON report; exit code 1 when the expectation failed.
 import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -213,6 +214,68 @@ async function killMode(impl, rev) {
   }
 }
 
+/**
+ * Phase 7A: kill midway, restart, then decide like a person would. The implementer is
+ * `needs_reconciliation`; the worktree is looked at, and the decision follows what is there
+ * (`completed` when hello.txt exists, otherwise `requeue`). The workflow must then finish.
+ */
+async function resumeMode(impl, rev) {
+  const dir = mkdtempSync(join(tmpdir(), "as-e2e-resume-"));
+  const dbPath = join(dir, "s.db");
+  const wt = join(dir, "wt");
+  const root = makeRepo(dir);
+  const child = spawn(process.execPath, [self, "_victim", impl, rev, dbPath, wt, root], {
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  let workflowId = "";
+  await new Promise((resolve) => {
+    child.stdout.on("data", (b) => {
+      const m = /WF (\S+)/.exec(String(b));
+      if (m) {
+        workflowId = m[1];
+        resolve();
+      }
+    });
+  });
+  const probe = open(dbPath, wt);
+  let running = false;
+  for (let i = 0; i < 120 && !running; i++) {
+    running = (await call(probe, "tasks.list", { workflowId })).tasks.some(
+      (t) => t.state === "running",
+    );
+    if (!running) await sleep(500);
+  }
+  probe.close();
+  child.kill("SIGKILL");
+  await sleep(1000);
+  const svc = open(dbPath, wt);
+  try {
+    const before = await report(svc, workflowId);
+    const first = (await call(svc, "tasks.list", { workflowId })).tasks[0];
+    const diff = (await call(svc, "artifacts.diff", { taskId: first.id })).patch;
+    const decision = diff.includes("+hello") ? "completed" : "requeue";
+    await call(svc, "tasks.resolveReconciliation", {
+      taskId: first.id,
+      decision,
+      note: `e2e: looked at the worktree diff, chose ${decision}`,
+    });
+    const final = await waitSettled(svc, workflowId, 600_000);
+    const after = await report(svc, workflowId);
+    console.log(
+      JSON.stringify(
+        { mode: "resume", sawRunning: running, decision, before, final, after },
+        null,
+        2,
+      ),
+    );
+    process.exitCode =
+      running && before.tasks[0]?.state === "needs_reconciliation" && final === "completed" ? 0 : 1;
+  } finally {
+    svc.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 async function victim(impl, rev, dbPath, wt, root) {
   const svc = open(dbPath, wt);
   const { projectId } = await call(svc, "projects.create", { name: "e2e", rootPath: root });
@@ -231,6 +294,7 @@ const [mode, a, b, c, d, e] = process.argv.slice(2);
 if (mode === "run") await runMode(a, b);
 else if (mode === "two") await twoMode(a, b);
 else if (mode === "kill") await killMode(a, b);
+else if (mode === "resume") await resumeMode(a, b);
 else if (mode === "_victim") await victim(a, b, c, d, e);
 else console.error("usage: e2e-peer-review.mjs run|two|kill <implementer> <reviewer>");
 void dirname;

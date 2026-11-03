@@ -258,3 +258,32 @@ export const worktrees = sqliteTable(
   },
   (t) => [check("worktrees_state_check", sql`${t.state} IN ('active','removed')`)],
 );
+
+/**
+ * Shared context board (Phase 2): what agents in one workflow may be told about each other's work.
+ * `source` says who vouches for an entry; only the engine writes `verified` (it measured it itself).
+ * Artifact entries carry the path and the sha256 of its content (null = the file was deleted).
+ */
+export const contextEntries = sqliteTable(
+  "context_entries",
+  {
+    id: text("id").primaryKey(),
+    workflowId: text("workflow_id")
+      .notNull()
+      .references(() => workflows.id),
+    kind: text("kind").notNull(),
+    source: text("source").notNull(),
+    authorTaskId: text("author_task_id").references(() => tasks.id),
+    content: text("content").notNull(),
+    path: text("path"),
+    sha256: text("sha256"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    index("idx_context_workflow").on(t.workflowId, t.createdAt),
+    check("context_kind_check", sql`${t.kind} IN ('goal','plan','decision','artifact','report')`),
+    check("context_source_check", sql`${t.source} IN ('user','verified','agent-reported')`),
+    check("context_artifact_check", sql`${t.kind} != 'artifact' OR ${t.path} IS NOT NULL`),
+    check("context_sha_check", sql`${t.sha256} IS NULL OR length(${t.sha256}) = 64`),
+  ],
+);

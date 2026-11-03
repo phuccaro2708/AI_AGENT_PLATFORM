@@ -362,3 +362,47 @@ describe("worktrees registry", () => {
     expect(repo.getWorktree(t)).toMatchObject({ state: "removed" });
   });
 });
+
+describe("context board storage", () => {
+  it("stores entries per workflow in order and enforces kind/source/artifact constraints", () => {
+    const { w } = seed();
+    const other = repo.createWorkflow(repo.createProject("o", "/o"));
+    repo.addContextEntry({ workflowId: w, kind: "goal", source: "user", content: "g" });
+    repo.addContextEntry({
+      workflowId: w,
+      kind: "artifact",
+      source: "verified",
+      content: "",
+      path: "a.txt",
+      sha256: "a".repeat(64),
+    });
+    repo.addContextEntry({ workflowId: other, kind: "goal", source: "user", content: "x" });
+    expect(repo.listContextEntries(w).map((e) => e.kind)).toEqual(["goal", "artifact"]);
+    expect(repo.listContextEntries(other)).toHaveLength(1);
+    const bad = (e: Parameters<Repo["addContextEntry"]>[0]) =>
+      expect(() => repo.addContextEntry(e)).toThrow();
+    bad({ workflowId: w, kind: "artifact", source: "verified", content: "no path" });
+    bad({
+      workflowId: w,
+      kind: "artifact",
+      source: "verified",
+      content: "",
+      path: "p",
+      sha256: "short",
+    });
+    bad({ workflowId: w, kind: "nope" as never, source: "user", content: "" });
+    bad({ workflowId: w, kind: "goal", source: "trust-me" as never, content: "" });
+  });
+
+  it("allows a deleted artifact (path, no sha256)", () => {
+    const { w } = seed();
+    repo.addContextEntry({
+      workflowId: w,
+      kind: "artifact",
+      source: "verified",
+      content: "deleted",
+      path: "gone.txt",
+    });
+    expect(repo.listContextEntries(w)[0]).toMatchObject({ path: "gone.txt", sha256: null });
+  });
+});

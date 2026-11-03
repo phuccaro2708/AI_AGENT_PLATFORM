@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -51,18 +52,21 @@ const implementerRole: RoleDef = {
   instructions: "Implement the goal.",
   access: "write",
   allowedAgents: ["claude"],
+  sees: ["goal"],
 };
 const reviewerRole: RoleDef = {
   name: "reviewer",
   instructions: "Review the change. End with VERDICT: APPROVE or VERDICT: CHANGES_REQUESTED.",
   access: "read",
   allowedAgents: "any",
+  sees: ["goal", "artifact", "report"],
 };
 const workerRole: RoleDef = {
   name: "worker",
   instructions: "Do your part.",
   access: "write",
   allowedAgents: "any",
+  sees: ["goal"],
 };
 
 let dir: string;
@@ -242,6 +246,79 @@ describe("WorkflowEngine.runPeerReview (implement → review)", () => {
       }),
     ).rejects.toThrow(/not allowed/i);
     expect(codex.prompts).toEqual([]);
+  });
+});
+
+describe("WorkflowEngine shared context board", () => {
+  const approve = () => "fine\nVERDICT: APPROVE";
+  const peer = (implementer: RoleDef = implementerRole) =>
+    engine.runPeerReview({
+      workflowId: wf,
+      goal: "THE-GOAL",
+      implementer: { role: implementer, agentId: "claude" },
+      reviewer: { role: reviewerRole, agentId: "codex" },
+    });
+  const writeF = (t: AgentTask) => writeFileSync(join(t.cwd, "f.txt"), "f\n");
+
+  it("gives the reviewer the final report and files, never the implementer's raw log", async () => {
+    build((t) => {
+      writeF(t);
+      return [
+        { type: "text", content: "INTERMEDIATE-THOUGHT" },
+        { type: "tool_call", name: "RAW-TOOL", args: {} },
+        { type: "tool_result", result: "RAW-RESULT" },
+        { type: "text", content: "FINAL-REPORT" },
+      ] as AgentEvent[];
+    }, approve);
+    await peer();
+    const prompt = codex.prompts[0]!;
+    expect(prompt).toContain("FINAL-REPORT");
+    expect(prompt).toContain("f.txt");
+    for (const raw of ["INTERMEDIATE-THOUGHT", "RAW-TOOL", "RAW-RESULT"]) {
+      expect(prompt).not.toContain(raw);
+    }
+    expect(prompt).toMatch(/not instructions/i);
+  });
+
+  it("shows a plan only to roles whose sees includes plan", async () => {
+    build((t) => {
+      writeF(t);
+      return "done";
+    }, approve);
+    engine.board.add(wf, { kind: "plan", source: "agent-reported", content: "SECRET-PLAN" });
+    await peer(); // implementer sees only the goal; the reviewer has no plan access
+    expect(claude.prompts[0]).not.toContain("SECRET-PLAN");
+    expect(codex.prompts[0]).not.toContain("SECRET-PLAN");
+  });
+
+  it("does show the plan to a role that is allowed to see it", async () => {
+    build((t) => {
+      writeF(t);
+      return "done";
+    }, approve);
+    engine.board.add(wf, { kind: "plan", source: "agent-reported", content: "SECRET-PLAN" });
+    await peer({ ...implementerRole, sees: ["goal", "plan"] });
+    expect(claude.prompts[0]).toContain("SECRET-PLAN");
+    expect(codex.prompts[0]).not.toContain("SECRET-PLAN");
+  });
+
+  it("records the goal, verified artifacts (real sha256, deletions) and an agent-reported report", async () => {
+    build((t) => {
+      writeFileSync(join(t.cwd, "feature.txt"), "feature\n");
+      rmSync(join(t.cwd, "a.txt"));
+      return "my report";
+    }, approve);
+    await peer();
+    const entries = repo.listContextEntries(wf);
+    const of = (k: string) => entries.filter((e) => e.kind === k);
+    expect(of("goal")).toMatchObject([{ source: "user", content: "THE-GOAL" }]);
+    expect(of("report")).toMatchObject([{ source: "agent-reported", content: "my report" }]);
+    const art = Object.fromEntries(of("artifact").map((e) => [e.path, e]));
+    expect(art["feature.txt"]).toMatchObject({
+      source: "verified",
+      sha256: createHash("sha256").update("feature\n").digest("hex"),
+    });
+    expect(art["a.txt"]).toMatchObject({ source: "verified", sha256: null });
   });
 });
 

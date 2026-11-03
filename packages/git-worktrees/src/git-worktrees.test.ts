@@ -124,3 +124,17 @@ describe("GitWorktrees.commitAll / diffStat", () => {
     await expect(gw.diffStat("--output=x", w.branch)).rejects.toThrow();
   });
 });
+
+describe("GitWorktrees.changedFiles", () => {
+  it("lists added, modified and deleted files of a branch", async () => {
+    const w = await gw.create({ taskId: "t1" });
+    writeFileSync(join(w.path, "a.txt"), "changed\n");
+    writeFileSync(join(w.path, "sub name.txt"), "n\n");
+    await gw.commitAll(w.path, "c1");
+    rmSync(join(w.path, "sub name.txt"));
+    git(w.path, "rm", "-q", "a.txt");
+    await gw.commitAll(w.path, "c2");
+    expect(await gw.changedFiles(w.baseSha, w.branch)).toEqual([{ path: "a.txt", deleted: true }]);
+    await expect(gw.changedFiles("--x", w.branch)).rejects.toThrow();
+  });
+});

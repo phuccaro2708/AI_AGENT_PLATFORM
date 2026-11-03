@@ -6,12 +6,14 @@ const implementer: RoleDef = {
   instructions: "Make the change.",
   access: "write",
   allowedAgents: ["claude"],
+  sees: ["goal"],
 };
 const anyReader: RoleDef = {
   name: "reviewer",
   instructions: "Review it.",
   access: "read",
   allowedAgents: "any",
+  sees: ["goal", "artifact"],
 };
 
 describe("assignRole", () => {

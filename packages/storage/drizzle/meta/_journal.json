@@ -36,6 +36,13 @@
       "when": 1793668756909,
       "tag": "0004_worktrees",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793669542150,
+      "tag": "0005_context_entries",
+      "breakpoints": true
     }
   ]
 }

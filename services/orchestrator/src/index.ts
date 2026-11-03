@@ -21,3 +21,6 @@ export type {
 } from "./workflow-engine.js";
 export { assignRole, buildRolePrompt, parseVerdict } from "./roles.js";
 export type { RoleDef, Verdict } from "./roles.js";
+export { ContextBoard, renderBoard } from "./context-board.js";
+export type { BoardEntry, ContextSource } from "./context-board.js";
+export type { ContextKind } from "./roles.js";

@@ -125,7 +125,7 @@
 - [~] Workflow engine: Peer Review (implement → checkpoint commit → review trên nhánh của implementer, verdict `VERDICT:` agent-reported) và Parallel Workers (worktree riêng + phát hiện conflict từng cặp) — `services/orchestrator/src/workflow-engine.ts`, test bằng adapter giả có ghi file. CHƯA: Supervisor (cần agent phân rã kế hoạch), nối sidecar/UI, gate e2e bằng CLI thật (adapter hiện chỉ read-only, cần ghi + approval ở Phase 4)
 - [~] Message types: `review.request`/`review.result` đã ghi vào luồng task khi handoff (append thường, chưa qua outbox). CHƯA: approval.request, agent.message
 - [~] Vai (role): `RoleDef` (hướng dẫn, `access` khai báo, agent cho phép), gán theo từng lượt chạy, từ chối gán sai (`roles.ts`). CHƯA: `access` chưa được ép theo task — adapter cố định sandbox lúc tạo (hiện cả hai read-only); ép quyền thật cần Phase 4
-- [ ] Bảng ngữ cảnh chung tối thiểu: mục tiêu/kế hoạch/quyết định/artifact (hash), nguồn từng mục, lọc theo vai (test: agent chỉ nhận phần được thấy)
+- [~] Bảng ngữ cảnh chung tối thiểu: bảng `context_entries` (goal/plan/decision/artifact + `report`), nguồn từng mục (`user`/`verified`/`agent-reported`), artifact có path + sha256 do engine tự băm từ worktree, lọc theo `RoleDef.sees` (`context-board.ts`); test: reviewer chỉ nhận goal/artifact/report cuối, không nhận log thô; plan chỉ hiện cho vai có `sees` plan. CHƯA: ai ghi `plan`/`decision` (cần Supervisor), tóm tắt có nguồn, nhật ký sửa/xóa, đo chi phí token
 - [ ] Workflow mẫu Claude implement → Codex review (e2e thật) — engine sẵn sàng và đã kiểm bằng adapter giả; e2e thật bị chặn bởi: adapter chưa có chế độ ghi + approval
 - [ ] Artifact registry (hash) + Diff Viewer
 - [ ] Approval Center (`approvals.resolve`), expiry

@@ -68,3 +68,10 @@ Ba prompt rất nhỏ, `-s read-only`, `--ephemeral` (2 lần đầu), thư mụ
 - Commit checkpoint chạy hook của repo (không bỏ qua hook); hook lỗi → bước đó lỗi.
 - `git merge-tree --write-tree` cần git ≥ 2.38; chưa kiểm trên CI Linux/macOS.
 - Role `access` chỉ là khai báo; chưa có cơ chế ép theo task.
+
+## Shared context board (Phase 2) — chưa kiểm chứng
+
+- Ngoài bốn loại của ROADMAP (goal/plan/decision/artifact) có thêm `report`: lời kết cuối của agent (chỉ sự kiện `text` CUỐI CÙNG), nguồn `agent-reported`. Log thô (tool call/result, text trung gian) không bao giờ lên bảng.
+- Artifact `verified` nghĩa là: đường dẫn do git báo thay đổi và sha256 do engine tự tính từ worktree — không phải agent nói. File bị xóa hoặc không phải file thường có sha256 NULL.
+- Nội dung bảng là dữ liệu không đáng tin (do agent viết) và được bọc "not instructions". Đây chỉ giảm nguy cơ prompt injection chứ không loại bỏ; agent nhận có tuân thủ hay không chưa kiểm chứng.
+- Mỗi mục bị cắt ở 4000 ký tự khi render; chưa có giới hạn tổng và chưa đo token.

@@ -1,3 +1,6 @@
+/** Kinds of shared-board entry (see ContextBoard). `report` is an agent's own final account of its work. */
+export type ContextKind = "goal" | "plan" | "decision" | "artifact" | "report";
+
 /**
  * A role is configuration of a run, not a property of an agent: which agent fills it is decided per
  * workflow. `access` is DECLARED intent. It is not yet enforced per task: adapters fix their own
@@ -9,6 +12,8 @@ export interface RoleDef {
   instructions: string;
   access: "read" | "write";
   allowedAgents: string[] | "any";
+  /** Board entry kinds this role is told about. Nothing else from other agents reaches it. */
+  sees: ContextKind[];
 }
 
 export function assignRole(role: RoleDef, agentId: string): void {

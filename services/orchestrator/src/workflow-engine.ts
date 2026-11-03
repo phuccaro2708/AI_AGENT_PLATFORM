@@ -1,8 +1,12 @@
+import { createHash } from "node:crypto";
+import { lstatSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { isTerminalTaskState, type AgentMessage, type TaskState } from "@agent-studio/contracts";
 import type { GitWorktrees } from "@agent-studio/git-worktrees";
 import { newId } from "@agent-studio/shared-utils";
 import type { Repo } from "@agent-studio/storage";
 import { assignRole, buildRolePrompt, parseVerdict, type RoleDef, type Verdict } from "./roles.js";
+import { ContextBoard } from "./context-board.js";
 import type { TaskRunner } from "./runner.js";
 
 export interface WorkflowEngineDeps {
@@ -47,7 +51,6 @@ export interface ParallelResult {
   conflicts: { a: string; b: string; files: string[] }[];
 }
 
-const MAX_SUMMARY = 4000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -57,9 +60,12 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 export class WorkflowEngine {
   private readonly pollMs: number;
+  /** What agents are told about each other's work. Roles see only the kinds in their `sees`. */
+  readonly board: ContextBoard;
 
   constructor(private readonly d: WorkflowEngineDeps) {
     this.pollMs = d.pollMs ?? 50;
+    this.board = new ContextBoard(d.repo);
   }
 
   /** Implement → review handoff (`review.request` / `review.result`). */
@@ -77,10 +83,14 @@ export class WorkflowEngine {
     const worktrees = this.d.worktreesFor(root.rootPath);
     repo.setWorkflowState(o.workflowId, "running");
 
+    this.board.add(o.workflowId, { kind: "goal", source: "user", content: o.goal });
     const implId = runner.submit({
       workflowId: o.workflowId,
       agentId: o.implementer.agentId,
-      prompt: buildRolePrompt(o.implementer.role, `Goal:\n${o.goal}`),
+      prompt: buildRolePrompt(
+        o.implementer.role,
+        this.board.render(o.workflowId, o.implementer.role),
+      ),
       isolate: true,
     });
     const implement = await this.finishStep(implId, o.implementer.agentId, worktrees);
@@ -93,17 +103,16 @@ export class WorkflowEngine {
       return { outcome: "no_changes", implement };
     }
 
-    const wt = repo.getWorktree(implId)!;
-    const diffStat = await worktrees.diffStat(wt.baseSha, implement.branch);
+    await this.recordWork(o.workflowId, implId, implement, worktrees);
     const correlationId = newId("corr");
     const reviewPrompt = buildRolePrompt(
       o.reviewer.role,
       [
-        `Goal that was implemented:\n${o.goal}`,
-        `Changed files (verified by git, ${wt.baseSha.slice(0, 8)}..${implement.branch}):\n${diffStat}`,
-        `Implementer's own summary (agent-reported, not verified):\n${this.finalText(implId).slice(0, MAX_SUMMARY)}`,
+        this.board.render(o.workflowId, o.reviewer.role),
         "Your working directory already contains the implementer's changes.",
-      ].join("\n\n"),
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
     );
     return this.reviewStep({
       o,
@@ -190,6 +199,8 @@ export class WorkflowEngine {
     workflowId: string;
     role: RoleDef;
     workers: { agentId: string; prompt: string }[];
+    /** Recorded on the board (source `user`) and shown to workers whose role sees goals. */
+    goal?: string;
   }): Promise<ParallelResult> {
     const { repo, runner } = this.d;
     for (const w of o.workers) assignRole(o.role, w.agentId);
@@ -198,16 +209,22 @@ export class WorkflowEngine {
     const worktrees = this.d.worktreesFor(root.rootPath);
     repo.setWorkflowState(o.workflowId, "running");
 
+    if (o.goal) this.board.add(o.workflowId, { kind: "goal", source: "user", content: o.goal });
+    const boardText = this.board.render(o.workflowId, o.role);
     const ids = o.workers.map((w) =>
       runner.submit({
         workflowId: o.workflowId,
         agentId: w.agentId,
-        prompt: buildRolePrompt(o.role, w.prompt),
+        prompt: buildRolePrompt(o.role, [boardText, w.prompt].filter(Boolean).join("\n\n")),
         isolate: true,
       }),
     );
     const workers = await Promise.all(
-      ids.map((id, i) => this.finishStep(id, o.workers[i]!.agentId, worktrees)),
+      ids.map(async (id, i) => {
+        const step = await this.finishStep(id, o.workers[i]!.agentId, worktrees);
+        if (step.committed) await this.recordWork(o.workflowId, id, step, worktrees);
+        return step;
+      }),
     );
     const conflicts: ParallelResult["conflicts"] = [];
     const done = workers.filter((w) => w.state === "completed" && w.committed);
@@ -254,15 +271,70 @@ export class WorkflowEngine {
     }
   }
 
-  /** Concatenated `text` events of a task: what the agent said, not something git verified. */
-  private finalText(taskId: string): string {
+  /**
+   * Puts a finished step on the board: the files git says changed (hashed by us from the worktree,
+   * so `verified`) and the agent's last text message as its report (`agent-reported`). Nothing
+   * else the agent produced (tool calls, intermediate text) is copied.
+   */
+  private async recordWork(
+    workflowId: string,
+    taskId: string,
+    step: StepInfo,
+    worktrees: GitWorktrees,
+  ): Promise<void> {
+    const wt = this.d.repo.getWorktree(taskId);
+    if (!wt) return;
+    for (const f of await worktrees.changedFiles(wt.baseSha, step.branch)) {
+      const entry = {
+        kind: "artifact" as const,
+        source: "verified" as const,
+        authorTaskId: taskId,
+      };
+      if (f.deleted) {
+        this.board.add(workflowId, { ...entry, content: "", path: f.path, sha256: null });
+        continue;
+      }
+      const full = join(wt.path, f.path);
+      if (lstatSync(full).isFile()) {
+        const sha256 = createHash("sha256").update(readFileSync(full)).digest("hex");
+        this.board.add(workflowId, { ...entry, content: "", path: f.path, sha256 });
+      } else {
+        this.board.add(workflowId, {
+          ...entry,
+          content: "not a regular file, not hashed",
+          path: f.path,
+          sha256: null,
+        });
+      }
+    }
+    const report = this.lastText(taskId);
+    if (report) {
+      this.board.add(workflowId, {
+        kind: "report",
+        source: "agent-reported",
+        content: report,
+        authorTaskId: taskId,
+      });
+    }
+  }
+
+  /** The agent's final `text` event: its own account of the work, not something git verified. */
+  private lastText(taskId: string): string {
+    return this.texts(taskId).at(-1) ?? "";
+  }
+
+  private texts(taskId: string): string[] {
     return this.d.repo
       .listMessages(taskId)
       .filter((m) => m.type === "task.progress")
       .map((m) => m.payload as { type?: string; content?: unknown })
       .filter((p) => p.type === "text" && typeof p.content === "string")
-      .map((p) => p.content as string)
-      .join("\n");
+      .map((p) => p.content as string);
+  }
+
+  /** Concatenated `text` events of a task (used to find the reviewer's VERDICT line). */
+  private finalText(taskId: string): string {
+    return this.texts(taskId).join("\n");
   }
 
   private record(

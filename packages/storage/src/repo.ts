@@ -9,6 +9,7 @@ import { newId } from "@agent-studio/shared-utils";
 import type { StudioDb } from "./db.js";
 import {
   agents,
+  contextEntries,
   events,
   executionRuns,
   inbox,
@@ -209,6 +210,44 @@ export class Repo {
       .from(worktrees)
       .where(eq(worktrees.state, "active"))
       .orderBy(asc(worktrees.createdAt))
+      .all();
+  }
+
+  addContextEntry(e: {
+    workflowId: string;
+    kind: "goal" | "plan" | "decision" | "artifact" | "report";
+    source: "user" | "verified" | "agent-reported";
+    content: string;
+    authorTaskId?: string;
+    path?: string;
+    sha256?: string | null;
+  }): string {
+    const id = newId("ctx");
+    this.db
+      .insert(contextEntries)
+      .values({
+        id,
+        workflowId: e.workflowId,
+        kind: e.kind,
+        source: e.source,
+        content: e.content,
+        authorTaskId: e.authorTaskId ?? null,
+        path: e.path ?? null,
+        sha256: e.sha256 ?? null,
+        createdAt: now(),
+      })
+      .run();
+    return id;
+  }
+
+  /** Every entry of a workflow, oldest first. Visibility filtering is the caller's job (see ContextBoard). */
+  listContextEntries(workflowId: string) {
+    return this.db
+      .select()
+      .from(contextEntries)
+      .where(eq(contextEntries.workflowId, workflowId))
+      // rowid is insertion order: entries within one millisecond must not reorder by random id
+      .orderBy(asc(contextEntries.createdAt), sql`rowid`)
       .all();
   }
 

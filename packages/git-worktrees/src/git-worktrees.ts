@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { runProcess } from "@agent-studio/process-manager";
 
@@ -78,7 +79,12 @@ export interface MergeCheck {
 /** Compares paths the way the OS does (git prints forward slashes; Windows is case-insensitive). */
 export function samePath(a: string, b: string): boolean {
   const norm = (p: string) => {
-    const r = resolve(p);
+    let r = resolve(p);
+    try {
+      r = realpathSync.native(r); // CI temp dirs use 8.3 short names; git prints the long form
+    } catch {
+      // a path that no longer exists is compared as written
+    }
     return process.platform === "win32" ? r.toLowerCase() : r;
   };
   return norm(a) === norm(b);

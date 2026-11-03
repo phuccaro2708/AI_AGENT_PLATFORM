@@ -74,6 +74,21 @@ describe("task log", () => {
     });
     expect(describeMessage(msg(0, "task.progress", null)).kind).toBe("info");
     expect(
+      describeMessage(msg(0, "review.request", { summary: "add x", artifacts: [{ path: "a" }] }))
+        .text,
+    ).toBe("Review requested: add x (1 file(s))");
+    expect(
+      describeMessage(msg(0, "review.result", { verdict: "request_changes", comments: ["fix y"] })),
+    ).toEqual({ kind: "error", text: "Changes requested\n- fix y" });
+    expect(describeMessage(msg(0, "review.result", { verdict: "approve", comments: [] }))).toEqual({
+      kind: "info",
+      text: "Approved",
+    });
+    expect(describeMessage(msg(0, "review.result", null)).text).toBe("Review result");
+    expect(
+      describeMessage(msg(0, "approval.request", { approvalId: "a", description: "merge" })).text,
+    ).toBe("Approval needed: merge");
+    expect(
       describeMessage(msg(0, "task.progress", { type: "text", content: "x".repeat(1000) })).text,
     ).toHaveLength(301);
   });

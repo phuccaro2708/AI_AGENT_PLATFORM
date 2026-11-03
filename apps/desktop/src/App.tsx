@@ -7,7 +7,8 @@ import { Inspector } from "./Inspector";
 import { api, type AdapterInfo, type CliProbe, type Project } from "./api";
 import { msg, type TaskRef } from "./components";
 import { getHealth, type Health } from "./health";
-import { MultiAgentView, type MultiRun } from "./MultiAgentView";
+import { loadRuns, saveRuns, type PeerRun } from "./peerReview";
+import { PeerReviewView } from "./PeerReviewView";
 import { runSelftestIfRequested } from "./selftest";
 import { onSidecarEvent } from "./sidecar";
 import { NewProjectDialog } from "./NewProjectDialog";
@@ -15,6 +16,7 @@ import { Sidebar, type Mode, type Session } from "./Sidebar";
 import { SettingsView } from "./SettingsView";
 import { useNickname } from "./profile";
 import { useTheme } from "./theme";
+import { useRuns } from "./useRuns";
 
 export function App() {
   const [mode, setMode] = useState<Mode>("agent");
@@ -31,14 +33,22 @@ export function App() {
   const [agentId, setAgentId] = useState("");
   const [tasks, setTasks] = useState<TaskRef[]>([]);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
-  const [runs, setRuns] = useState<MultiRun[]>([]);
+  const [runs, setRuns] = useState<PeerRun[]>(loadRuns);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [newProject, setNewProject] = useState(false);
-  const [chosen, setChosen] = useState<string[]>([]);
   const [inspector, setInspector] = useState(false);
   const [states, setStates] = useState<Record<string, TaskState>>({});
 
   const fail = useCallback((m: string) => setError(m), []);
+  const { snaps, approvals, refresh: refreshRuns } = useRuns(runs, fail);
+  useEffect(() => {
+    // Polled workflow tasks also feed the sidebar dots (push events only cover the open tasks).
+    setStates((s) => {
+      const next = { ...s };
+      for (const snap of Object.values(snaps)) for (const t of snap.tasks) next[t.id] = t.state;
+      return next;
+    });
+  }, [snaps]);
   const refreshProjects = useCallback(
     () => void api.projects().then(setProjects, (e: unknown) => fail(msg(e))),
     [fail],
@@ -97,24 +107,16 @@ export function App() {
     );
   };
 
-  const startRun = (goal: string) => {
-    const agentIds = chosen;
-    Promise.all(agentIds.map((a) => api.startTask(projectId, a, goal))).then(
-      (ids) => {
-        const run: MultiRun = {
-          id: ids.join("+"),
-          projectId,
-          goal,
-          tasks: ids.map((id, i) => ({
-            id,
-            title: goal.slice(0, 60),
-            prompt: goal,
-            agentId: agentIds[i]!,
-            projectId,
-          })),
-        };
-        setRuns((r) => [run, ...r]);
-        setSelectedRun(run.id);
+  const startRun = (implementer: string, reviewer: string, goal: string) => {
+    api.startPeerReview(projectId, implementer, reviewer, goal).then(
+      (workflowId) => {
+        const run: PeerRun = { workflowId, projectId, goal, implementer, reviewer };
+        setRuns((r) => {
+          const next = [run, ...r];
+          saveRuns(next);
+          return next;
+        });
+        setSelectedRun(workflowId);
         setError(null);
       },
       (err: unknown) => fail(msg(err)),
@@ -122,16 +124,22 @@ export function App() {
   };
 
   const project = projects.find((p) => p.id === projectId);
-  const toggleChosen = (id: string) =>
-    setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
   const task = tasks.find((t) => t.id === selectedTask) ?? null;
-  const run = runs.find((r) => r.id === selectedRun) ?? null;
-  const openTasks = mode === "agent" ? (task ? [task] : []) : (run?.tasks ?? []);
+  const run = runs.find((r) => r.workflowId === selectedRun) ?? null;
+  const toRefs = (r: PeerRun): TaskRef[] =>
+    (snaps[r.workflowId]?.tasks ?? []).map((t) => ({
+      id: t.id,
+      title: r.goal.slice(0, 60),
+      prompt: r.goal,
+      agentId: t.agentId ?? "?",
+      projectId: r.projectId,
+    }));
+  const openTasks = mode === "agent" ? (task ? [task] : []) : run ? toRefs(run) : [];
   const title = settings
     ? "Settings"
     : mode === "agent"
       ? (task?.title ?? "New session")
-      : (run?.goal.slice(0, 60) ?? "New multi-agent run");
+      : (run?.goal.slice(0, 60) ?? "New Peer Review");
 
   const sessions: Session[] = [
     ...tasks.map((t) => ({
@@ -142,11 +150,11 @@ export function App() {
       taskIds: [t.id],
     })),
     ...runs.map((r) => ({
-      id: r.id,
+      id: r.workflowId,
       projectId: r.projectId,
       mode: "multi" as const,
       label: r.goal.slice(0, 40),
-      taskIds: r.tasks.map((t) => t.id),
+      taskIds: (snaps[r.workflowId]?.tasks ?? []).map((t) => t.id),
     })),
   ];
   const openSession = (s: Session) => {
@@ -225,16 +233,17 @@ export function App() {
               onError={fail}
             />
           ) : (
-            <MultiAgentView
+            <PeerReviewView
               projects={projects}
               projectId={projectId}
               onProject={setProjectId}
               onNewProject={() => setNewProject(true)}
               adapters={adapters}
-              chosen={chosen}
-              onToggle={toggleChosen}
               run={run}
+              snapshot={run ? snaps[run.workflowId] : undefined}
+              approvals={approvals}
               onStart={startRun}
+              onResolved={() => void refreshRuns()}
               onError={fail}
             />
           )}
@@ -248,7 +257,7 @@ export function App() {
           detecting={detecting}
           onDetect={detect}
           agentId={agentId}
-          chosen={chosen}
+          chosen={run ? [run.implementer, run.reviewer] : []}
           multi={mode === "multi"}
           tasks={openTasks}
           states={states}

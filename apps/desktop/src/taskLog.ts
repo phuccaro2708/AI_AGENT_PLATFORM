@@ -57,6 +57,26 @@ export function describeMessage(m: AgentMessage): Line {
       return { kind: "info", text: "Completed" };
     case "task.failed":
       return { kind: "error", text: show(p.message ?? "Failed") };
+    case "review.request": {
+      const n = Array.isArray(p.artifacts) ? p.artifacts.length : 0;
+      return { kind: "info", text: `Review requested: ${show(p.summary)} (${n} file(s))` };
+    }
+    case "review.result": {
+      const comments = Array.isArray(p.comments) ? p.comments : [];
+      const verdict =
+        p.verdict === "approve"
+          ? "Approved"
+          : p.verdict === "request_changes"
+            ? "Changes requested"
+            : "Review result";
+      const detail = comments.map((c) => `- ${show(c)}`).join("\n");
+      return {
+        kind: p.verdict === "approve" ? "info" : "error",
+        text: detail ? `${verdict}\n${detail}` : verdict,
+      };
+    }
+    case "approval.request":
+      return { kind: "info", text: `Approval needed: ${show(p.description)}` };
     default:
       if (p.type === "text") return { kind: "text", text: show(p.content) };
       if (p.type === "tool_call") return { kind: "tool", text: `${show(p.name)}(${show(p.args)})` };

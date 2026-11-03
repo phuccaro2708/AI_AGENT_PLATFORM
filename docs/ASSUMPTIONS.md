@@ -107,3 +107,11 @@ Repo git tạm ngoài repo dự án, prompt rất ngắn. Chưa lưu fixture; ch
 - **Scheduler khởi động lười:** chỉ chạy sau `workflows.startPeerReview` đầu tiên của tiến trình; `approvals.list/resolve` quét hết hạn khi được gọi (chưa có timer). Số task chạy song song vẫn mặc định 2, chưa đọc từ `settings`.
 - **Hạn chế còn lại:** restart giữa chừng vẫn để workflow `running` mà engine không tự tiếp tục (bookkeeping bước trong bộ nhớ); hủy một task `queued` của engine bằng `tasks.cancel` không báo cho engine nên workflow có thể kẹt `running`; project không phải repo git → task implementer `failed` kèm lý do, workflow `failed`.
 - **Đã kiểm chứng bằng test:** `SidecarService` + git worktree thật + adapter giả chạy trọn implement → review (cùng cwd, thư mục chính không bị đổi, `artifacts.diff` có nội dung). Chưa chạy với CLI Claude/Codex thật.
+
+## Phase 2 step 8: Peer Review UI
+
+- The UI does not run against real Claude/Codex CLIs yet; it was verified with typecheck, build and logic tests only, and has not been exercised in the Tauri app.
+- Workflows have no push events: the UI polls `tasks.list` and `approvals.list` every 1.5 s while a run is unsettled.
+- The sidecar has no "list workflows" method, so the UI remembers run ids (workflow, project, goal, agents) in `localStorage` and restores tasks and state with `tasks.list` after a restart. Clearing site data forgets the runs, not the work.
+- Task roles on the board are derived from creation order (implement, review, implement, ...), which holds for Peer Review only.
+- Approvals shown are those the orchestrator creates; real CLIs do not emit them yet.

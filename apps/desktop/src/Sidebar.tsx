@@ -60,7 +60,7 @@ export function Sidebar({
   const q = query.trim().toLowerCase();
   const nav = [
     ["agent", "Agent", "Work with one agent on your machine"],
-    ["multi", "Multi-agent", "A bigger project with several agents"],
+    ["multi", "Peer Review", "One agent builds, another reviews"],
   ] as const;
   return (
     <aside className="sidebar">

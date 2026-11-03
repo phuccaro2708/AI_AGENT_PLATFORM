@@ -1087,3 +1087,38 @@ button.primary:hover:not(:disabled) {
   display: flex;
   gap: 4px;
 }
+
+/* peer review: task board and diff */
+.board {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.board li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.diff {
+  margin: 0;
+  max-height: 420px;
+  overflow: auto;
+  font-size: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+.diff .da {
+  color: var(--ok);
+}
+.diff .dd {
+  color: var(--err);
+}
+.diff .dh,
+.diff .dk {
+  color: var(--muted);
+}

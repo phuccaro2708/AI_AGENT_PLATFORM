@@ -63,6 +63,12 @@ function snippetAround(payloadJson: string, query: string): string {
   return `${start > 0 ? "…" : ""}${payloadJson.slice(start, end)}${end < payloadJson.length ? "…" : ""}`;
 }
 
+/** What the adapters rely on; settings are accepted only for a program that shows all of them. */
+const REQUIRED_CAPABILITIES = {
+  claude: ["print", "outputStreamJson"],
+  codex: ["execSubcommand", "execJson"],
+} as const;
+
 export class SidecarService {
   readonly db: StudioDb;
   private readonly repo: Repo;
@@ -124,13 +130,15 @@ export class SidecarService {
 
   /**
    * Validates and probes proposed settings without storing anything. A program that merely prints a
-   * version and exits 0 is not accepted: the probe must have seen at least one real CLI capability.
+   * version and exits 0 is not accepted: the probe must have seen every capability the adapter relies on.
    */
   private async tryAgentSettings(provider: "claude" | "codex", input: AgentLaunchSettings) {
     const checked = checkAgentSettings(input);
     if (!checked.ok) return { ok: false as const, reason: checked.reason };
     const probe = await this.probeWith(provider, checked.resolvedPath, checked.settings.env);
-    const looksLikeTheCli = Object.values(probe.capabilities).some(Boolean);
+    // The adapter needs these to talk to the CLI at all. Any single flag is not enough: `node`
+    // also lists `-p, --print`.
+    const looksLikeTheCli = REQUIRED_CAPABILITIES[provider].every((c) => probe.capabilities[c]);
     return { ok: probe.status === "ok" && looksLikeTheCli, probe, checked, looksLikeTheCli };
   }
 

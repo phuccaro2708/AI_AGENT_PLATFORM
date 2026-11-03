@@ -17,7 +17,12 @@ const probeOk = (provider: "claude" | "codex"): ProbeResult => ({
   status: "ok",
   path: process.execPath,
   version: "1.0.0",
-  capabilities: { print: true },
+  capabilities: {
+    print: true,
+    outputStreamJson: true,
+    execSubcommand: true,
+    execJson: true,
+  },
   evidence: [],
   probedAt: "2026-01-01T00:00:00.000Z",
 });
@@ -93,7 +98,7 @@ describe("agent launch settings (7B)", () => {
   });
 
   it("does not accept a program that is not the CLI (version prints, no known options)", async () => {
-    svc = open((p) => ({ ...probeOk(p), capabilities: { print: false } }));
+    svc = open((p) => ({ ...probeOk(p), capabilities: { print: true, outputStreamJson: false } }));
     const r = await call(svc, "agents.setSettings", {
       provider: "claude",
       settings: { command: process.execPath, args: [], env: {} },
@@ -105,6 +110,17 @@ describe("agent launch settings (7B)", () => {
     expect((await call(svc, "agents.getSettings", { provider: "claude" })).result?.settings).toBe(
       null,
     );
+  });
+
+  it("with the real probe, node is not accepted as either CLI (its help lists -p, --print)", async () => {
+    svc = new SidecarService({ dbPath: join(dir, "s.db") }, log());
+    for (const provider of ["claude", "codex"]) {
+      const r = await call(svc, "agents.setSettings", {
+        provider,
+        settings: { command: process.execPath, args: [], env: {} },
+      });
+      expect(r.result?.ok, provider).toBe(false);
+    }
   });
 
   it("saves verified settings, keeps them across a restart, and records the probe", async () => {

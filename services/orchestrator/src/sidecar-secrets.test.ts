@@ -25,7 +25,12 @@ const ok = (provider: "claude" | "codex"): ProbeResult => ({
   status: "ok",
   path: process.execPath,
   version: "1.0.0",
-  capabilities: { print: true },
+  capabilities: {
+    print: true,
+    outputStreamJson: true,
+    execSubcommand: true,
+    execJson: true,
+  },
   evidence: [],
   probedAt: "2026-01-01T00:00:00.000Z",
 });

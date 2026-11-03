@@ -15,7 +15,7 @@ export interface Outcome {
  * `needs_reconciliation` and is never retried automatically.
  *
  * "May have changed things" is judged from the events only: a `tool_call` without a matching
- * `tool_result`. `tool_result` carries no call id, so calls and results are counted. We cannot tell a
+ * `tool_result`, paired by `callId` when the adapter reports one and otherwise by counting. We cannot tell a
  * read-only tool from a writing one, so any unfinished tool is treated as unverified. This relies on
  * the adapter reporting `tool_call` faithfully; an adapter that hides tool use defeats it.
  */
@@ -25,21 +25,29 @@ export function classifyOutcome(input: {
   abnormalEnd?: string;
 }): Outcome {
   const { events, abnormalEnd } = input;
-  let calls = 0;
-  let results = 0;
+  // Calls that carry a callId are paired by id; calls without one fall back to counting.
+  const openIds = new Set<string>();
+  let anonCalls = 0;
+  let anonResults = 0;
   let terminal: Extract<AgentEvent, { type: "completed" | "error" }> | undefined;
   for (const e of events) {
-    if (e.type === "tool_call") calls++;
-    else if (e.type === "tool_result") results++;
+    if (e.type === "tool_call") {
+      if (e.callId === undefined) anonCalls++;
+      else openIds.add(e.callId);
+    } else if (e.type === "tool_result") {
+      if (e.callId === undefined) anonResults++;
+      else openIds.delete(e.callId);
+    }
     if (e.type === "completed" || e.type === "error") {
       terminal = e;
       break;
     }
   }
-  const unfinishedTools = calls > results;
+  const unfinished = openIds.size + Math.max(0, anonCalls - anonResults);
+  const unfinishedTools = unfinished > 0;
   const unverified = (why: string): Outcome => ({
     state: "needs_reconciliation",
-    reason: `${why}; ${calls - results} tool call(s) had no result, so side effects are unverified`,
+    reason: `${why}; ${unfinished} tool call(s) had no result, so side effects are unverified`,
   });
 
   if (abnormalEnd !== undefined || terminal === undefined) {

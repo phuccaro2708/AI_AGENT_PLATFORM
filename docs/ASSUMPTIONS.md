@@ -72,3 +72,10 @@ Repo git tạm ngoài repo dự án, prompt rất ngắn. Chưa lưu fixture; ch
 - Mỗi CLI giữ phiên riêng (Claude `--resume <session_id>` đã kiểm chứng; Codex resume chưa dùng). Không có bộ nhớ dùng chung giữa Claude và Codex: "ngữ cảnh chung" chỉ là văn bản do Agent Studio đưa vào prompt của từng lần chạy.
 - Chi phí token tăng theo kích thước bảng ngữ cảnh chung và số agent; chưa đo. Cần giới hạn cỡ và đo trước khi chốt mặc định.
 - Việc agent có tôn trọng đúng phần ngữ cảnh/vai được giao (không tự đọc ngoài phạm vi) chưa kiểm chứng; quyền thực tế vẫn do chế độ chỉ đọc/ghi của CLI và worktree quyết định, và worktree không phải sandbox bảo mật.
+
+## Chưa kiểm chứng: ánh xạ `permissions` → cờ CLI (Phase 2, bước 1c)
+
+- `AgentTaskInput.permissions` (`read-only` | `workspace-write`) là **khuyến nghị**, không phải sandbox (xem spike 2026-11-03: không CLI nào giới hạn ghi trong `cwd` theo mặc định).
+- Claude: `read-only` → `--tools Read,Grep,Glob` (đã kiểm chứng `--tools Read` chặn ghi). `workspace-write` → `--tools Read,Grep,Glob,Edit,Write --permission-mode acceptEdits`: **tên tool `Edit`/`Write` và hành vi `acceptEdits` dưới `-p` chưa quan sát**, cần probe trước khi dùng cho worker ghi.
+- Codex: ánh xạ thẳng sang `-s`; `read-only` chỉ mang tính tư vấn trên máy này (spike S2). Vì vậy bước 5 phải kiểm tra sau chạy (git status/hash) thay vì tin vào cờ.
+- `callId`: Claude lấy từ `tool_use.id` ↔ `tool_result.tool_use_id` (đã quan sát ở spike S3); Codex dùng `item.id`. Thiếu id → `classifyOutcome` quay về đếm.

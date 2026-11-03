@@ -1,4 +1,4 @@
-import type { AgentCapability, AgentEvent } from "@agent-studio/contracts";
+import type { AgentCapability, AgentEvent, TaskPermissions } from "@agent-studio/contracts";
 import type { AgentAdapter, AgentTask } from "@agent-studio/agent-core";
 import {
   createLineSplitter,
@@ -10,6 +10,14 @@ import { createCodexParser } from "./parse.js";
 
 /** `danger-full-access` is deliberately not offered; Codex also has a bypass flag we never pass. */
 export type CodexSandbox = "read-only" | "workspace-write";
+
+/** Task permissions win over the adapter option; with neither, stay read-only. */
+export function codexSandboxFor(
+  permissions: TaskPermissions | undefined,
+  fallback: CodexSandbox | undefined,
+): CodexSandbox {
+  return permissions ?? fallback ?? "read-only";
+}
 
 const isJson = (line: string): boolean => {
   try {
@@ -97,7 +105,7 @@ export class CodexAdapter implements AgentAdapter {
       "exec",
       "--json",
       "-s",
-      this.opts.sandbox ?? "read-only",
+      codexSandboxFor(task.permissions, this.opts.sandbox),
       ...(this.opts.extraArgs ?? []),
       "-",
     ];

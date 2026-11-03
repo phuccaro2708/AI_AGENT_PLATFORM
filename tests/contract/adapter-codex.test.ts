@@ -74,6 +74,7 @@ describe("createCodexParser on the REAL codex-cli 0.165.0 fixtures", () => {
     ]);
     expect(events[2]).toEqual({
       type: "tool_result",
+      callId: "item_1",
       result: { exitCode: 0, status: "completed", output: "hi\r\n" },
     });
   });
@@ -121,7 +122,12 @@ describe("CodexAdapter", () => {
       "usage",
       "completed",
     ]);
-    expect(events[0]).toEqual({ type: "tool_call", name: "shell", args: { command: "echo hi" } });
+    expect(events[0]).toEqual({
+      type: "tool_call",
+      name: "shell",
+      args: { command: "echo hi" },
+      callId: "item_1",
+    });
   });
   it("defaults to a read-only sandbox, reads the prompt from stdin, and ignores sessionId", async () => {
     const t = { ...task(), sessionId: "abc" };

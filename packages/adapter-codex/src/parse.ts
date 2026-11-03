@@ -69,12 +69,18 @@ export function createCodexParser(): CodexParser {
         const id = typeof item.id === "string" ? item.id : undefined;
         const events: AgentEvent[] = [];
         if (id === undefined || !started.has(id)) {
-          events.push({ type: "tool_call", name: toolName(item.type), args: toolArgs(item) });
+          events.push({
+            type: "tool_call",
+            name: toolName(item.type),
+            args: toolArgs(item),
+            ...(id !== undefined && id !== "" ? { callId: id } : {}),
+          });
           if (id !== undefined) started.add(id);
         }
         if (e.type === "item.completed") {
           events.push({
             type: "tool_result",
+            ...(id !== undefined && id !== "" ? { callId: id } : {}),
             result:
               item.type === "command_execution"
                 ? {

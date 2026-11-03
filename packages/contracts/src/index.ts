@@ -43,19 +43,38 @@ export const AgentCapability = z.enum([
 ]);
 export type AgentCapability = z.infer<typeof AgentCapability>;
 
+/**
+ * What a task may do to its working directory. Passed to the CLI as flags where the CLI supports it,
+ * but it is advisory: neither CLI confines writes to `cwd` (docs/ASSUMPTIONS.md), so it is not a sandbox.
+ */
+export const TaskPermissions = z.enum(["read-only", "workspace-write"]);
+export type TaskPermissions = z.infer<typeof TaskPermissions>;
+
 /** Serializable part of a task. `signal` (AbortSignal) is runtime-only, see agent-core. */
 export const AgentTaskInput = z.object({
   id: z.string().min(1),
   prompt: z.string(),
   cwd: z.string().min(1),
   sessionId: z.string().min(1).optional(),
+  /** Absent = adapter default (unchanged Phase 1 behaviour). */
+  permissions: TaskPermissions.optional(),
 });
 export type AgentTaskInput = z.infer<typeof AgentTaskInput>;
 
 export const AgentEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("text"), content: z.string() }),
-  z.object({ type: z.literal("tool_call"), name: z.string(), args: z.unknown() }),
-  z.object({ type: z.literal("tool_result"), result: z.unknown() }),
+  // `callId` pairs a result with its call when the CLI reports one; without it consumers fall back to counting.
+  z.object({
+    type: z.literal("tool_call"),
+    name: z.string(),
+    args: z.unknown(),
+    callId: z.string().min(1).optional(),
+  }),
+  z.object({
+    type: z.literal("tool_result"),
+    result: z.unknown(),
+    callId: z.string().min(1).optional(),
+  }),
   z.object({ type: z.literal("approval"), request: z.unknown() }),
   z.object({ type: z.literal("usage"), data: z.unknown() }),
   z.object({ type: z.literal("completed"), sessionId: z.string().optional() }),
@@ -198,6 +217,54 @@ export function canTransition(from: TaskState, to: TaskState): boolean {
 
 export function isTerminalTaskState(state: TaskState): boolean {
   return TASK_TRANSITIONS[state].length === 0;
+}
+
+/** Allowed workflow state transitions. Terminal states have no outgoing edges. */
+export const WORKFLOW_TRANSITIONS: Readonly<Record<WorkflowState, readonly WorkflowState[]>> = {
+  pending: ["running", "cancelled"],
+  running: ["paused", "completed", "failed", "cancelled"],
+  paused: ["running", "failed", "cancelled"],
+  completed: [],
+  failed: [],
+  cancelled: [],
+};
+
+export function canTransitionWorkflow(from: WorkflowState, to: WorkflowState): boolean {
+  return WORKFLOW_TRANSITIONS[from].includes(to);
+}
+
+export function isTerminalWorkflowState(state: WorkflowState): boolean {
+  return WORKFLOW_TRANSITIONS[state].length === 0;
+}
+
+// ---- Message payloads (only the types that carry structure the engine reads) ----
+
+const Sha256 = z.string().length(64);
+
+export const ReviewRequestPayload = z.object({
+  summary: z.string(),
+  artifacts: z.array(z.object({ path: z.string().min(1), sha256: Sha256 })),
+});
+export const ReviewResultPayload = z.object({
+  verdict: z.enum(["approve", "request_changes"]),
+  comments: z.array(z.string()),
+});
+export const ApprovalRequestPayload = z.object({
+  approvalId: z.string().min(1),
+  description: z.string(),
+});
+export const AgentMessagePayload = z.object({ text: z.string() });
+
+const PAYLOAD_SCHEMAS: Partial<Record<MessageType, z.ZodType>> = {
+  "review.request": ReviewRequestPayload,
+  "review.result": ReviewResultPayload,
+  "approval.request": ApprovalRequestPayload,
+  "agent.message": AgentMessagePayload,
+};
+
+/** Validates a payload for types with a schema; other types (task.*) stay free-form. */
+export function parseMessagePayload(type: MessageType, payload: unknown) {
+  return (PAYLOAD_SCHEMAS[type] ?? z.unknown()).safeParse(payload);
 }
 
 export class IllegalTransitionError extends Error {

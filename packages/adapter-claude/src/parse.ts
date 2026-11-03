@@ -42,9 +42,16 @@ export function parseClaudeLine(line: string): ParsedLine {
           type: "tool_call",
           name: typeof block.name === "string" ? block.name : "unknown",
           args: block.input,
+          ...(typeof block.id === "string" && block.id ? { callId: block.id } : {}),
         });
       } else if (e.type === "user" && block.type === "tool_result") {
-        events.push({ type: "tool_result", result: block.content });
+        events.push({
+          type: "tool_result",
+          result: block.content,
+          ...(typeof block.tool_use_id === "string" && block.tool_use_id
+            ? { callId: block.tool_use_id }
+            : {}),
+        });
       }
     }
     return { events };

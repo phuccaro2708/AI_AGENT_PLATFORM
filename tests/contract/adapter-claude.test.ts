@@ -63,7 +63,13 @@ describe("parseClaudeLine on the REAL tool-use fixture (2.1.314)", () => {
     const events = parsed.flatMap((p) => p.events);
     expect(events.map((e) => e.type)).toEqual(["tool_call", "tool_result", "text", "usage"]);
     expect(events[0]).toMatchObject({ type: "tool_call", name: "Read" });
-    expect(events[1]).toEqual({ type: "tool_result", result: "1\tagent-studio-probe-42\n2\t" });
+    const callId = (events[0] as { callId?: string }).callId;
+    expect(callId).toEqual(expect.any(String)); // tool_use.id pairs with tool_result.tool_use_id
+    expect(events[1]).toEqual({
+      type: "tool_result",
+      result: "1\tagent-studio-probe-42\n2\t",
+      callId,
+    });
     expect(parsed.find((p) => p.final)?.final).toEqual({
       type: "completed",
       sessionId: "00000000-0000-0000-0000-000000000000",

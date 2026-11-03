@@ -1,4 +1,4 @@
-import type { AgentCapability, AgentEvent } from "@agent-studio/contracts";
+import type { AgentCapability, AgentEvent, TaskPermissions } from "@agent-studio/contracts";
 import type { AgentAdapter, AgentTask } from "@agent-studio/agent-core";
 import {
   createLineSplitter,
@@ -7,6 +7,19 @@ import {
   type RunningProcess,
 } from "@agent-studio/process-manager";
 import { parseClaudeLine } from "./parse.js";
+
+/**
+ * Flags for a task's permissions. VERIFIED (spike 2026-11-03): `--tools Read` blocks writes.
+ * ASSUMED, unverified: the `Edit`/`Write` tool names and `--permission-mode acceptEdits` under `-p`
+ * (docs/ASSUMPTIONS.md). No shell tool is granted either way. Advisory, not a sandbox.
+ */
+export function claudePermissionArgs(permissions: TaskPermissions | undefined): string[] {
+  if (permissions === "read-only") return ["--tools", "Read,Grep,Glob"];
+  if (permissions === "workspace-write") {
+    return ["--tools", "Read,Grep,Glob,Edit,Write", "--permission-mode", "acceptEdits"];
+  }
+  return [];
+}
 
 const isJson = (line: string): boolean => {
   try {
@@ -100,6 +113,7 @@ export class ClaudeAdapter implements AgentAdapter {
       "--verbose",
       ...(this.opts.safeMode === false ? [] : ["--safe-mode"]),
       ...(task.sessionId ? ["--resume", task.sessionId] : []),
+      ...claudePermissionArgs(task.permissions),
       ...(this.opts.extraArgs ?? []),
     ];
     const proc = startProcess({

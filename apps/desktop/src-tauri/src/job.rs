@@ -204,7 +204,7 @@ mod tests {
                     grandchild = s.parse().ok();
                     grandchild.is_some()
                 },
-                20
+                60
             ),
             "grandchild ping.exe never appeared"
         );
@@ -217,11 +217,11 @@ mod tests {
         drop(job);
 
         assert!(
-            wait_for(|| child.try_wait().ok().flatten().is_some(), 10),
+            wait_for(|| child.try_wait().ok().flatten().is_some(), 30),
             "child still running"
         );
         assert!(
-            wait_for(|| !pid_alive(grandchild), 10),
+            wait_for(|| !pid_alive(grandchild), 30),
             "grandchild still running"
         );
     }

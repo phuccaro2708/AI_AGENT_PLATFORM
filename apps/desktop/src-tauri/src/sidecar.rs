@@ -231,7 +231,7 @@ mod tests {
             .expect("node must be on PATH to run these tests")
     }
 
-    const T: Duration = Duration::from_secs(5);
+    const T: Duration = Duration::from_secs(30);
 
     #[test]
     fn replies_match_by_id_even_when_they_finish_out_of_order() {

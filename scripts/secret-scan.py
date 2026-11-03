@@ -19,6 +19,32 @@ ACCEPTED_HISTORY = {
     # False positive: the CI step installs the package literally named "detect-secrets==1.5.0".
     ("d4e1b0bc", ".github/workflows/ci.yml", "Secret Keyword", 60),
     ("21c1ae96", ".github/workflows/ci.yml", "Secret Keyword", 60),
+    # Phase 7B history: FAKE test values and a schema comment that said "secrets", before the inline
+    # pragmas and the rewording landed. Reviewed by hand.
+    ("0b696542", "packages/storage/src/schema.ts", "Secret Keyword", 206),
+    ("0b696542", "services/orchestrator/src/sidecar-agent-settings.test.ts", "Secret Keyword", 134),
+    ("0b696542", "services/orchestrator/src/sidecar-secrets.test.ts", "Secret Keyword", 10),
+    ("0b696542", "services/orchestrator/src/sidecar-secrets.test.ts", "Secret Keyword", 11),
+    ("cb1ed4d6", "packages/storage/src/schema.ts", "Secret Keyword", 206),
+    ("cb1ed4d6", "services/orchestrator/src/sidecar-agent-settings.test.ts", "Secret Keyword", 134),
+    ("cb1ed4d6", "services/orchestrator/src/sidecar-secrets.test.ts", "Secret Keyword", 10),
+    ("cb1ed4d6", "services/orchestrator/src/sidecar-secrets.test.ts", "Secret Keyword", 11),
+    ("7b8cb236", "packages/storage/src/schema.ts", "Secret Keyword", 206),
+    ("7b8cb236", "services/orchestrator/src/sidecar-agent-settings.test.ts", "Secret Keyword", 134),
+    ("7b8cb236", "services/orchestrator/src/sidecar-secrets.test.ts", "Secret Keyword", 10),
+    ("7b8cb236", "services/orchestrator/src/sidecar-secrets.test.ts", "Secret Keyword", 11),
+    ("6461cf2d", "packages/storage/src/schema.ts", "Secret Keyword", 206),
+    ("6461cf2d", "services/orchestrator/src/sidecar-agent-settings.test.ts", "Secret Keyword", 134),
+    ("6461cf2d", "services/orchestrator/src/sidecar-secrets.test.ts", "Secret Keyword", 10),
+    ("6461cf2d", "services/orchestrator/src/sidecar-secrets.test.ts", "Secret Keyword", 11),
+    ("63d07e7e", "packages/storage/src/schema.ts", "Secret Keyword", 206),
+    ("63d07e7e", "services/orchestrator/src/sidecar-agent-settings.test.ts", "Secret Keyword", 134),
+    ("63d07e7e", "services/orchestrator/src/sidecar-secrets.test.ts", "Secret Keyword", 10),
+    ("63d07e7e", "services/orchestrator/src/sidecar-secrets.test.ts", "Secret Keyword", 11),
+    ("fce54cb1", "packages/storage/src/schema.ts", "Secret Keyword", 206),
+    ("fce54cb1", "services/orchestrator/src/sidecar-agent-settings.test.ts", "Secret Keyword", 134),
+    ("998ba7f8", "packages/storage/src/schema.ts", "Secret Keyword", 206),
+    ("998ba7f8", "services/orchestrator/src/sidecar-agent-settings.test.ts", "Secret Keyword", 134),
 }
 
 # Reviewed by hand, valid at any commit: exact (file, type, line). Line 28 of the Phase 0 spike

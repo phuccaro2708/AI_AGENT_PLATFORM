@@ -174,6 +174,9 @@ export const approvals = sqliteTable(
     createdAt: text("created_at").notNull(),
     expiresAt: text("expires_at"),
     resolvedAt: text("resolved_at"),
+    /** Who decided (a user id, or `system:*` for expiry/restart/cancel). Caller-supplied, not authenticated yet. */
+    resolvedBy: text("resolved_by"),
+    reason: text("reason"),
   },
   (t) => [
     index("idx_approvals_task_state").on(t.taskId, t.state),

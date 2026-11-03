@@ -9,6 +9,7 @@ import { newId } from "@agent-studio/shared-utils";
 import type { StudioDb } from "./db.js";
 import {
   agents,
+  approvals,
   contextEntries,
   events,
   executionRuns,
@@ -242,13 +243,129 @@ export class Repo {
 
   /** Every entry of a workflow, oldest first. Visibility filtering is the caller's job (see ContextBoard). */
   listContextEntries(workflowId: string) {
+    return (
+      this.db
+        .select()
+        .from(contextEntries)
+        .where(eq(contextEntries.workflowId, workflowId))
+        // rowid is insertion order: entries within one millisecond must not reorder by random id
+        .orderBy(asc(contextEntries.createdAt), sql`rowid`)
+        .all()
+    );
+  }
+
+  /**
+   * Opens an approval and parks the task in `waiting_approval` in ONE transaction (the task must be
+   * `running`). The request is stored as given and must be treated as untrusted data.
+   */
+  createApproval(a: {
+    taskId: string;
+    request: unknown;
+    expiresAt?: string;
+    nowIso?: string;
+  }): string {
+    const at = a.nowIso ?? now();
+    const id = newId("apr");
+    this.db.transaction((tx) => {
+      this.setTaskState(a.taskId, "waiting_approval", { reason: `approval ${id}` });
+      tx.insert(approvals)
+        .values({
+          id,
+          taskId: a.taskId,
+          requestJson: JSON.stringify(a.request),
+          createdAt: at,
+          expiresAt: a.expiresAt ?? null,
+        })
+        .run();
+      tx.insert(events)
+        .values({
+          id: newId("evt"),
+          aggregateId: id,
+          eventType: "approval.requested",
+          payloadJson: JSON.stringify({ taskId: a.taskId, expiresAt: a.expiresAt ?? null }),
+          createdAt: at,
+        })
+        .run();
+    });
+    return id;
+  }
+
+  getApproval(id: string) {
+    return this.db.select().from(approvals).where(eq(approvals.id, id)).get();
+  }
+
+  listPendingApprovals(taskId?: string) {
     return this.db
       .select()
-      .from(contextEntries)
-      .where(eq(contextEntries.workflowId, workflowId))
-      // rowid is insertion order: entries within one millisecond must not reorder by random id
-      .orderBy(asc(contextEntries.createdAt), sql`rowid`)
+      .from(approvals)
+      .where(
+        taskId
+          ? and(eq(approvals.state, "pending"), eq(approvals.taskId, taskId))
+          : eq(approvals.state, "pending"),
+      )
+      .orderBy(asc(approvals.createdAt), sql`rowid`)
       .all();
+  }
+
+  /** Pending approvals whose deadline has passed. */
+  listDueApprovals(nowIso: string): string[] {
+    return this.db
+      .select({ id: approvals.id })
+      .from(approvals)
+      .where(and(eq(approvals.state, "pending"), lte(approvals.expiresAt, nowIso)))
+      .all()
+      .map((r) => r.id);
+  }
+
+  /**
+   * Decides a pending approval exactly once (compare-and-set). An `approved` answer that arrives
+   * after the deadline is recorded as `expired`: a late "yes" never authorises anything. When the
+   * task is still `waiting_approval` it returns to `running` (with a fresh lease) so the agent can
+   * continue — on `denied`/`expired` too: the agent is told no, it is not killed.
+   * Returns the final state, or undefined when the approval was unknown or already decided.
+   */
+  resolveApproval(
+    id: string,
+    decision: "approved" | "denied" | "expired",
+    o: { by: string; reason?: string; nowIso: string; leaseMs: number },
+  ): "approved" | "denied" | "expired" | undefined {
+    return this.db.transaction((tx) => {
+      const row = tx.select().from(approvals).where(eq(approvals.id, id)).get();
+      if (!row || row.state !== "pending") return undefined;
+      const late = row.expiresAt !== null && row.expiresAt <= o.nowIso;
+      const final = decision === "approved" && late ? "expired" : decision;
+      const res = tx
+        .update(approvals)
+        .set({
+          state: final,
+          resolvedAt: o.nowIso,
+          resolvedBy: final === decision ? o.by : "system:expired",
+          reason: o.reason ?? null,
+        })
+        .where(and(eq(approvals.id, id), eq(approvals.state, "pending")))
+        .run();
+      if (res.changes !== 1) return undefined;
+      if (this.getTaskState(row.taskId) === "waiting_approval") {
+        this.setTaskState(row.taskId, "running", {
+          leaseExpiresAt: new Date(Date.parse(o.nowIso) + o.leaseMs).toISOString(),
+        });
+      }
+      tx.insert(events)
+        .values({
+          id: newId("evt"),
+          aggregateId: id,
+          eventType: "approval.resolved",
+          payloadJson: JSON.stringify({
+            state: final,
+            requested: decision,
+            by: o.by,
+            reason: o.reason ?? null,
+          }),
+          createdAt: o.nowIso,
+        })
+        .run();
+      return final;
+    });
   }
 
   listProjects() {
@@ -263,6 +380,10 @@ export class Repo {
       .innerJoin(projects, eq(projects.id, workflows.projectId))
       .where(eq(workflows.id, workflowId))
       .get();
+  }
+
+  getTask(taskId: string) {
+    return this.db.select().from(tasks).where(eq(tasks.id, taskId)).get();
   }
 
   getTaskAttempt(taskId: string): number | undefined {
@@ -333,6 +454,12 @@ export class Repo {
       this.setTaskState(id, "needs_reconciliation", {
         reason: "interrupted: the orchestrator stopped while this task was in progress",
       });
+      // nobody is waiting for these answers any more; an old "yes" must not resurrect them
+      this.db
+        .update(approvals)
+        .set({ state: "expired", resolvedAt: now(), resolvedBy: "system:restart" })
+        .where(and(eq(approvals.taskId, id), eq(approvals.state, "pending")))
+        .run();
     }
     return stuck.map((s) => s.id);
   }
@@ -567,7 +694,7 @@ export class Repo {
       .select()
       .from(events)
       .where(eq(events.aggregateId, aggregateId))
-      .orderBy(asc(events.createdAt))
+      .orderBy(asc(events.createdAt), sql`rowid`)
       .all();
   }
 }

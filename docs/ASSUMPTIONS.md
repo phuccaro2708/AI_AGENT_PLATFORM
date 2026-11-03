@@ -75,3 +75,10 @@ Ba prompt rất nhỏ, `-s read-only`, `--ephemeral` (2 lần đầu), thư mụ
 - Artifact `verified` nghĩa là: đường dẫn do git báo thay đổi và sha256 do engine tự tính từ worktree — không phải agent nói. File bị xóa hoặc không phải file thường có sha256 NULL.
 - Nội dung bảng là dữ liệu không đáng tin (do agent viết) và được bọc "not instructions". Đây chỉ giảm nguy cơ prompt injection chứ không loại bỏ; agent nhận có tuân thủ hay không chưa kiểm chứng.
 - Mỗi mục bị cắt ở 4000 ký tự khi render; chưa có giới hạn tổng và chưa đo token.
+
+## Approval center (Phase 2) — chưa kiểm chứng
+
+- Chưa adapter nào phát yêu cầu duyệt thật: `AgentAdapter` không có đường nhận câu trả lời, và cả hai adapter đang read-only. Luồng chạy end-to-end với CLI thật (Claude permission prompt, Codex app-server approval) chưa kiểm chứng.
+- `resolved_by` do bên gọi tự khai, chưa xác thực; trước khi mở qua sidecar/UI phải gắn danh tính thật.
+- Từ chối/hết hạn đưa task về `running` để agent biết kết quả; agent thật có xử lý "no" đúng cách hay không chưa kiểm chứng.
+- Nội dung yêu cầu do agent viết nên là dữ liệu không đáng tin; UI phải hiển thị như văn bản thuần.

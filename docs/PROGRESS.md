@@ -46,6 +46,12 @@ Kiểm: lint, typecheck, 357 test, build, prettier; `cargo test` 12 qua + 1 bỏ
 - Test `git-worktrees` từng flaky một lần; `logs.search` (LIKE) chưa benchmark.
 - 7C Approval UI, 7D Tailwind/shadcn + phím tắt, rồi `PHASE7_REPORT.md`.
 
+## 2026-11-03 (tối) — Đối chiếu roadmap, CLI mà app quét
+
+- Kiểm: lint, typecheck, 358 test qua. CI của `52660f3` (run `41736953160`): 4 job xanh; job Security (bước secret scan, bắt đầu 23:10:16Z) chạy hơn 45 phút, chưa đọc được kết quả vì GitHub API trả 403 (nhiều bộ theo dõi dùng chung hạn mức). `da9614c` và `803ccac` chưa push.
+- App không quét "model" LLM. Nó chỉ dò **CLI agent** có thật trên máy qua `agents.detect`/`agents.probe`: `claude` và `codex` (Gemini CLI và Ollama thuộc Phase 3, chưa có code). Mỗi CLI được ghi: đường dẫn, version, bảng capability suy từ `--help` (kể cả cờ `--model` của Claude, chỉ là cờ có mặt, không có danh sách model).
+- Trên máy này: `claude` 2.1.316 (`~\.local\bin\claude.exe`), `codex-cli` 0.165.0 (npm shim `codex.cmd`); không có `gemini`, `ollama`. Khớp với ASSUMPTIONS #13/#14 (Claude 2.1.316 và 2.1.314, Codex 0.165.0).
+
 ## Đổi tên hiển thị
 
 - Tên hiển thị của app đổi từ "Agent Studio" sang "Team workspace" (`cb1ed4d`), rồi chốt là **"Agent Workspace"** và đồng bộ ở giao diện (productName, tiêu đề cửa sổ, `index.html`, Header, About, thông báo) lẫn tài liệu (README, CLAUDE.md, docs/). Giữ nguyên `identifier` `dev.agentstudio.desktop`, tên package `@agent-studio/*` và service Credential Manager `agent-studio`, vì đổi chúng sẽ làm mất dữ liệu và secret đã lưu của người dùng hiện có.

@@ -13,6 +13,8 @@ describe("checkArgs", () => {
     "--allowedTools",
     "-s",
     "--sandbox=danger-full-access",
+    "-sread-only",
+    "-cfoo=bar",
     "--full-auto",
     "--add-dir",
     "--cd",
@@ -36,11 +38,23 @@ describe("checkArgs", () => {
 
 describe("checkEnv", () => {
   it("accepts plain settings", () => {
-    expect(checkEnv({ HTTPS_PROXY: "http://proxy:8080", LANG: "en_US" })).toBeNull();
+    expect(
+      checkEnv({ HTTPS_PROXY: "http://proxy:8080", LANG: "en_US", LC_ALL: "C", TZ: "UTC" }),
+    ).toBeNull();
   });
   it("refuses names that change how programs load", () => {
-    for (const n of ["PATH", "path", "NODE_OPTIONS", "LD_PRELOAD", "ComSpec"]) {
-      expect(checkEnv({ [n]: "x" }), n).toMatch(/cannot be set/);
+    for (const n of [
+      "PATH",
+      "path",
+      "NODE_OPTIONS",
+      "LD_PRELOAD",
+      "ComSpec",
+      "BASH_ENV",
+      "CLAUDE_CONFIG_DIR",
+      "ANTHROPIC_BASE_URL",
+      "DYLD_INSERT_LIBRARIES",
+    ]) {
+      expect(checkEnv({ [n]: "x" }), n).toMatch(/not an allowed/);
     }
   });
   it("refuses names that look like secrets", () => {
@@ -51,8 +65,8 @@ describe("checkEnv", () => {
   it("refuses bad names and values", () => {
     expect(checkEnv({ "A B": "x" })).toMatch(/valid/);
     expect(checkEnv({ "1A": "x" })).toMatch(/valid/);
-    expect(checkEnv({ A: "x\u0000y" })).toMatch(/control/);
-    expect(checkEnv({ A: "x".repeat(1025) })).toMatch(/too long/);
+    expect(checkEnv({ TZ: "x\u0000y" })).toMatch(/control/);
+    expect(checkEnv({ TZ: "x".repeat(1025) })).toMatch(/too long/);
   });
 });
 

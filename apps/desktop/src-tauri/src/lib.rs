@@ -1,4 +1,5 @@
 mod job;
+mod secrets;
 mod sidecar;
 
 use serde::Serialize;
@@ -99,9 +100,15 @@ fn ensure_sidecar(app: &tauri::AppHandle, state: &SidecarState) -> Result<Arc<Si
     let db = db_path(app)?;
     let log = db.with_file_name("sidecar.log");
     let handle = app.clone();
-    let s = Arc::new(Sidecar::spawn(&sidecar_dir()?, &db, &log, move |ev| {
-        let _ = handle.emit(SIDECAR_EVENT, ev);
-    })?);
+    let s = Arc::new(Sidecar::spawn(
+        &sidecar_dir()?,
+        &db,
+        &log,
+        secrets::env_for_sidecar(),
+        move |ev| {
+            let _ = handle.emit(SIDECAR_EVENT, ev);
+        },
+    )?);
     *guard = Some(s.clone());
     Ok(s)
 }
@@ -191,6 +198,73 @@ async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
     }
 }
 
+/// Refuses while work is in flight: a restart would kill running tasks (they would end up in
+/// `needs_reconciliation`), so the person waits or cancels first. Nothing running -> nothing to ask.
+async fn ensure_idle(state: &SidecarState) -> Result<(), String> {
+    let running = state.0.lock().map_err(|_| "sidecar lock poisoned")?.clone();
+    let Some(sidecar) = running.filter(|s| s.is_alive()) else {
+        return Ok(());
+    };
+    let reply = tauri::async_runtime::spawn_blocking(move || {
+        sidecar.request("system.activeTasks", None, REQUEST_TIMEOUT)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    match reply["count"].as_u64() {
+        Some(0) => Ok(()),
+        _ => Err(
+            "Tasks are still running or queued. Cancel them or wait, then change secrets.".into(),
+        ),
+    }
+}
+
+/// Stops the sidecar so the next call starts one with the new secrets in its environment.
+async fn restart_sidecar(state: &SidecarState) -> Result<(), String> {
+    let old = state.0.lock().map_err(|_| "sidecar lock poisoned")?.take();
+    if let Some(s) = old {
+        tauri::async_runtime::spawn_blocking(move || s.shutdown())
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Write-only: stores a secret in the credential store. There is no command that reads a value.
+#[tauri::command]
+async fn secret_set(
+    state: tauri::State<'_, SidecarState>,
+    provider: String,
+    name: String,
+    value: String,
+) -> Result<(), String> {
+    ensure_idle(&state).await?;
+    tauri::async_runtime::spawn_blocking(move || secrets::set(&provider, &name, &value))
+        .await
+        .map_err(|e| e.to_string())??;
+    restart_sidecar(&state).await
+}
+
+#[tauri::command]
+async fn secret_delete(
+    state: tauri::State<'_, SidecarState>,
+    provider: String,
+    name: String,
+) -> Result<(), String> {
+    ensure_idle(&state).await?;
+    tauri::async_runtime::spawn_blocking(move || secrets::delete(&provider, &name))
+        .await
+        .map_err(|e| e.to_string())??;
+    restart_sidecar(&state).await
+}
+
+/// Names only, never values.
+#[tauri::command]
+async fn secret_names(provider: String) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || secrets::names(&provider))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// True only when CI/automation asks the app to verify itself and exit.
 #[tauri::command]
 fn selftest_mode() -> bool {
@@ -220,6 +294,9 @@ pub fn run() {
             sidecar_health,
             sidecar_run_stub,
             pick_folder,
+            secret_set,
+            secret_delete,
+            secret_names,
             selftest_mode,
             selftest_finish
         ])
@@ -271,6 +348,7 @@ mod tests {
             "workflows.start ",
             "Health",
             "agents",
+            "system.activeTasks",
         ] {
             assert!(!is_allowed(m), "{m:?}");
         }

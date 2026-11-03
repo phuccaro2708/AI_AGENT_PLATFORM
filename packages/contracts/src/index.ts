@@ -164,6 +164,8 @@ export const SidecarRequest = z.discriminatedUnion("method", [
     method: z.literal("projects.create"),
     params: z.object({ name: z.string().trim().min(1).max(200), rootPath: z.string().min(1) }),
   }),
+  // Internal: asked by the native side before it restarts the sidecar. Not in the UI allowlist.
+  z.object({ id: z.number().int(), method: z.literal("system.activeTasks") }),
   z.object({ id: z.number().int(), method: z.literal("projects.list") }),
   z.object({
     id: z.number().int(),

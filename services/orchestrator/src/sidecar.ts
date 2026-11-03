@@ -5,6 +5,7 @@ import {
   type SidecarResponse,
 } from "@agent-studio/contracts";
 import { AdapterRegistry, StubAdapter, type AgentAdapter } from "@agent-studio/agent-core";
+import { noSecrets, type ProviderSecrets } from "./secrets.js";
 import { checkAgentSettings, type AgentLaunchSettings } from "./agent-settings.js";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAdapter } from "@agent-studio/adapter-codex";
@@ -38,6 +39,8 @@ export interface SidecarOptions {
   probes?: Partial<Record<"claude" | "codex", (o?: ProbeOptions) => Promise<ProbeResult>>>;
   /** Where agent worktrees are created. Default: `worktrees` next to the database (keep it short on Windows). */
   worktreesDir?: string;
+  /** Per-provider secrets handed in by the native side. Never stored, logged or returned. */
+  secrets?: ProviderSecrets;
   /** How often the scheduler looks for ready tasks once a workflow has started. Default 500. */
   schedulerIntervalMs?: number;
 }
@@ -72,6 +75,7 @@ export class SidecarService {
   /** Phase 0 spike workflow for `runStub`; created on first use so a normal start adds no project. */
   private spikeWorkflowId: string | undefined;
   private readonly recoveredTasks: number;
+  private readonly secrets: ProviderSecrets;
   private readonly probes: Record<"claude" | "codex", (o?: ProbeOptions) => Promise<ProbeResult>>;
   /** Tasks currently executing in this process. */
   private readonly active = new Map<string, { abort: AbortController; done: Promise<void> }>();
@@ -101,13 +105,14 @@ export class SidecarService {
     provider: "claude" | "codex",
     s?: { command: string; args: string[]; env: Record<string, string> },
   ): AgentAdapter {
-    const o = s
-      ? {
-          command: s.command,
-          extraArgs: s.args,
-          ...(Object.keys(s.env).length > 0 ? { env: { ...process.env, ...s.env } } : {}),
-        }
-      : {};
+    const secret = this.secrets[provider];
+    const o =
+      s || Object.keys(secret).length > 0
+        ? {
+            ...(s ? { command: s.command, extraArgs: s.args } : {}),
+            env: this.childEnv(provider, s?.env ?? {}),
+          }
+        : {};
     return provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o);
   }
 
@@ -129,14 +134,20 @@ export class SidecarService {
     return { ok: probe.status === "ok" && looksLikeTheCli, probe, checked, looksLikeTheCli };
   }
 
+  /** What an agent of this provider is started with: our environment, its settings, its secrets. */
+  private childEnv(provider: "claude" | "codex", env: Record<string, string>) {
+    return { ...process.env, ...env, ...this.secrets[provider] };
+  }
+
   private probeWith(provider: "claude" | "codex", executable: string, env: Record<string, string>) {
-    return this.probes[provider]({ executable, env: { ...process.env, ...env } });
+    return this.probes[provider]({ executable, env: this.childEnv(provider, env) });
   }
 
   constructor(
     private readonly opts: SidecarOptions,
     private readonly log: Logger,
   ) {
+    this.secrets = opts.secrets ?? noSecrets();
     this.probes = {
       claude: (o) => probeClaude(o),
       codex: (o) => probeCodex(o),
@@ -296,6 +307,14 @@ export class SidecarService {
         }
         case "agents.capabilities":
           return ok(req.id, { probe: this.repo.getAgentProbe(req.params.provider) ?? null });
+        case "system.activeTasks": {
+          const row = this.db.$client
+            .prepare(
+              "select count(*) as n from tasks where state in ('queued','running','waiting_approval')",
+            )
+            .get() as { n: number };
+          return ok(req.id, { count: Math.max(row.n, this.active.size) });
+        }
         case "agents.getSettings":
           return ok(req.id, { settings: this.repo.getAgentSettings(req.params.provider) ?? null });
         case "agents.probe": {

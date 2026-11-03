@@ -59,6 +59,7 @@ impl Sidecar {
         dir: &Path,
         db: &Path,
         log: &Path,
+        secrets: Vec<(String, String)>,
         on_event: impl Fn(Value) + Send + 'static,
     ) -> Result<Self, String> {
         let node = dir.join(if cfg!(windows) { "node.exe" } else { "node" });
@@ -70,6 +71,8 @@ impl Sidecar {
             .arg(dir.join("better_sqlite3.node"))
             .arg("--migrations")
             .arg(dir.join("drizzle"));
+        // Secrets travel in the child's environment only; the sidecar removes them from it on start.
+        cmd.envs(secrets);
         Self::spawn_command(cmd, log, on_event)
     }
 

@@ -18,7 +18,12 @@ tauri = { version = "=2.12.5", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "=2.8.3"
+# Phase 7B: credential-store API (1.0.1 published 2026-10-13, MIT OR Apache-2.0).
+keyring-core = "=1.0.1"
 
 # ADR-004: Job Object for the sidecar. Same version already in Cargo.lock via tauri's dependencies.
 [target.'cfg(windows)'.dependencies]
+# Phase 7B: secrets live in Windows Credential Manager (both crates: MIT OR Apache-2.0, same
+# maintainers; the store 1.1.0 was published 2026-05-24).
+windows-native-keyring-store = "=1.1.0"
 windows-sys = { version = "=0.61.2", default-features = false, features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Threading"] }

@@ -63,18 +63,25 @@ const FORBIDDEN_FLAGS = new Set([
 /** Values that grant everything, wherever they appear in an argument. */
 const FORBIDDEN_VALUES = ["danger-full-access", "bypasspermissions", "dontask"];
 
-/** Environment names that change how a program is loaded or where it looks for programs. */
-const FORBIDDEN_ENV = new Set([
-  "PATH",
-  "PATHEXT",
-  "COMSPEC",
-  "NODE_OPTIONS",
-  "NODE_PATH",
-  "LD_PRELOAD",
-  "LD_LIBRARY_PATH",
-  "DYLD_INSERT_LIBRARIES",
-  "DYLD_LIBRARY_PATH",
+/**
+ * Environment settings are an allowlist: only names known to be harmless are accepted. Anything
+ * that changes how programs are found or loaded (PATH, NODE_OPTIONS, LD_*, DYLD_*, BASH_ENV...) or
+ * that steers the CLI itself (CLAUDE_*, CODEX_*, ANTHROPIC_*, OPENAI_*) is simply not on the list.
+ */
+const ALLOWED_ENV = new Set([
+  "HTTPS_PROXY",
+  "HTTP_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "LANG",
+  "TZ",
+  "SSL_CERT_FILE",
+  "NODE_EXTRA_CA_CERTS",
 ]);
+const allowedEnv = (name: string) => {
+  const n = name.toUpperCase();
+  return ALLOWED_ENV.has(n) || /^LC_[A-Z_]+$/.test(n);
+};
 
 const SECRET_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|COOKIE|BEARER)/i;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -92,7 +99,10 @@ export function checkArgs(args: readonly string[]): string | null {
     if (raw.length > MAX_ARG_LENGTH) return "An extra argument is too long";
     if (hasControl(raw)) return "Extra arguments cannot contain control characters";
     const flag = raw.split("=", 1)[0]!.toLowerCase();
-    if (FORBIDDEN_FLAGS.has(flag)) {
+    // "-sfoo" / "-cfoo": a short flag with its value attached
+    const short =
+      /^-[a-z]/i.test(raw) && !raw.startsWith("--") ? raw.slice(0, 2).toLowerCase() : "";
+    if (FORBIDDEN_FLAGS.has(flag) || (short !== "" && FORBIDDEN_FLAGS.has(short))) {
       return `The flag ${raw.split("=", 1)[0]} is not allowed here: permissions, tools and the working folder are set per task`;
     }
     const lower = raw.toLowerCase();
@@ -108,11 +118,11 @@ export function checkEnv(env: Readonly<Record<string, string>>): string | null {
   if (names.length > MAX_ENV) return `At most ${MAX_ENV} environment variables are allowed`;
   for (const name of names) {
     if (!ENV_NAME.test(name)) return `Not a valid environment variable name: ${name}`;
-    if (FORBIDDEN_ENV.has(name.toUpperCase())) {
-      return `${name} changes how programs are found or loaded and cannot be set here`;
-    }
     if (SECRET_NAME.test(name)) {
       return `${name} looks like a secret. Secrets are kept in the system credential store, not in settings`;
+    }
+    if (!allowedEnv(name)) {
+      return `${name} is not an allowed environment setting (allowed: proxies, LANG, LC_*, TZ, certificate paths)`;
     }
     const value = env[name]!;
     if (value.length > MAX_ENV_VALUE) return `The value of ${name} is too long`;

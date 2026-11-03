@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline";
 import { createLogger } from "@agent-studio/shared-utils";
 import { createEventWriter } from "./event-writer.js";
+import { takeSecretsFromEnv } from "./secrets.js";
 import { SidecarService } from "./sidecar.js";
 
 /** stdout is reserved for the protocol; all logs go to stderr. */
@@ -23,9 +24,11 @@ const events = createEventWriter({
   write: (line) => void process.stdout.write(line),
   pending: () => process.stdout.writableLength,
 });
+const secrets = takeSecretsFromEnv(process.env);
 const service = new SidecarService(
   {
     dbPath,
+    secrets,
     onEvent: events.emit,
     ...(nativeBinding ? { nativeBinding } : {}),
     ...(migrationsFolder ? { migrationsFolder } : {}),

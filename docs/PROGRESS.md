@@ -4,14 +4,14 @@ Ghi theo thứ tự thời gian; số liệu lấy từ lịch sử git và các
 
 ## Tổng quan
 
-| Phase             | Trạng thái                                                                                       | Bằng chứng                 |
-| ----------------- | ------------------------------------------------------------------------------------------------ | -------------------------- |
-| 0                 | Đóng                                                                                             | `docs/PHASE0_REPORT.md`    |
-| 1                 | Đóng 2026-11-02 (CI xanh run 41551598060)                                                        | `docs/PHASE1_REPORT.md`    |
-| 2 Peer Review MVP | Đóng 2026-11-03, có ngoại lệ, tag `mvp-phase2`                                                   | `docs/PHASE2_REPORT.md`    |
-| 7A                | Code và test xong, đã push (`eb80d83`), CI xanh 5 job; còn kiểm UI trong app Tauri thật          | commit `428b422`…`eb80d83` |
-| 7B                | Code và test xong, đã push (`7b8cb23`); CI và kiểm app Tauri thật đang được hai session theo dõi | commit `ea4c183`…`7b8cb23` |
-| 7C, 7D            | Chưa bắt đầu (7C cần nguồn approval từ Phase 4)                                                  | `docs/TODO.md`             |
+| Phase             | Trạng thái                                                                                                                                                                            | Bằng chứng                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| 0                 | Đóng                                                                                                                                                                                  | `docs/PHASE0_REPORT.md`    |
+| 1                 | Đóng 2026-11-02 (CI xanh run 41551598060)                                                                                                                                             | `docs/PHASE1_REPORT.md`    |
+| 2 Peer Review MVP | Đóng 2026-11-03, có ngoại lệ, tag `mvp-phase2`                                                                                                                                        | `docs/PHASE2_REPORT.md`    |
+| 7A                | Code và test xong, đã push (`eb80d83`), CI xanh 5 job; còn kiểm UI trong app Tauri thật                                                                                               | commit `428b422`…`eb80d83` |
+| 7B                | Code và test xong, đã push (`7b8cb23`); CI đỏ ở `7b8cb23` (Security, 3 test Windows), kiểm app Tauri thật đạt có một lỗi probe; cả ba đã sửa ở `52660f3`, CI của commit này đang chạy | commit `ea4c183`…`7b8cb23` |
+| 7C, 7D            | Chưa bắt đầu (7C cần nguồn approval từ Phase 4)                                                                                                                                       | `docs/TODO.md`             |
 
 ## 2026-11-02 — Phase 0–1
 

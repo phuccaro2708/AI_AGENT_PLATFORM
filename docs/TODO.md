@@ -192,7 +192,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [x] Peer Review engine resume sau restart và sau quyết định reconciliation (`resumeAll`/`resume`); giới hạn: `maxRounds` tùy chỉnh không được lưu qua restart
 - [x] UI: thẻ "Needs your decision" (diff trước, không quyết định mặc định, requeue cần xác nhận)
 - [ ] Kiểm với CLI thật: `node scripts/e2e-peer-review.mjs resume <impl> <rev>` (script đã viết, đã chạy 2026-11-03 với claude→codex: kill → needs_reconciliation → requeue → workflow completed; một lần thoát mã 1 chỉ do dọn thư mục tạm bị EPERM, đã sửa)
-- [ ] Chạy UI trong app Tauri thật
+- [ ] Chạy UI 7A (History, thẻ "Needs your decision") trong app Tauri thật
 
 ### 7B — Thư mục, settings agent, secrets (code xong 2026-11-03)
 
@@ -201,7 +201,8 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [x] Cấu hình agent theo provider (command/args/env), chỉ có hiệu lực sau probe tốt; env là allowlist
 - [x] Secrets trong Windows Credential Manager, chỉ ghi từ UI, tiêm vào sidecar khi spawn theo provider
 - [x] UI Settings → Agents
-- [ ] Chạy 7B trong app Tauri thật (Browse, Agents, Secrets); `cargo audit` khi có công cụ
+- [x] Chạy 7B trong app Tauri thật (2026-11-03, WebView2 + CDP, DB tạm): Browse, policy rootPath, Agents, Secrets đạt; tìm ra `node.exe` lọt probe Claude và màu hộp Check — đã sửa (`52660f3`). Chưa kiểm lại màu mới trong app
+- [ ] `cargo audit` khi có công cụ; CI xanh cho `52660f3`
 
 ### Còn lại của Phase 7
 

@@ -6,13 +6,14 @@ Nguyên tắc ưu tiên: **Agent Runtime → Message Router → Durable Task Sta
 
 ## Tiến trình (cập nhật 2026-11-03)
 
-| Phase | Trạng thái                                                                                                                                                                                                           |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | **PASS (có hạn chế)** — CI xanh (runner), đã xác minh trên Windows vật lý bằng `tauri dev`; xem PHASE0_REPORT                                                                                                        |
-| 1     | **ĐÓNG (2026-11-02), có ngoại lệ** — cả 4 tiêu chí đạt/đạt có giới hạn, CI xanh; ngoại lệ chuyển phase sau (sai version → Phase 6, release máy thứ hai → Phase 5, tool ghi/phê duyệt → Phase 2/4). Xem PHASE1_REPORT |
-| 2     | **ĐÓNG (2026-11-03), có ngoại lệ** — CI xanh 5/5; xem PHASE2_REPORT                                                                                                                                                  |
-| 3–6   | Chưa bắt đầu                                                                                                                                                                                                         |
-| 7–10  | Kế hoạch mở rộng "ngang AionUi, hơn ở an toàn / tin cậy / multi-agent / nhẹ" — xem cuối tài liệu; chỉ bắt đầu sau Phase 2                                                                                            |
+| Phase | Trạng thái                                                                                                                                                                                                                    |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | **PASS (có hạn chế)** — CI xanh (runner), đã xác minh trên Windows vật lý bằng `tauri dev`; xem PHASE0_REPORT                                                                                                                 |
+| 1     | **ĐÓNG (2026-11-02), có ngoại lệ** — cả 4 tiêu chí đạt/đạt có giới hạn, CI xanh; ngoại lệ chuyển phase sau (sai version → Phase 6, release máy thứ hai → Phase 5, tool ghi/phê duyệt → Phase 2/4). Xem PHASE1_REPORT          |
+| 2     | **ĐÓNG (2026-11-03), có ngoại lệ** — CI xanh 5/5; xem PHASE2_REPORT                                                                                                                                                           |
+| 7     | **ĐANG LÀM (từ 2026-11-03)** — 7A và 7B đã có code, test và push; kiểm trong app Tauri thật đã chạy cho 7B (còn lỗi nhỏ đã sửa); 7C (Approval UI đầy đủ), 7D (Tailwind/shadcn, phím tắt), preset, E2E người dùng mới chưa làm |
+| 3–6   | Chưa bắt đầu                                                                                                                                                                                                                  |
+| 8–10  | Kế hoạch mở rộng "ngang AionUi, hơn ở an toàn / tin cậy / multi-agent / nhẹ" — xem cuối tài liệu; chưa bắt đầu                                                                                                                |
 
 ## Tổng quan
 
@@ -56,7 +57,7 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 
 ## Phase 1 — Single-Agent MVP (1–2 tuần)
 
-**Trạng thái: ĐÓNG (2026-11-02), có ba ngoại lệ** — chi tiết và bằng chứng: `docs/PHASE1_REPORT.md`. CI xanh 5/5 job ở run `41551598060`. Claude 2.1.314 và Codex 0.165.0 chạy task thật và hủy được giữa chừng (adapter và nút Cancel trong app Tauri release), không còn tiến trình mồ côi. Ngoại lệ chuyển sang phase sau: "sai version" (Phase 6), bản release trên máy thứ hai/installer (Phase 5), tool ghi/phê duyệt của CLI thật (Phase 2/4). Nợ còn mở (`tasks.list`, UI phê duyệt, policy `projects.rootPath`, Browse…/Settings/theme trong app thật…) nằm ở `docs/TODO.md`.
+**Trạng thái: ĐÓNG (2026-11-02), có ba ngoại lệ** — chi tiết và bằng chứng: `docs/PHASE1_REPORT.md`. CI xanh 5/5 job ở run `41551598060`. Claude 2.1.314 và Codex 0.165.0 chạy task thật và hủy được giữa chừng (adapter và nút Cancel trong app Tauri release), không còn tiến trình mồ côi. Ngoại lệ chuyển sang phase sau: "sai version" (Phase 6), bản release trên máy thứ hai/installer (Phase 5), tool ghi/phê duyệt của CLI thật (Phase 2/4). Nợ Phase 1: `tasks.list` đã trả ở Phase 2, policy `projects.rootPath`, Browse và Settings → Agents đã trả ở 7B; còn UI phê duyệt đầy đủ (7C). Chi tiết: `docs/TODO.md`.
 
 **Việc làm ngoài phạm vi Phase 1 (theo yêu cầu người dùng):** làm lại UI (theme sáng/tối, sidebar, Settings, bố cục 3 cột, composer, thẻ lỗi). Mode "Multi-agent" hiện chỉ gửi cùng mục tiêu cho ≥ 2 agent chạy độc lập, chưa điều phối (điều phối thật: Phase 2/9). Không giả lập tính năng backend chưa có.
 

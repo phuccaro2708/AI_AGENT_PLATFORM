@@ -177,10 +177,7 @@
       "indexes": {
         "idx_approvals_task_state": {
           "name": "idx_approvals_task_state",
-          "columns": [
-            "task_id",
-            "state"
-          ],
+          "columns": ["task_id", "state"],
           "isUnique": false
         }
       },
@@ -189,12 +186,8 @@
           "name": "approvals_task_id_tasks_id_fk",
           "tableFrom": "approvals",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -250,9 +243,7 @@
       "indexes": {
         "idx_artifacts_task": {
           "name": "idx_artifacts_task",
-          "columns": [
-            "task_id"
-          ],
+          "columns": ["task_id"],
           "isUnique": false
         }
       },
@@ -261,12 +252,8 @@
           "name": "artifacts_task_id_tasks_id_fk",
           "tableFrom": "artifacts",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -350,10 +337,7 @@
       "indexes": {
         "idx_context_items_workflow": {
           "name": "idx_context_items_workflow",
-          "columns": [
-            "workflow_id",
-            "kind"
-          ],
+          "columns": ["workflow_id", "kind"],
           "isUnique": false
         }
       },
@@ -362,12 +346,8 @@
           "name": "context_items_workflow_id_workflows_id_fk",
           "tableFrom": "context_items",
           "tableTo": "workflows",
-          "columnsFrom": [
-            "workflow_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workflow_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -431,10 +411,7 @@
       "indexes": {
         "idx_events_aggregate": {
           "name": "idx_events_aggregate",
-          "columns": [
-            "aggregate_id",
-            "created_at"
-          ],
+          "columns": ["aggregate_id", "created_at"],
           "isUnique": false
         }
       },
@@ -514,10 +491,7 @@
       "indexes": {
         "idx_execution_runs_task": {
           "name": "idx_execution_runs_task",
-          "columns": [
-            "task_id",
-            "started_at"
-          ],
+          "columns": ["task_id", "started_at"],
           "isUnique": false
         }
       },
@@ -526,12 +500,8 @@
           "name": "execution_runs_task_id_tasks_id_fk",
           "tableFrom": "execution_runs",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -539,12 +509,8 @@
           "name": "execution_runs_session_id_sessions_id_fk",
           "tableFrom": "execution_runs",
           "tableTo": "sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -589,10 +555,7 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "inbox_message_id_consumer_pk": {
-          "columns": [
-            "message_id",
-            "consumer"
-          ],
+          "columns": ["message_id", "consumer"],
           "name": "inbox_message_id_consumer_pk"
         }
       },
@@ -648,18 +611,12 @@
       "indexes": {
         "idx_messages_task": {
           "name": "idx_messages_task",
-          "columns": [
-            "task_id",
-            "sequence"
-          ],
+          "columns": ["task_id", "sequence"],
           "isUnique": false
         },
         "messages_task_sequence_unique": {
           "name": "messages_task_sequence_unique",
-          "columns": [
-            "task_id",
-            "sequence"
-          ],
+          "columns": ["task_id", "sequence"],
           "isUnique": true
         }
       },
@@ -668,12 +625,8 @@
           "name": "messages_task_id_tasks_id_fk",
           "tableFrom": "messages",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -768,17 +721,12 @@
       "indexes": {
         "outbox_message_id_unique": {
           "name": "outbox_message_id_unique",
-          "columns": [
-            "message_id"
-          ],
+          "columns": ["message_id"],
           "isUnique": true
         },
         "idx_outbox_due": {
           "name": "idx_outbox_due",
-          "columns": [
-            "status",
-            "next_attempt_at"
-          ],
+          "columns": ["status", "next_attempt_at"],
           "isUnique": false
         }
       },
@@ -787,12 +735,8 @@
           "name": "outbox_task_id_tasks_id_fk",
           "tableFrom": "outbox",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -841,9 +785,7 @@
       "indexes": {
         "projects_root_path_unique": {
           "name": "projects_root_path_unique",
-          "columns": [
-            "root_path"
-          ],
+          "columns": ["root_path"],
           "isUnique": true
         }
       },
@@ -894,10 +836,7 @@
       "indexes": {
         "idx_sessions_project_agent": {
           "name": "idx_sessions_project_agent",
-          "columns": [
-            "project_id",
-            "agent_id"
-          ],
+          "columns": ["project_id", "agent_id"],
           "isUnique": false
         }
       },
@@ -906,12 +845,8 @@
           "name": "sessions_project_id_projects_id_fk",
           "tableFrom": "sessions",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -968,12 +903,8 @@
           "name": "task_dependencies_task_id_tasks_id_fk",
           "tableFrom": "task_dependencies",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -981,22 +912,15 @@
           "name": "task_dependencies_dependency_id_tasks_id_fk",
           "tableFrom": "task_dependencies",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "dependency_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["dependency_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "task_dependencies_task_id_dependency_id_pk": {
-          "columns": [
-            "task_id",
-            "dependency_id"
-          ],
+          "columns": ["task_id", "dependency_id"],
           "name": "task_dependencies_task_id_dependency_id_pk"
         }
       },
@@ -1080,11 +1004,7 @@
       "indexes": {
         "idx_tasks_queue": {
           "name": "idx_tasks_queue",
-          "columns": [
-            "state",
-            "\"priority\" DESC",
-            "created_at"
-          ],
+          "columns": ["state", "\"priority\" DESC", "created_at"],
           "isUnique": false
         }
       },
@@ -1093,12 +1013,8 @@
           "name": "tasks_workflow_id_workflows_id_fk",
           "tableFrom": "tasks",
           "tableTo": "workflows",
-          "columnsFrom": [
-            "workflow_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workflow_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1176,10 +1092,7 @@
       "indexes": {
         "workflow_roles_name_unique": {
           "name": "workflow_roles_name_unique",
-          "columns": [
-            "workflow_id",
-            "name"
-          ],
+          "columns": ["workflow_id", "name"],
           "isUnique": true
         }
       },
@@ -1188,12 +1101,8 @@
           "name": "workflow_roles_workflow_id_workflows_id_fk",
           "tableFrom": "workflow_roles",
           "tableTo": "workflows",
-          "columnsFrom": [
-            "workflow_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workflow_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1245,12 +1154,8 @@
           "name": "workflows_project_id_projects_id_fk",
           "tableFrom": "workflows",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1335,30 +1240,22 @@
       "indexes": {
         "worktrees_task_id_unique": {
           "name": "worktrees_task_id_unique",
-          "columns": [
-            "task_id"
-          ],
+          "columns": ["task_id"],
           "isUnique": true
         },
         "worktrees_path_unique": {
           "name": "worktrees_path_unique",
-          "columns": [
-            "path"
-          ],
+          "columns": ["path"],
           "isUnique": true
         },
         "worktrees_branch_unique": {
           "name": "worktrees_branch_unique",
-          "columns": [
-            "branch"
-          ],
+          "columns": ["branch"],
           "isUnique": true
         },
         "idx_worktrees_workflow": {
           "name": "idx_worktrees_workflow",
-          "columns": [
-            "workflow_id"
-          ],
+          "columns": ["workflow_id"],
           "isUnique": false
         }
       },
@@ -1367,12 +1264,8 @@
           "name": "worktrees_workflow_id_workflows_id_fk",
           "tableFrom": "worktrees",
           "tableTo": "workflows",
-          "columnsFrom": [
-            "workflow_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workflow_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1380,12 +1273,8 @@
           "name": "worktrees_task_id_tasks_id_fk",
           "tableFrom": "worktrees",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }

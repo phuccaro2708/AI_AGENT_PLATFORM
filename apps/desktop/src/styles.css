@@ -1176,3 +1176,27 @@ button.primary:hover:not(:disabled) {
   cursor: pointer;
   color: inherit;
 }
+
+.agent-settings .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.agent-settings textarea {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+.secrets {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line, #8884);
+}
+.secrets h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.secrets li code {
+  flex: 1;
+}

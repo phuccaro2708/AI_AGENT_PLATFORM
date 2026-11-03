@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AgentsSettings } from "./AgentsSettings";
 import { DEFAULT_NICKNAME } from "./profile";
 import type { Theme } from "./theme";
 
@@ -70,6 +71,8 @@ export function SettingsView({
           ))}
         </div>
       </div>
+
+      <AgentsSettings />
 
       <div className="card">
         <h2>About</h2>

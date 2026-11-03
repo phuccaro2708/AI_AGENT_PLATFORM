@@ -16,6 +16,7 @@ export interface CliProbe {
   status: string;
   version?: string;
   path?: string;
+  capabilities?: Record<string, boolean>;
 }
 
 export type Provider = "claude" | "codex";

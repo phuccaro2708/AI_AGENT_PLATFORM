@@ -392,3 +392,94 @@ describe("WorkflowEngine.runParallelWorkers", () => {
     expect(repo.getWorkflowState(wf)).toBe("failed");
   });
 });
+
+describe("WorkflowEngine.runSupervised", () => {
+  const supervisorRole: RoleDef = {
+    name: "supervisor",
+    instructions: "Plan only.",
+    access: "read",
+    allowedAgents: ["claude"],
+    sees: ["goal"],
+  };
+  const subRole: RoleDef = { ...workerRole, sees: ["goal", "plan", "artifact", "report"] };
+  const fence = (j: unknown) => `Plan:\n\`\`\`json\n${JSON.stringify(j)}\n\`\`\``;
+  const sub = (id: string, dependsOn: string[] = []) => ({
+    id,
+    title: "T" + id,
+    prompt: "do " + id,
+    dependsOn,
+  });
+  const idOf = (t: AgentTask) => subtaskOf(t.prompt);
+  const subtaskOf = (prompt: string) => /Your subtask \[(\w+)\]/.exec(prompt)![1]!;
+  const run = () =>
+    engine.runSupervised({
+      workflowId: wf,
+      goal: "BIG-GOAL",
+      supervisor: { role: supervisorRole, agentId: "claude" },
+      workerRole: subRole,
+      workerAgents: ["codex"],
+    });
+
+  it("runs the plan layer by layer; a single dependency starts from that branch and reports flow through the board", async () => {
+    build(
+      () => fence({ subtasks: [sub("a"), sub("b"), sub("c", ["a"])] }),
+      (t) => {
+        const id = idOf(t);
+        writeFileSync(join(t.cwd, id + ".txt"), id);
+        return "report-" + id;
+      },
+    );
+    const r = await run();
+    expect(r.outcome).toBe("completed");
+    expect(r.steps.map((x) => x.subtaskId).sort()).toEqual(["a", "b", "c"]);
+    const order = codex.prompts.map(subtaskOf);
+    expect(order.indexOf("c")).toBe(2); // after both layer-0 subtasks
+    const cPrompt = codex.prompts[2]!;
+    expect(cPrompt).toContain("report-a"); // dependency's report arrives via the board
+    expect(cPrompt).toContain("a.txt");
+    expect(codex.cwds[2]!.length).toBeGreaterThan(0);
+    expect(existsSync(join(codex.cwds[2]!, "a.txt"))).toBe(true); // started from a's branch
+    expect(repo.getWorkflowState(wf)).toBe("completed");
+    expect(repo.listContextEntries(wf).filter((e) => e.kind === "plan")).toHaveLength(1);
+    expect(claude.prompts[0]).toContain("BIG-GOAL");
+  });
+
+  it("pauses the workflow on an invalid plan and starts no worker", async () => {
+    build(
+      () => "I could not decide.",
+      () => "never",
+    );
+    const r = await run();
+    expect(r.outcome).toBe("plan_invalid");
+    expect(r.error).toMatch(/no JSON/);
+    expect(codex.prompts).toEqual([]);
+    expect(repo.getWorkflowState(wf)).toBe("paused");
+  });
+
+  it("skips dependents of a failed subtask and fails the workflow", async () => {
+    build(
+      () => fence({ subtasks: [sub("a"), sub("b"), sub("c", ["a"])] }),
+      (t) => {
+        const id = idOf(t);
+        if (id === "a") return [{ type: "error", message: "boom" }];
+        writeFileSync(join(t.cwd, id + ".txt"), id);
+        return "ok";
+      },
+    );
+    const r = await run();
+    expect(r.outcome).toBe("subtask_failed");
+    expect(r.skipped).toEqual(["c"]);
+    expect(r.steps.find((x) => x.subtaskId === "b")?.state).toBe("completed");
+    expect(repo.getWorkflowState(wf)).toBe("failed");
+  });
+
+  it("fails without planning when the supervisor itself fails", async () => {
+    build(
+      () => [{ type: "error", message: "boom" }],
+      () => "never",
+    );
+    const r = await run();
+    expect(r.outcome).toBe("supervisor_failed");
+    expect(codex.prompts).toEqual([]);
+  });
+});

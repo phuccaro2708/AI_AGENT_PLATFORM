@@ -7,6 +7,7 @@ import { newId } from "@agent-studio/shared-utils";
 import type { Repo } from "@agent-studio/storage";
 import { assignRole, buildRolePrompt, parseVerdict, type RoleDef, type Verdict } from "./roles.js";
 import { ContextBoard } from "./context-board.js";
+import { parsePlan, planInstructions, type Subtask } from "./plan.js";
 import type { TaskRunner } from "./runner.js";
 
 export interface WorkflowEngineDeps {
@@ -49,6 +50,20 @@ export interface ParallelResult {
   workers: StepInfo[];
   /** Pairs of worker branches that would conflict if both were merged. */
   conflicts: { a: string; b: string; files: string[] }[];
+}
+
+export type SupervisedOutcome =
+  "completed" | "supervisor_failed" | "plan_invalid" | "subtask_failed";
+
+export interface SupervisedResult {
+  outcome: SupervisedOutcome;
+  supervisor: StepInfo;
+  /** Why the plan was rejected (outcome `plan_invalid`). */
+  error?: string;
+  steps: (StepInfo & { subtaskId: string })[];
+  /** Subtasks never started because something they depend on failed. */
+  skipped: string[];
+  conflicts: ParallelResult["conflicts"];
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -226,8 +241,133 @@ export class WorkflowEngine {
         return step;
       }),
     );
+    const conflicts = await this.conflictsAmong(workers, worktrees);
+    repo.setWorkflowState(
+      o.workflowId,
+      workers.every((w) => w.state === "completed") ? "completed" : "failed",
+    );
+    return { workers, conflicts };
+  }
+
+  /**
+   * Supervisor pattern: one agent turns the goal into a plan (validated JSON), then the subtasks run
+   * layer by layer in their own worktrees. A subtask with exactly one dependency starts from that
+   * dependency's branch; with several it starts from the project's HEAD and learns about the others
+   * only through the board (merging branches is a human decision). An invalid plan pauses the
+   * workflow; nothing is retried or repaired.
+   */
+  async runSupervised(o: {
+    workflowId: string;
+    goal: string;
+    supervisor: RoleAssignment;
+    workerRole: RoleDef;
+    /** Agents allowed to take subtasks; the first is the default for subtasks that name none. */
+    workerAgents: string[];
+    maxSubtasks?: number;
+  }): Promise<SupervisedResult> {
+    const { repo, runner } = this.d;
+    const max = o.maxSubtasks ?? 8;
+    if (o.workerAgents.length === 0)
+      throw new Error("runSupervised needs at least one worker agent");
+    assignRole(o.supervisor.role, o.supervisor.agentId);
+    for (const a of o.workerAgents) assignRole(o.workerRole, a);
+    const root = repo.getWorkflowRoot(o.workflowId);
+    if (!root) throw new Error(`Unknown workflow: ${o.workflowId}`);
+    const worktrees = this.d.worktreesFor(root.rootPath);
+    repo.setWorkflowState(o.workflowId, "running");
+    this.board.add(o.workflowId, { kind: "goal", source: "user", content: o.goal });
+
+    const supId = runner.submit({
+      workflowId: o.workflowId,
+      agentId: o.supervisor.agentId,
+      prompt: buildRolePrompt(
+        o.supervisor.role,
+        [
+          this.board.render(o.workflowId, o.supervisor.role),
+          planInstructions({ maxSubtasks: max, agents: o.workerAgents }),
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+      ),
+      isolate: true,
+    });
+    const supervisor = await this.finishStep(supId, o.supervisor.agentId, worktrees, false);
+    const base = { supervisor, steps: [], skipped: [], conflicts: [] };
+    if (supervisor.state !== "completed") {
+      repo.setWorkflowState(o.workflowId, "failed");
+      return { outcome: "supervisor_failed", ...base };
+    }
+    const plan = parsePlan(this.lastText(supId), { maxSubtasks: max, agents: o.workerAgents });
+    if (!plan.ok) {
+      repo.setWorkflowState(o.workflowId, "paused");
+      return { outcome: "plan_invalid", error: plan.error, ...base };
+    }
+    this.board.add(o.workflowId, {
+      kind: "plan",
+      source: "agent-reported",
+      authorTaskId: supId,
+      content: plan.subtasks
+        .map(
+          (t, i) =>
+            `${i + 1}. [${t.id}] ${t.title}${t.dependsOn.length ? ` (after ${t.dependsOn.join(", ")})` : ""}`,
+        )
+        .join("\n"),
+    });
+
+    const steps: SupervisedResult["steps"] = [];
+    const byId = new Map<string, SupervisedResult["steps"][number]>();
+    const skipped: string[] = [];
+    for (const layer of plan.layers) {
+      const runnable: Subtask[] = [];
+      for (const t of layer) {
+        const deps = t.dependsOn.map((d) => byId.get(d));
+        if (deps.every((d) => d?.state === "completed")) runnable.push(t);
+        else skipped.push(t.id);
+      }
+      const boardText = this.board.render(o.workflowId, o.workerRole);
+      const ids = runnable.map((t) => {
+        const deps = t.dependsOn.map((d) => byId.get(d)!);
+        const from = deps.length === 1 && deps[0]!.committed ? deps[0]!.branch : undefined;
+        return runner.submit({
+          workflowId: o.workflowId,
+          agentId: t.agent ?? o.workerAgents[0]!,
+          prompt: buildRolePrompt(
+            o.workerRole,
+            [boardText, `Your subtask [${t.id}] ${t.title}:\n${t.prompt}`]
+              .filter(Boolean)
+              .join("\n\n"),
+          ),
+          isolate: true,
+          dependsOn: deps.map((d) => d.taskId),
+          ...(from ? { baseRef: from } : {}),
+        });
+      });
+      const done = await Promise.all(
+        ids.map(async (id, i) => {
+          const t = runnable[i]!;
+          const step = await this.finishStep(id, t.agent ?? o.workerAgents[0]!, worktrees);
+          if (step.committed) await this.recordWork(o.workflowId, id, step, worktrees);
+          return { ...step, subtaskId: t.id };
+        }),
+      );
+      for (const d of done) {
+        steps.push(d);
+        byId.set(d.subtaskId, d);
+      }
+    }
+    const conflicts = await this.conflictsAmong(steps, worktrees);
+    const ok = skipped.length === 0 && steps.every((x) => x.state === "completed");
+    repo.setWorkflowState(o.workflowId, ok ? "completed" : "failed");
+    return { outcome: ok ? "completed" : "subtask_failed", supervisor, steps, skipped, conflicts };
+  }
+
+  /** Pairs of finished, committed branches that would conflict if both were merged. */
+  private async conflictsAmong(
+    steps: StepInfo[],
+    worktrees: GitWorktrees,
+  ): Promise<ParallelResult["conflicts"]> {
     const conflicts: ParallelResult["conflicts"] = [];
-    const done = workers.filter((w) => w.state === "completed" && w.committed);
+    const done = steps.filter((w) => w.state === "completed" && w.committed);
     for (let i = 0; i < done.length; i++) {
       for (let j = i + 1; j < done.length; j++) {
         const { conflicts: files } = await worktrees.detectConflicts(
@@ -237,11 +377,7 @@ export class WorkflowEngine {
         if (files.length) conflicts.push({ a: done[i]!.taskId, b: done[j]!.taskId, files });
       }
     }
-    repo.setWorkflowState(
-      o.workflowId,
-      workers.every((w) => w.state === "completed") ? "completed" : "failed",
-    );
-    return { workers, conflicts };
+    return conflicts;
   }
 
   /** Waits for a task to stop, then (for completed work) checkpoints its worktree onto its branch. */

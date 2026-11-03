@@ -128,7 +128,7 @@ export class Repo {
             sql`NOT EXISTS (SELECT 1 FROM ${taskDependencies} d JOIN ${tasks} dep ON dep.id = d.dependency_id WHERE d.task_id = ${tasks.id} AND dep.state != 'completed')`,
           ),
         )
-        .orderBy(desc(tasks.priority), asc(tasks.createdAt), asc(tasks.id))
+        .orderBy(desc(tasks.priority), asc(tasks.createdAt), sql`${tasks}.rowid`)
         .limit(1)
         .get();
       if (!next) return undefined;
@@ -150,7 +150,7 @@ export class Repo {
           sql`EXISTS (SELECT 1 FROM ${taskDependencies} d JOIN ${tasks} dep ON dep.id = d.dependency_id WHERE d.task_id = ${tasks.id} AND dep.state IN ('failed','cancelled','needs_reconciliation'))`,
         ),
       )
-      .orderBy(asc(tasks.createdAt), asc(tasks.id))
+      .orderBy(asc(tasks.createdAt), sql`${tasks}.rowid`)
       .all()
       .map((r) => r.id);
   }

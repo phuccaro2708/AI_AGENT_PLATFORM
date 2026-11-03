@@ -82,3 +82,10 @@ Ba prompt rất nhỏ, `-s read-only`, `--ephemeral` (2 lần đầu), thư mụ
 - `resolved_by` do bên gọi tự khai, chưa xác thực; trước khi mở qua sidecar/UI phải gắn danh tính thật.
 - Từ chối/hết hạn đưa task về `running` để agent biết kết quả; agent thật có xử lý "no" đúng cách hay không chưa kiểm chứng.
 - Nội dung yêu cầu do agent viết nên là dữ liệu không đáng tin; UI phải hiển thị như văn bản thuần.
+
+## Supervisor (Phase 2) — chưa kiểm chứng
+
+- Supervisor thật có trả đúng khối `json` cuối câu trả lời hay không chưa được thử; kế hoạch sai bị từ chối nguyên khối (workflow `paused`), không tự sửa.
+- Prompt của từng subtask do agent giám sát viết, nên là đường khuếch đại prompt injection: nội dung đó chỉ giới hạn ở 4000 ký tự, agent hợp lệ và worktree riêng; kiểm soát thật sự vẫn là chế độ read-only của adapter và approval (Phase 4).
+- Subtask có từ 2 phụ thuộc trở lên bắt đầu từ HEAD của dự án, không gộp nhánh; nó chỉ biết kết quả của các phụ thuộc qua bảng ngữ cảnh (path+hash, báo cáo). Việc merge nhánh là quyết định của con người.
+- Worker chạy theo từng lớp (chờ cả lớp xong) cho đơn giản; chưa tận dụng song song tối đa giữa các lớp.

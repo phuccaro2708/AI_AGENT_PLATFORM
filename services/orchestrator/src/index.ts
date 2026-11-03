@@ -17,6 +17,8 @@ export type {
   PeerReviewResult,
   RoleAssignment,
   StepInfo,
+  SupervisedOutcome,
+  SupervisedResult,
   WorkflowEngineDeps,
 } from "./workflow-engine.js";
 export { assignRole, buildRolePrompt, parseVerdict } from "./roles.js";
@@ -26,3 +28,5 @@ export type { BoardEntry, ContextSource } from "./context-board.js";
 export type { ContextKind } from "./roles.js";
 export { ApprovalCenter } from "./approvals.js";
 export type { ApprovalCenterOptions, ApprovalDecision, ApprovalRequest } from "./approvals.js";
+export { parsePlan } from "./plan.js";
+export type { PlanResult, Subtask } from "./plan.js";

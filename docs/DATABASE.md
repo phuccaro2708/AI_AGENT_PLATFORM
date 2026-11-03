@@ -19,4 +19,4 @@ Added in Phase 2: `outbox`/`inbox` (delivery ledger), `worktrees` (one row per t
 
 `context_entries` (shared context board, per workflow): `kind` goal|plan|decision|artifact|report, `source` user|verified|agent-reported, optional `author_task_id`, `content`, and for artifacts `path` + `sha256` (NULL sha256 = file deleted or not hashed). Listed in insertion order (`created_at`, then `rowid`). Content is untrusted data.
 
-Scheduling (Phase 2): a task is _ready_ when `queued` and every dependency is `completed`; order is `priority DESC, created_at, id`. Concurrency counts `running` tasks only. `lease_expires_at` is set while `running` and cleared on any other state; a lapsed lease means `needs_reconciliation`, never an automatic re-queue.
+Scheduling (Phase 2): a task is _ready_ when `queued` and every dependency is `completed`; order is `priority DESC, created_at, rowid` (insertion order breaks same-millisecond ties; random ids must not). Concurrency counts `running` tasks only. `lease_expires_at` is set while `running` and cleared on any other state; a lapsed lease means `needs_reconciliation`, never an automatic re-queue.

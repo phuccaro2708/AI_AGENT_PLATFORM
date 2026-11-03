@@ -65,6 +65,11 @@ export interface WorktreeStatus {
   files: { path: string; code: string }[];
 }
 
+export interface WorktreeDiff {
+  patch: string;
+  truncated: boolean;
+}
+
 export interface MergeCheck {
   clean: boolean;
   conflicts: string[];
@@ -160,6 +165,29 @@ export class GitWorktrees {
       if (code[0] === "R" || code[0] === "C") i++; // the next field is the original path
     }
     return { dirty: files.length > 0, files };
+  }
+
+  /**
+   * Unified diff of everything changed in the worktree against its HEAD, untracked files included (shown
+   * as new files). Read-only: nothing is staged. Output beyond `maxBytes` is cut and `truncated` is set.
+   */
+  async diff(path: string, opts: { maxBytes?: number } = {}): Promise<WorktreeDiff> {
+    const maxBytes = opts.maxBytes ?? 200_000;
+    const parts = [await this.git(["diff", "HEAD", "--no-color", "--no-ext-diff"], path)];
+    for (const f of (await this.status(path)).files) {
+      if (f.code !== "??") continue;
+      // --no-index exits 1 when the files differ, which is the expected case here.
+      const r = await this.run(
+        ["diff", "--no-index", "--no-color", "--", "/dev/null", f.path],
+        path,
+      );
+      if (r.exitCode !== 0 && r.exitCode !== 1) throw new GitError(["diff"], r.exitCode, r.stderr);
+      parts.push(r.stdout);
+    }
+    const patch = parts.join("");
+    return patch.length > maxBytes
+      ? { patch: patch.slice(0, maxBytes), truncated: true }
+      : { patch, truncated: false };
   }
 
   /** Refuses a dirty worktree unless `force`. Retries because Windows may briefly hold file handles. */

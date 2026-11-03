@@ -768,6 +768,10 @@ export class Repo {
     });
   }
 
+  getApproval(id: string) {
+    return this.db.select().from(approvals).where(eq(approvals.id, id)).get();
+  }
+
   listApprovals(state?: ApprovalState) {
     const q = this.db.select().from(approvals);
     return (state === undefined ? q : q.where(eq(approvals.state, state)))

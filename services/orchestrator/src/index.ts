@@ -12,3 +12,7 @@ export { ContextBoard, ContextLimitError } from "./context-board.js";
 export type { ContextBoardLimits, RenderedBoard } from "./context-board.js";
 export { PeerReviewEngine } from "./workflow-engine.js";
 export type { Workspaces } from "./workflow-engine.js";
+export { ApprovalService } from "./approvals.js";
+export type { ApprovalServiceOptions } from "./approvals.js";
+export { ArtifactRegistry } from "./artifacts.js";
+export type { ArtifactCheck, ArtifactDiffSource } from "./artifacts.js";

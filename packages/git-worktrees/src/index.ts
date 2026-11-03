@@ -8,6 +8,7 @@ export {
 export type {
   GitWorktreesOptions,
   MergeCheck,
+  WorktreeDiff,
   WorktreeEntry,
   WorktreeInfo,
   WorktreeStatus,

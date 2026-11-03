@@ -91,6 +91,28 @@ describe("status", () => {
   });
 });
 
+describe("diff", () => {
+  it("shows modified and untracked files without staging anything", async () => {
+    const info = await wt.create({ workflowId: "wf_1", taskId: "task_a" });
+    expect(await wt.diff(info.path)).toEqual({ patch: "", truncated: false });
+    writeFileSync(join(info.path, "a.txt"), "one\nTWO\nthree\n");
+    writeFileSync(join(info.path, "new.txt"), "fresh\n");
+    const d = await wt.diff(info.path);
+    expect(d.patch).toContain("-two");
+    expect(d.patch).toContain("+TWO");
+    expect(d.patch).toMatch(/new file mode[\s\S]*\+fresh/);
+    expect((await wt.status(info.path)).files.find((f) => f.path === "new.txt")?.code).toBe("??");
+  });
+
+  it("cuts output beyond maxBytes and says so", async () => {
+    const info = await wt.create({ workflowId: "wf_1", taskId: "task_a" });
+    writeFileSync(join(info.path, "big.txt"), "x".repeat(5000));
+    const d = await wt.diff(info.path, { maxBytes: 300 });
+    expect(d.truncated).toBe(true);
+    expect(d.patch.length).toBe(300);
+  });
+});
+
 describe("remove / prune", () => {
   it("removes a clean worktree", async () => {
     const info = await wt.create({ workflowId: "wf_1", taskId: "task_a" });

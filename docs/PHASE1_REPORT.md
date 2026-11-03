@@ -30,12 +30,7 @@ Nhánh `claude/loving-lovelace-32lh71`. Trạng thái đo: commit `818431e` (và
 
 **Cập nhật (cuối Phase 1):** `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm build` pass; `pnpm test` 17 file, **168 test pass** (thêm: sidecar mới khởi động không tạo project nào; JSON hỏng được báo ở Claude và Codex). Các thay đổi giao diện sau `818431e` (theme, sidebar, Settings, bố cục 3 cột, composer, thẻ lỗi) đã được chạy trong app Tauri thật ở luồng chạy task + Cancel (xem hàng Cancel); phần còn lại của giao diện (Settings, theme, Browse…) chỉ kiểm bằng trình duyệt với sidecar giả.
 
-**CI (GitHub Actions): XANH từ run `41526633402` (commit sửa CI, 5/5 job success).** Trước đó đỏ: đã push và chạy. Run `41520802510` (`edd080e`) và `41521937556` (`0459386`) đều fail; run `41524725428` (`982232a`) chưa xong khi ghi. Các job TypeScript (ubuntu + windows) và Windows desktop spike **xanh**. Hai job fail:
-
-1. _Tauri shell (Rust check + test, Windows)_: `cargo test --locked` — 3/7 test trong `src/sidecar.rs` fail trên runner (kể cả `a_request_times_out…` ở `assert!(!s.is_alive())`), dù 7/7 pass trên máy Legion. Chưa điều tra nguyên nhân; nghi test phụ thuộc thời gian hoặc process giả.
-2. _Security_: secret scan báo 23 phát hiện, chỉ 7 được chấp nhận; toàn bộ phát hiện mới nằm ở `docs/reports/phase0-windows/spike-report.json` (Base64 High Entropy String). Chưa xác nhận bản chất dữ liệu; chưa thêm vào danh sách chấp nhận.
-
-**Đã sửa:** job Tauri thiếu Node được ghim (thêm `actions/setup-node`) và test chờ sidecar thoát bằng polling thay vì `sleep` cố định; secret scan chấp nhận đúng dòng 28 của `spike-report.json` (task id ULID sinh tự động, đã xem). Nguyên nhân gốc của 3 test fail là suy luận (Node trên runner không phải bản ghim), được xác nhận gián tiếp vì sau sửa test pass; không tái hiện được cục bộ.
+**CI (GitHub Actions): XANH ở commit đóng Phase 1 — run `41551598060`, 5/5 job success.** Lịch sử: các run `41520802510`, `41521937556`, `41524725428` đỏ (job Tauri thiếu Node ghim; secret scan dòng 28 của `spike-report.json` là task id ULID sinh tự động). Run `41526633402` xanh sau khi sửa hai lỗi đó. Run `41531288838` lại đỏ ở job Tauri (4 test timeout, phần test chạy 236 s: runner quá tải), nên lần xanh trước chưa đủ tin cậy. Đã nới timeout của test phụ thuộc tốc độ (phản hồi sidecar 5→30 s; chờ Job Object 10/20→30/60 s) và run `41551598060` xanh. Nguyên nhân gốc vẫn là suy luận (runner chậm/ngẫu nhiên), không tái hiện được cục bộ; nếu job Tauri đỏ lại thì mở lại điều tra, không nới tiếp.
 
 ## Đã làm trong Phase 1
 

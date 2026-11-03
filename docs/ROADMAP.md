@@ -73,7 +73,7 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 - [x] Cancel dừng cả process tree (test không còn orphan) — đã chạy thật với claude 2.1.314 và codex 0.165.0, cả trực tiếp qua adapter lẫn bấm Cancel trong app Tauri release: 0 `ping.exe` và 0 sidecar còn lại.
 - [~] Lỗi CLI (không cài, sai version, exit ≠ 0, JSON hỏng) được báo rõ, không crash — đạt trừ "sai version" (chưa có version tối thiểu được kiểm chứng; chuyển Phase 6).
 - [~] Contract tests với fixture output thật đã ghi lại của từng CLI — đạt có giới hạn (xem PHASE1_REPORT).
-- [x] CI xanh (run `41526633402`).
+- [x] CI xanh (run `41551598060`).
 
 ## Phase 2 — Multi-Agent Collaboration (1–2 tuần) → MVP
 

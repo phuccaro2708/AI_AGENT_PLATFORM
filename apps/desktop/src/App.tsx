@@ -3,6 +3,7 @@ import type { TaskState } from "@agent-studio/contracts";
 import { AgentView } from "./AgentView";
 import { ErrorCard } from "./ErrorCard";
 import { Header } from "./Header";
+import { HistoryView } from "./HistoryView";
 import { Inspector } from "./Inspector";
 import { api, type AdapterInfo, type CliProbe, type Project } from "./api";
 import { msg, type TaskRef } from "./components";
@@ -21,6 +22,7 @@ import { useRuns } from "./useRuns";
 export function App() {
   const [mode, setMode] = useState<Mode>("agent");
   const [settings, setSettings] = useState(false);
+  const [history, setHistory] = useState(false);
   const { nickname, setNickname } = useNickname();
   const { theme, set: setTheme } = useTheme();
   const [health, setHealth] = useState<Health | null>(null);
@@ -137,9 +139,11 @@ export function App() {
   const openTasks = mode === "agent" ? (task ? [task] : []) : run ? toRefs(run) : [];
   const title = settings
     ? "Settings"
-    : mode === "agent"
-      ? (task?.title ?? "New session")
-      : (run?.goal.slice(0, 60) ?? "New Peer Review");
+    : history
+      ? "History"
+      : mode === "agent"
+        ? (task?.title ?? "New session")
+        : (run?.goal.slice(0, 60) ?? "New Peer Review");
 
   const sessions: Session[] = [
     ...tasks.map((t) => ({
@@ -159,6 +163,7 @@ export function App() {
   ];
   const openSession = (s: Session) => {
     setSettings(false);
+    setHistory(false);
     setMode(s.mode);
     setProjectId(s.projectId);
     if (s.mode === "agent") setSelectedTask(s.id);
@@ -166,12 +171,14 @@ export function App() {
   };
   const newSession = (pid?: string) => {
     setSettings(false);
+    setHistory(false);
     if (pid) setProjectId(pid);
     setSelectedTask(null);
     setSelectedRun(null);
   };
   const switchMode = (m: Mode) => {
     setSettings(false);
+    setHistory(false);
     setMode(m);
     if (m === "agent") setSelectedTask(null);
     else setSelectedRun(null);
@@ -203,8 +210,16 @@ export function App() {
         onNewProject={() => setNewProject(true)}
         onNewSession={newSession}
         nickname={nickname}
-        onSettings={() => setSettings((v) => !v)}
+        onSettings={() => {
+          setHistory(false);
+          setSettings((v) => !v);
+        }}
         settingsOpen={settings}
+        onHistory={() => {
+          setSettings(false);
+          setHistory((v) => !v);
+        }}
+        historyOpen={history}
       />
       <main className="main-col">
         <div className="content">
@@ -218,6 +233,8 @@ export function App() {
               version={health ? `${health.source} · v${health.version}` : "starting…"}
               onClose={() => setSettings(false)}
             />
+          ) : history ? (
+            <HistoryView projects={projects} adapters={adapters} onError={fail} />
           ) : mode === "agent" ? (
             <AgentView
               projects={projects}

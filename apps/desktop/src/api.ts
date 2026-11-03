@@ -45,6 +45,33 @@ export interface ContextItem {
   createdBy: string;
 }
 
+export type ResolveDecision = "completed" | "failed" | "cancelled" | "requeue";
+export interface HistoryRow {
+  taskId: string;
+  workflowId: string;
+  projectId: string;
+  projectName: string;
+  agentId: string | null;
+  state: TaskState;
+  attempt: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface HistoryFilter {
+  projectId?: string;
+  agentId?: string;
+  state?: TaskState;
+  limit?: number;
+  offset?: number;
+}
+export interface LogHit {
+  taskId: string;
+  sequence: number;
+  type: string;
+  createdAt: string;
+  snippet: string;
+}
+
 /** Typed wrappers over the allowlisted sidecar methods (docs/PROTOCOL.md). */
 export const api = {
   projects: () => call<{ projects: Project[] }>("projects.list").then((r) => r.projects),
@@ -87,6 +114,15 @@ export const api = {
     call<{ artifacts: ArtifactCheck[] }>("artifacts.list", { taskId }).then((r) => r.artifacts),
   diff: (taskId: string) =>
     call<{ patch: string; truncated: boolean }>("artifacts.diff", { taskId }),
+  history: (filter: HistoryFilter) =>
+    call<{ tasks: HistoryRow[] }>("tasks.history", filter).then((r) => r.tasks),
+  searchLogs: (query: string, projectId?: string) =>
+    call<{ hits: LogHit[] }>("logs.search", { query, ...(projectId ? { projectId } : {}) }).then(
+      (r) => r.hits,
+    ),
+  /** A person's decision about a task whose side effects are unknown; the note is kept in the audit trail. */
+  resolveReconciliation: (taskId: string, decision: ResolveDecision, note: string) =>
+    call<{ state: TaskState }>("tasks.resolveReconciliation", { taskId, decision, note }),
   cancel: (taskId: string) =>
     call<{ requested: boolean; state: TaskState }>("tasks.cancel", { taskId }),
   task: (taskId: string) => call<{ state: TaskState | null }>("queryTask", { taskId }),

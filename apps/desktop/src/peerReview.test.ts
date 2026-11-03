@@ -3,9 +3,11 @@ import type { Approval, WorkflowTask } from "./api";
 import {
   approvalText,
   approvalsFor,
+  awaitingDecision,
   boardRows,
   diffTask,
   parseRuns,
+  resolutionBlocker,
   workflowDone,
 } from "./peerReview";
 
@@ -51,5 +53,26 @@ describe("peer review run logic", () => {
     expect(parseRuns(JSON.stringify([ok, { workflowId: 1 }, null]))).toEqual([ok]);
     expect(parseRuns("{")).toEqual([]);
     expect(parseRuns(null)).toEqual([]);
+  });
+});
+
+describe("reconciliation", () => {
+  const withState = (id: string, state: WorkflowTask["state"]): WorkflowTask => ({
+    ...task(id),
+    state,
+  });
+
+  it("lists only tasks that wait for a decision", () => {
+    const rows = boardRows([withState("1", "completed"), withState("2", "needs_reconciliation")]);
+    expect(awaitingDecision(rows).map((r) => r.task.id)).toEqual(["2"]);
+    expect(awaitingDecision(boardRows([withState("1", "running")]))).toEqual([]);
+  });
+
+  it("blocks a decision until it is complete; requeue needs a confirmation", () => {
+    expect(resolutionBlocker(null, "checked", false)).toMatch(/Choose/);
+    expect(resolutionBlocker("failed", "  ", false)).toMatch(/what you checked/);
+    expect(resolutionBlocker("failed", "no file written", false)).toBeNull();
+    expect(resolutionBlocker("requeue", "no file written", false)).toMatch(/Confirm/);
+    expect(resolutionBlocker("requeue", "no file written", true)).toBeNull();
   });
 });

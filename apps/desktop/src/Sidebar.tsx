@@ -36,6 +36,8 @@ export function Sidebar({
   nickname,
   onSettings,
   settingsOpen,
+  onHistory,
+  historyOpen,
 }: {
   mode: Mode;
   onMode: (m: Mode) => void;
@@ -52,6 +54,8 @@ export function Sidebar({
   nickname: string;
   onSettings: () => void;
   settingsOpen: boolean;
+  onHistory: () => void;
+  historyOpen: boolean;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");
@@ -89,6 +93,13 @@ export function Sidebar({
           </button>
         ))}
       </nav>
+      <button
+        className={historyOpen ? "nav-item active" : "nav-item"}
+        onClick={onHistory}
+        title="Every task, with filters and log search"
+      >
+        History
+      </button>
 
       <div className="side-title">
         <h2>Projects</h2>

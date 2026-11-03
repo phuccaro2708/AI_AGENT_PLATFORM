@@ -1122,3 +1122,57 @@ button.primary:hover:not(:disabled) {
 .diff .dk {
   color: var(--muted);
 }
+
+.reconcile {
+  border-color: var(--warn, #b7791f);
+}
+.choices {
+  border: 0;
+  padding: 0;
+  margin: 8px 0;
+  display: grid;
+  gap: 6px;
+}
+.choice {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.reconcile textarea {
+  width: 100%;
+  margin: 8px 0;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+.history {
+  display: grid;
+  gap: 12px;
+}
+.filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.log-search {
+  display: flex;
+  gap: 8px;
+}
+.log-search input {
+  flex: 1;
+}
+.snippet {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+  color: inherit;
+}

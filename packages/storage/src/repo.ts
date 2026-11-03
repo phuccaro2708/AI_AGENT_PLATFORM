@@ -18,6 +18,7 @@ import {
   taskDependencies,
   tasks,
   workflows,
+  worktrees,
 } from "./schema.js";
 
 const now = () => new Date().toISOString();
@@ -164,6 +165,36 @@ export class Repo {
       });
     }
     return lapsed.map((r) => r.id);
+  }
+
+  registerWorktree(w: { taskId: string; path: string; branch: string; baseSha: string }): string {
+    const id = newId("wt");
+    this.db
+      .insert(worktrees)
+      .values({ id, ...w, createdAt: now() })
+      .run();
+    return id;
+  }
+
+  markWorktreeRemoved(taskId: string): void {
+    this.db
+      .update(worktrees)
+      .set({ state: "removed", removedAt: now() })
+      .where(and(eq(worktrees.taskId, taskId), eq(worktrees.state, "active")))
+      .run();
+  }
+
+  getWorktree(taskId: string) {
+    return this.db.select().from(worktrees).where(eq(worktrees.taskId, taskId)).get();
+  }
+
+  listActiveWorktrees() {
+    return this.db
+      .select()
+      .from(worktrees)
+      .where(eq(worktrees.state, "active"))
+      .orderBy(asc(worktrees.createdAt))
+      .all();
   }
 
   listProjects() {

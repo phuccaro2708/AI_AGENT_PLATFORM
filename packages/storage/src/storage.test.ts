@@ -348,3 +348,17 @@ describe("task DAG & leases (Phase 2 scheduler storage)", () => {
     expect(repo.expireLeases(plus(99_999))).toEqual([]);
   });
 });
+
+describe("worktrees registry", () => {
+  it("registers one worktree per task and tracks removal", () => {
+    const { t } = seed();
+    repo.registerWorktree({ taskId: t, path: "/wt/1", branch: "agent/x", baseSha: "a".repeat(40) });
+    expect(() =>
+      repo.registerWorktree({ taskId: t, path: "/wt/2", branch: "agent/y", baseSha: "b" }),
+    ).toThrow();
+    expect(repo.listActiveWorktrees()).toHaveLength(1);
+    repo.markWorktreeRemoved(t);
+    expect(repo.listActiveWorktrees()).toHaveLength(0);
+    expect(repo.getWorktree(t)).toMatchObject({ state: "removed" });
+  });
+});

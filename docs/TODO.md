@@ -6,7 +6,7 @@
 
 - **Phase 0: PASS (có hạn chế)** — `docs/PHASE0_REPORT.md`.
 - **Phase 1: ĐÓNG (có ba ngoại lệ)** — `docs/PHASE1_REPORT.md`. CI xanh 5/5 job ở run `41551598060`; `pnpm test` 168 test pass; `cargo test` 7/7, clippy sạch. Claude 2.1.314 và Codex 0.165.0 đã chạy task thật và hủy được khi tool đang chạy (cả qua adapter lẫn nút Cancel trong app Tauri release), không để lại tiến trình mồ côi.
-- **Phase 2: ĐANG LÀM** — lát 1 (outbox/inbox + Router lõi) và lát 2 (Task DAG + Scheduler) xong, còn lại xem mục Phase 2. Thứ tự đã chốt: 2 → 7 → 8 → 9 (10 song song 5–6).
+- **Phase 2: ĐANG LÀM** — lát 1 (outbox/inbox + Router lõi) và lát 2 (Task DAG + Scheduler), lát 3 (git-worktrees) xong, còn lại xem mục Phase 2. Thứ tự đã chốt: 2 → 7 → 8 → 9 (10 song song 5–6).
 - Chưa có PR; nhánh làm việc `claude/loving-lovelace-32lh71`.
 
 ### Ngoại lệ chuyển từ Phase 1
@@ -121,7 +121,7 @@
 - [~] Transaction: message + outbox atomic (`appendMessageWithOutbox`, test rollback). CHƯA: đổi state task + outbox cùng transaction; test kill process thật
 - [x] Task DAG: cycle detection (kể cả gián tiếp), ready-set, priority, lease/heartbeat — `Repo.addDependency/claimNextReady/heartbeat/expireLeases/listBlockedTasks`; lease hết hạn → `needs_reconciliation`, không tự retry
 - [~] Scheduler giới hạn concurrency (mặc định 2, cấu hình) — `services/orchestrator/src/scheduler.ts` (tick: hết hạn lease → lấp slot → báo blocked). CHƯA: nối vào Orchestrator/sidecar (chạy task thật + heartbeat), tick nền, slot theo agent/worktree
-- [ ] `git-worktrees`: create/remove/list, branch naming, dirty check, conflict detect, cleanup khi hủy
+- [x] `git-worktrees`: create/remove/list, branch naming (`agent/<taskId>`, id được whitelist), dirty check, conflict detect (`merge-tree --write-tree`, không đụng working tree), cleanup (từ chối khi dirty trừ `force`; giữ branch trừ `deleteBranch`) — `packages/git-worktrees`, test với git thật; bảng `worktrees` (`0004`). CHƯA: nối vào Orchestrator (tạo khi claim task, dọn khi hủy), merge/đưa kết quả về nhánh chính
 - [ ] Workflow engine: Supervisor, Peer Review, Parallel Workers
 - [ ] Message types: task._, review._, approval.request, agent.message
 - [ ] Vai (role) trong workflow: hướng dẫn, quyền, agent cho phép; gán agent vào vai theo cấu hình lượt chạy

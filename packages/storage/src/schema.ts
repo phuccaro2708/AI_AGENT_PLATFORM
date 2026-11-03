@@ -239,3 +239,22 @@ export const inbox = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.recipient, t.messageId] })],
 );
+
+/** Registry of per-task git worktrees (branch isolation, not a sandbox). One active row per task. */
+export const worktrees = sqliteTable(
+  "worktrees",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id")
+      .notNull()
+      .unique()
+      .references(() => tasks.id),
+    path: text("path").notNull(),
+    branch: text("branch").notNull(),
+    baseSha: text("base_sha").notNull(),
+    state: text("state").notNull().default("active"),
+    createdAt: text("created_at").notNull(),
+    removedAt: text("removed_at"),
+  },
+  (t) => [check("worktrees_state_check", sql`${t.state} IN ('active','removed')`)],
+);

@@ -13,6 +13,6 @@ Tables: `projects`, `workflows`, `tasks`, `task_dependencies`, `messages`, `even
 - Phase 1 (migration `0001`): `sessions` (task/agent ↔ provider native session id), `execution_runs` (pid, exit code, signal, timestamps; `Repo.startRun/finishRun`), `artifacts` (path + 64-char sha256), `approvals` (`pending|approved|denied|expired`).
 - Timestamps are ISO-8601 text.
 
-Deferred (needed before multi-agent concurrency): `agents`, `worktrees`, outbox/delivery ledger.
+Added in Phase 2: `outbox`/`inbox` (delivery ledger), `worktrees` (one row per task; `state` active|removed). Worktrees live under `<git-common-dir>/agent-studio/worktrees/<taskId>` on branch `agent/<taskId>`; they are branch isolation, not a security boundary.
 
 Scheduling (Phase 2): a task is _ready_ when `queued` and every dependency is `completed`; order is `priority DESC, created_at, id`. Concurrency counts `running` tasks only. `lease_expires_at` is set while `running` and cleared on any other state; a lapsed lease means `needs_reconciliation`, never an automatic re-queue.

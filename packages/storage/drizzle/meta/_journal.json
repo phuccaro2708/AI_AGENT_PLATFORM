@@ -29,6 +29,13 @@
       "when": 1793668298891,
       "tag": "0003_outbox_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793668756909,
+      "tag": "0004_worktrees",
+      "breakpoints": true
     }
   ]
 }

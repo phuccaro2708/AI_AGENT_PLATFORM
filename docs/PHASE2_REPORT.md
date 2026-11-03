@@ -24,7 +24,7 @@ Nhánh `claude/repo-current-status-acfd51`. Các bước 1–8 đã commit; bư�
 | `cargo clippy --locked -- -D warnings`                         | sạch                                                 |
 | `node scripts/e2e-peer-review.mjs run\|kill\|two claude codex` | 3/3 exit 0 (CLI thật; tốn token, không chạy trên CI) |
 
-CI trên GitHub chưa được chạy cho các commit Phase 2 trong phiên này.
+CI GitHub: lần chạy đầu (`64532f8`) đỏ vì (1) `scripts/build-sidecar.mjs` thiếu alias `git-worktrees`, (2) `samePath` sai trên Windows do thư mục temp dùng tên 8.3 (đã sửa ở `5d8a92a`, `8789e93`), rồi (3) secret scan báo giả tên nhánh giả trong test (đã duyệt tay, `c74b924`). **Run `41690761288` ở `c74b924`: 5/5 job xanh** (Security mất ~32 phút vì quét 83 commit).
 
 ## Ngoại lệ và nợ (chuyển sang phase sau, xem ASSUMPTIONS.md)
 

@@ -6,7 +6,7 @@
 
 - **Phase 0: PASS (có hạn chế)** — `docs/PHASE0_REPORT.md`.
 - **Phase 1: ĐÓNG (có ba ngoại lệ)** — `docs/PHASE1_REPORT.md`. CI xanh 5/5 job ở run `41551598060`; `pnpm test` 168 test pass; `cargo test` 7/7, clippy sạch. Claude 2.1.314 và Codex 0.165.0 đã chạy task thật và hủy được khi tool đang chạy (cả qua adapter lẫn nút Cancel trong app Tauri release), không để lại tiến trình mồ côi.
-- **Phase 2: ĐANG LÀM** — lát 1 (outbox/inbox + Router lõi) và lát 2 (Task DAG + Scheduler), lát 3 (git-worktrees), lát 4 (nối Scheduler + worktree vào Orchestrator qua `TaskRunner`), lát 5 (WorkflowEngine: vai, Peer Review, Parallel Workers) xong, còn lại xem mục Phase 2. Thứ tự đã chốt: 2 → 7 → 8 → 9 (10 song song 5–6).
+- **Phase 2: ĐANG LÀM** — lát 1 (outbox/inbox + Router lõi) và lát 2 (Task DAG + Scheduler), lát 3 (git-worktrees), lát 4 (nối Scheduler + worktree vào Orchestrator qua `TaskRunner`), lát 5 (WorkflowEngine: vai, Peer Review, Parallel Workers), lát 6 (bảng ngữ cảnh), lát 7 (Approval Center), lát 8 (Supervisor) và lát 9 (nối sidecar: `workflows.runPeerReview|runSupervised|state`, `context.list`, `approvals.list|resolve`, sự kiện `approval.changed`/`workflow.finished`, commit `1e81f3a`) xong, còn lại xem mục Phase 2. Thứ tự đã chốt: 2 → 7 → 8 → 9 (10 song song 5–6).
 - Chưa có PR; nhánh làm việc `claude/loving-lovelace-32lh71`.
 
 ### Ngoại lệ chuyển từ Phase 1
@@ -18,7 +18,10 @@
 ### Nợ kỹ thuật còn mở (không chặn phase nào đã đóng)
 
 - [ ] `tasks.list` — session chỉ nằm trong bộ nhớ, mất khi mở lại app (Phase 7).
-- [ ] UI phê duyệt (Phase 2 cơ bản, Phase 7 đầy đủ).
+- [ ] UI phê duyệt (Phase 2 cơ bản, Phase 7 đầy đủ). Backend + IPC đã sẵn (`approvals.list|resolve`, sự kiện `approval.changed`); chỉ còn màn hình.
+- [ ] `apps/desktop/src/preview-sidecar.ts` (bản giả khi dev) chưa có các method Phase 2 mới.
+- [ ] Chưa kiểm sidecar Phase 2 trong app Tauri thật (mới qua `SidecarService.handle` + test allowlist Rust).
+- [ ] `approvals.resolve` gắn cứng `user:local`, chưa xác thực người duyệt (ghi ở ASSUMPTIONS).
 - [ ] Policy cho `projects.rootPath` (Phase 4/7); test nhánh lỗi của `JobObject::spawn`.
 - [ ] Nút Browse… (plugin dialog, quyền `dialog:allow-open`), Settings, theme, bố cục hẹp (< 800 px) chưa kiểm trong app Tauri thật.
 - [ ] `cargo audit` cho plugin dialog; ẩn adapter `stub` ngoài chế độ dev.
@@ -128,7 +131,7 @@
 - [~] Bảng ngữ cảnh chung tối thiểu: bảng `context_entries` (goal/plan/decision/artifact + `report`), nguồn từng mục (`user`/`verified`/`agent-reported`), artifact có path + sha256 do engine tự băm từ worktree, lọc theo `RoleDef.sees` (`context-board.ts`); test: reviewer chỉ nhận goal/artifact/report cuối, không nhận log thô; plan chỉ hiện cho vai có `sees` plan. CHƯA: ai ghi `plan`/`decision` (cần Supervisor), tóm tắt có nguồn, nhật ký sửa/xóa, đo chi phí token
 - [ ] Workflow mẫu Claude implement → Codex review (e2e thật) — engine sẵn sàng và đã kiểm bằng adapter giả; e2e thật bị chặn bởi: adapter chưa có chế độ ghi + approval
 - [ ] Artifact registry (hash) + Diff Viewer
-- [~] Approval Center backend: `ApprovalCenter.request/resolve/expireDue/cancelForTask` (`approvals.ts`) — task `running`→`waiting_approval`→`running`, quyết định ghi `resolved_by`/`reason` + sự kiện `approval.requested|resolved`, trả lời đầu tiên thắng, "yes" muộn sau hạn = `expired`, restart → hết hạn các yêu cầu còn mở. CHƯA: định tuyến `approvals.resolve` qua sidecar/UI, xác thực `by`, adapter nhận được câu trả lời (adapter hiện read-only), vòng lặp gọi `expireDue`, loại quyết định một lần/trong phạm vi (Phase 7)
+- [~] Approval Center backend: `ApprovalCenter.request/resolve/expireDue/cancelForTask` (`approvals.ts`) — task `running`→`waiting_approval`→`running`, quyết định ghi `resolved_by`/`reason` + sự kiện `approval.requested|resolved`, trả lời đầu tiên thắng, "yes" muộn sau hạn = `expired`, restart → hết hạn các yêu cầu còn mở. Đã nối sidecar: `approvals.list|resolve` + sự kiện `approval.changed`, sidecar quét `expireDue` mỗi 5 giây. CHƯA: UI, xác thực `by`, adapter nhận được câu trả lời (adapter hiện read-only), loại quyết định một lần/trong phạm vi (Phase 7)
 - [ ] Message Timeline + Task Board UI
 - [ ] Tests: kill giữa chừng, duplicate delivery, 2 agent song song
 - [ ] PHASE2_REPORT.md → **gắn tag MVP**

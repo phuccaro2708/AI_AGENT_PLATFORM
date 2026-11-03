@@ -29,6 +29,13 @@
       "when": 1793721029908,
       "tag": "0003_phase2_router_worktrees_board",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793722538306,
+      "tag": "0004_phase2_role_visibility",
+      "breakpoints": true
     }
   ]
 }

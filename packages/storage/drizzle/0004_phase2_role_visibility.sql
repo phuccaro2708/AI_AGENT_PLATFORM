@@ -1,0 +1,1 @@
+ALTER TABLE `workflow_roles` ADD `visible_kinds_json` text DEFAULT '["goal"]' NOT NULL;

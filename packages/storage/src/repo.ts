@@ -3,7 +3,9 @@ import {
   AgentMessage,
   IllegalTransitionError,
   canTransition,
+  canTransitionWorkflow,
   type TaskState,
+  type WorkflowState,
 } from "@agent-studio/contracts";
 import { newId } from "@agent-studio/shared-utils";
 import type { StudioDb } from "./db.js";
@@ -172,6 +174,29 @@ export class Repo {
       .innerJoin(projects, eq(projects.id, workflows.projectId))
       .where(eq(workflows.id, workflowId))
       .get();
+  }
+
+  getWorkflowState(workflowId: string): WorkflowState | undefined {
+    return this.db
+      .select({ s: workflows.state })
+      .from(workflows)
+      .where(eq(workflows.id, workflowId))
+      .get()?.s as WorkflowState | undefined;
+  }
+
+  /** Compare-and-set guarded by `WORKFLOW_TRANSITIONS`; a stale or illegal change throws. */
+  setWorkflowState(workflowId: string, to: WorkflowState): void {
+    const from = this.getWorkflowState(workflowId);
+    if (!from) throw new Error(`Unknown workflow: ${workflowId}`);
+    if (!canTransitionWorkflow(from, to)) {
+      throw new Error(`Illegal workflow transition for ${workflowId}: ${from} -> ${to}`);
+    }
+    const res = this.db
+      .update(workflows)
+      .set({ state: to })
+      .where(and(eq(workflows.id, workflowId), eq(workflows.state, from)))
+      .run();
+    if (res.changes !== 1) throw new Error(`Workflow ${workflowId} changed concurrently`);
   }
 
   getTaskAttempt(taskId: string): number | undefined {
@@ -580,11 +605,14 @@ export class Repo {
     instructions: string;
     permissions: RolePermissions;
     allowedAgents: string[];
+    /** Board kinds this role may see. Omitted: new roles see only `goal`, existing roles keep theirs. */
+    visibleKinds?: ContextKind[];
   }): void {
     const values = {
       instructions: input.instructions,
       permissions: input.permissions,
       allowedAgentsJson: JSON.stringify(input.allowedAgents),
+      ...(input.visibleKinds ? { visibleKindsJson: JSON.stringify(input.visibleKinds) } : {}),
     };
     this.db
       .insert(workflowRoles)
@@ -623,6 +651,7 @@ export class Repo {
         instructions: r.instructions,
         permissions: r.permissions as RolePermissions,
         allowedAgents: JSON.parse(r.allowedAgentsJson) as string[],
+        visibleKinds: JSON.parse(r.visibleKindsJson) as ContextKind[],
         agentId: r.agentId ?? undefined,
       }));
   }

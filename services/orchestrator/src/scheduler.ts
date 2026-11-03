@@ -1,5 +1,5 @@
 import type { Repo } from "@agent-studio/storage";
-import type { Orchestrator } from "./orchestrator.js";
+import type { Orchestrator, RunResult } from "./orchestrator.js";
 
 export interface SchedulerOptions {
   repo: Repo;
@@ -9,6 +9,11 @@ export interface SchedulerOptions {
   concurrency?: number;
   /** A claimed task must be heartbeated within this window or its owner is presumed dead. Default 60s. */
   leaseMs?: number;
+  /**
+   * After a task the scheduler ran has settled (`result` is absent when `execute` threw, leaving the task
+   * to its lease). A throwing listener never affects the scheduler. Used by the workflow engine to hand off.
+   */
+  onSettled?: (taskId: string, result: RunResult | undefined) => void | Promise<void>;
 }
 
 export interface SchedulerTick {
@@ -32,6 +37,7 @@ export class Scheduler {
   private readonly clock: () => Date;
   private readonly concurrency: number;
   private readonly leaseMs: number;
+  private readonly onSettled: SchedulerOptions["onSettled"];
   private readonly running = new Map<string, { done: Promise<void>; abort: AbortController }>();
   private timers: NodeJS.Timeout[] = [];
 
@@ -41,6 +47,7 @@ export class Scheduler {
     this.clock = opts.clock ?? (() => new Date());
     this.concurrency = opts.concurrency ?? 2;
     this.leaseMs = opts.leaseMs ?? 60_000;
+    this.onSettled = opts.onSettled;
   }
 
   private leaseUntil(): string {
@@ -71,8 +78,14 @@ export class Scheduler {
       const abort = new AbortController();
       const done = this.orchestrator
         .execute(id, { signal: abort.signal })
-        .then(() => undefined)
         .catch(() => undefined) // execute settles task state itself; a throw leaves it for the lease
+        .then(async (r) => {
+          try {
+            await this.onSettled?.(id, r);
+          } catch {
+            // see SchedulerOptions.onSettled
+          }
+        })
         .finally(() => this.running.delete(id));
       this.running.set(id, { done, abort });
       result.started.push(id);

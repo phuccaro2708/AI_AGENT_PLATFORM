@@ -252,6 +252,21 @@ describe("workflow roles", () => {
     expect(() => repo.assignRoleAgent(wf, "ghost", "codex")).toThrow(/Unknown role/);
   });
 
+  it("a role sees only the goal unless told otherwise, and keeps its kinds when re-upserted without any", () => {
+    const base = {
+      workflowId: wf,
+      name: "r",
+      instructions: "i",
+      permissions: "read-only" as const,
+      allowedAgents: ["codex"],
+    };
+    repo.upsertRole(base);
+    expect(repo.listRoles(wf)[0]?.visibleKinds).toEqual(["goal"]);
+    repo.upsertRole({ ...base, visibleKinds: ["goal", "artifact"] });
+    repo.upsertRole(base);
+    expect(repo.listRoles(wf)[0]?.visibleKinds).toEqual(["goal", "artifact"]);
+  });
+
   it("upserting an existing role updates it and keeps the assignment", () => {
     const base = {
       workflowId: wf,
@@ -355,5 +370,13 @@ describe("approvals", () => {
         .sort(),
     ).toEqual([fresh, noExpiry].sort());
     expect(() => repo.resolveApproval(old, "approved")).toThrow(/not pending/);
+  });
+  it("moves a workflow only along legal transitions", () => {
+    expect(repo.getWorkflowState(wf)).toBe("pending");
+    repo.setWorkflowState(wf, "running");
+    expect(() => repo.setWorkflowState(wf, "pending")).toThrow(/Illegal workflow transition/);
+    repo.setWorkflowState(wf, "completed");
+    expect(() => repo.setWorkflowState(wf, "running")).toThrow(/Illegal workflow transition/);
+    expect(() => repo.setWorkflowState("wf_missing", "running")).toThrow(/Unknown workflow/);
   });
 });

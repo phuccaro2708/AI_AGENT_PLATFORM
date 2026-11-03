@@ -27,6 +27,16 @@ export interface OrchestratorHooks {
   onMessage?: (message: AgentMessage) => void;
   /** After a task state change is persisted. */
   onState?: (taskId: string, state: TaskState, reason?: string) => void;
+  /**
+   * Picks the working directory of a scheduled task that was enqueued without one (e.g. creates its
+   * worktree). Unlike the other hooks it is awaited and its failure fails the task; `undefined` means
+   * the project root.
+   */
+  resolveCwd?: (ctx: {
+    taskId: string;
+    workflowId: string;
+    agentId: string;
+  }) => Promise<string | undefined>;
 }
 
 export class Orchestrator {
@@ -83,6 +93,8 @@ export class Orchestrator {
     prompt: string;
     priority?: number;
     permissions?: TaskPermissions;
+    /** Server-chosen working directory (e.g. a worktree). Never comes from the UI; default is the project root. */
+    cwd?: string;
     /** Task ids that must complete first. A cycle is rejected. */
     dependsOn?: readonly string[];
   }): string {
@@ -105,6 +117,7 @@ export class Orchestrator {
         payload: {
           prompt: opts.prompt,
           ...(opts.permissions ? { permissions: opts.permissions } : {}),
+          ...(opts.cwd ? { cwd: opts.cwd } : {}),
         },
         createdAt: new Date().toISOString(),
       });
@@ -123,7 +136,8 @@ export class Orchestrator {
     if (!task) throw new Error(`Unknown task: ${taskId}`);
     if (task.state !== "running") throw new Error(`Task ${taskId} is ${task.state}, not running`);
     const request = this.repo.listMessages(taskId).find((m) => m.type === "task.request");
-    const payload = request?.payload as { prompt?: unknown; permissions?: unknown } | undefined;
+    const payload = request?.payload as
+      { prompt?: unknown; permissions?: unknown; cwd?: unknown } | undefined;
     const root = this.repo.getWorkflowRoot(task.workflowId);
     const parsedPermissions = TaskPermissions.safeParse(payload?.permissions);
     const problem = !request
@@ -141,12 +155,28 @@ export class Orchestrator {
       this.notify(() => this.hooks.onState?.(taskId, "failed", reason));
       return { taskId, finalState: "failed", reason, events: [] };
     }
+    let cwd = typeof payload?.cwd === "string" && payload.cwd !== "" ? payload.cwd : undefined;
+    if (cwd === undefined && this.hooks.resolveCwd) {
+      try {
+        cwd = await this.hooks.resolveCwd({
+          taskId,
+          workflowId: task.workflowId,
+          agentId: task.agentId,
+        });
+      } catch (err) {
+        // Nothing has run yet, so failing here is safe (no side effects to reconcile).
+        const reason = `could not prepare a workspace: ${String(err)}`;
+        this.repo.setTaskState(taskId, "failed", { reason });
+        this.notify(() => this.hooks.onState?.(taskId, "failed", reason));
+        return { taskId, finalState: "failed", reason, events: [] };
+      }
+    }
     return this.drive({
       taskId,
       workflowId: task.workflowId,
       agentId: task.agentId,
       prompt: payload?.prompt as string,
-      cwd: root.rootPath,
+      cwd: cwd ?? root.rootPath,
       ...(parsedPermissions.success ? { permissions: parsedPermissions.data } : {}),
       correlationId: request.correlationId,
       signal: opts.signal ?? new AbortController().signal,

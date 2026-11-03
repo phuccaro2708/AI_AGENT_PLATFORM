@@ -280,6 +280,8 @@ export const workflowRoles = sqliteTable(
     instructions: text("instructions").notNull(),
     permissions: text("permissions").notNull(),
     allowedAgentsJson: text("allowed_agents_json").notNull(),
+    /** Context board kinds this role may see. Least privilege by default: the goal only. */
+    visibleKindsJson: text("visible_kinds_json").notNull().default('["goal"]'),
     agentId: text("agent_id"),
   },
   (t) => [

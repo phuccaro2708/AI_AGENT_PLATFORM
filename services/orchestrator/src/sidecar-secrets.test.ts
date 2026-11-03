@@ -7,8 +7,8 @@ import type { ProbeOptions, ProbeResult } from "@agent-studio/cli-probe";
 import { createLogger } from "@agent-studio/shared-utils";
 import { SidecarService } from "./sidecar.js";
 
-const CLAUDE_SECRET = "sk-ant-test-0123456789-claude";
-const CODEX_SECRET = "sk-oai-test-9876543210-codex";
+const CLAUDE_SECRET = "sk-ant-test-0123456789-claude"; // pragma: allowlist secret
+const CODEX_SECRET = "sk-oai-test-9876543210-codex"; // pragma: allowlist secret
 
 let dir: string;
 let svc: SidecarService;
@@ -93,7 +93,10 @@ describe("secrets in the sidecar (7B)", () => {
     };
     const root = join(dir, "projects", "p");
     mkdirSync(root, { recursive: true });
-    const project = await run("projects.create", { name: "p", rootPath: realpathSync(root) });
+    const project = await run("projects.create", {
+      name: "p",
+      rootPath: realpathSync.native(root),
+    });
     const wf = await run("workflows.create", { projectId: project.result?.["projectId"] });
     await run("workflows.start", {
       workflowId: wf.result?.["workflowId"],

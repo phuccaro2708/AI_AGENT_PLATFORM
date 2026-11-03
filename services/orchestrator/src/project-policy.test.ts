@@ -8,7 +8,7 @@ let dir: string;
 let ctx: { dbPath: string; worktreesDir: string };
 
 beforeEach(() => {
-  dir = realpathSync(mkdtempSync(join(tmpdir(), "as-policy-")));
+  dir = realpathSync.native(mkdtempSync(join(tmpdir(), "as-policy-")));
   ctx = { dbPath: join(dir, "data", "s.db"), worktreesDir: join(dir, "data", "wt") };
   mkdirSync(join(dir, "data"));
   mkdirSync(join(dir, "app"));

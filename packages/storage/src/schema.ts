@@ -203,7 +203,7 @@ export const agents = sqliteTable(
 
 /**
  * User-chosen way to launch a CLI agent (Phase 7B). A row exists only after a successful probe, so
- * what is stored is what was verified. Holds NO secrets: `env_json` is for plain settings; secret
+ * what is stored is what was verified. `env_json` holds plain settings only; credential
  * values live in the OS credential store.
  */
 export const agentSettings = sqliteTable("agent_settings", {

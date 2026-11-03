@@ -20,7 +20,7 @@ const call = async (method: string, params?: unknown) => {
 };
 
 beforeEach(() => {
-  dir = realpathSync(mkdtempSync(join(tmpdir(), "as-roots-")));
+  dir = realpathSync.native(mkdtempSync(join(tmpdir(), "as-roots-")));
   mkdirSync(join(dir, "data"));
   mkdirSync(join(dir, "app"));
   svc = open();

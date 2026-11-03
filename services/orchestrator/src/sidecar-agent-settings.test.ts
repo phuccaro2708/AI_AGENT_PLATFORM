@@ -131,7 +131,7 @@ describe("agent launch settings (7B)", () => {
     svc = open(probeOk);
     const bad = [
       { command: process.execPath, args: ["--dangerously-skip-permissions"], env: {} },
-      { command: process.execPath, args: [], env: { ANTHROPIC_API_KEY: "sk-test" } },
+      { command: process.execPath, args: [], env: { ANTHROPIC_API_KEY: "sk-test" } }, // pragma: allowlist secret
       { command: "no-such-program-agent-studio", args: [], env: {} },
     ];
     for (const settings of bad) {

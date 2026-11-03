@@ -13,7 +13,7 @@ let dir: string;
 const folder = (name: string): string => {
   const p = join(dir, "projects", name);
   mkdirSync(p, { recursive: true });
-  return realpathSync(p);
+  return realpathSync.native(p);
 };
 let svc: SidecarService;
 const sink = new Writable({ write: (_c, _e, cb) => cb() });

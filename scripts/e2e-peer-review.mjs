@@ -1,5 +1,6 @@
 // Phase 2 e2e against the REAL Claude Code and Codex CLIs (costs tokens; never run in CI).
 //   node scripts/e2e-peer-review.mjs run <implementer> <reviewer>   full Peer Review in a temp repo
+//   node scripts/e2e-peer-review.mjs two <implementer> <reviewer>   two workflows at once, two worktrees
 //   node scripts/e2e-peer-review.mjs kill <implementer> <reviewer>  kill the process mid-run, restart on the same DB
 // Needs `pnpm build` first. Prints a JSON report; exit code 1 when the expectation failed.
 import { execFileSync, spawn } from "node:child_process";
@@ -231,5 +232,5 @@ if (mode === "run") await runMode(a, b);
 else if (mode === "two") await twoMode(a, b);
 else if (mode === "kill") await killMode(a, b);
 else if (mode === "_victim") await victim(a, b, c, d, e);
-else console.error("usage: e2e-peer-review.mjs run|kill <implementer> <reviewer>");
+else console.error("usage: e2e-peer-review.mjs run|two|kill <implementer> <reviewer>");
 void dirname;

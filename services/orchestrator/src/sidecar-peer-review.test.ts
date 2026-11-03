@@ -145,9 +145,19 @@ describe("Peer Review through the sidecar (real git worktree, fake agents)", () 
       call("workflows.startPeerReview", { ...params, reviewerAgent: "ghost" }),
     ).rejects.toThrow(/Unknown agent/);
     await call("workflows.startPeerReview", params);
-    await expect(call("workflows.startPeerReview", params)).rejects.toThrow(
-      /Illegal workflow transition/,
+    await expect(
+      call("workflows.startPeerReview", {
+        ...params,
+        implementerAgent: "rev",
+        reviewerAgent: "impl",
+      }),
+    ).rejects.toThrow(/Illegal workflow transition/);
+    const { roles } = await call<{ roles: { name: string; allowedAgents: string[] }[] }>(
+      "roles.list",
+      { workflowId },
     );
+    // the refused second start must not have rewritten the roles
+    expect(roles.find((r) => r.name === "implementer")?.allowedAgents).toEqual(["impl"]);
     await waitForWorkflow(workflowId);
   });
 

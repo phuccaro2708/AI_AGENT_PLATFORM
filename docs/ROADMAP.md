@@ -4,13 +4,14 @@
 
 Nguyên tắc ưu tiên: **Agent Runtime → Message Router → Durable Task State → Permission Engine** trước, UI và số lượng LLM sau.
 
-## Tiến trình (cập nhật 2026-11-02)
+## Tiến trình (cập nhật 2026-11-03)
 
 | Phase | Trạng thái                                                                                                                                                                                                           |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0     | **PASS (có hạn chế)** — CI xanh (runner), đã xác minh trên Windows vật lý bằng `tauri dev`; xem PHASE0_REPORT                                                                                                        |
 | 1     | **ĐÓNG (2026-11-02), có ngoại lệ** — cả 4 tiêu chí đạt/đạt có giới hạn, CI xanh; ngoại lệ chuyển phase sau (sai version → Phase 6, release máy thứ hai → Phase 5, tool ghi/phê duyệt → Phase 2/4). Xem PHASE1_REPORT |
-| 2–6   | Chưa bắt đầu                                                                                                                                                                                                         |
+| 2     | **ĐÓNG (2026-11-03), có ngoại lệ** — CI xanh 5/5; xem PHASE2_REPORT                                                                                                                                                  |
+| 3–6   | Chưa bắt đầu                                                                                                                                                                                                         |
 | 7–10  | Kế hoạch mở rộng "ngang AionUi, hơn ở an toàn / tin cậy / multi-agent / nhẹ" — xem cuối tài liệu; chỉ bắt đầu sau Phase 2                                                                                            |
 
 ## Tổng quan

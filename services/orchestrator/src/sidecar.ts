@@ -1,4 +1,9 @@
-import { SidecarRequest, type SidecarEvent, type SidecarResponse } from "@agent-studio/contracts";
+import {
+  canTransitionWorkflow,
+  SidecarRequest,
+  type SidecarEvent,
+  type SidecarResponse,
+} from "@agent-studio/contracts";
 import { AdapterRegistry, StubAdapter, type AgentAdapter } from "@agent-studio/agent-core";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAdapter } from "@agent-studio/adapter-codex";
@@ -299,6 +304,14 @@ export class SidecarService {
           }
           for (const agent of [p.implementerAgent, p.reviewerAgent]) {
             if (!this.registry.get(agent)) return fail(req.id, `Unknown agent: ${agent}`);
+          }
+          // Refuse a workflow that already started before roles are rewritten (start() checks again).
+          const from = this.repo.getWorkflowState(p.workflowId)!;
+          if (!canTransitionWorkflow(from, "running")) {
+            return fail(
+              req.id,
+              `Illegal workflow transition for ${p.workflowId}: ${from} -> running`,
+            );
           }
           this.engine.defineRoles(p.workflowId, {
             implementerAgent: p.implementerAgent,

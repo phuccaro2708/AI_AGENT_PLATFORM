@@ -123,7 +123,7 @@
 - [ ] Scheduler giới hạn concurrency (mặc định 2, cấu hình)
 - [ ] `git-worktrees`: create/remove/list, branch naming, dirty check, conflict detect, cleanup khi hủy
 - [ ] Workflow engine: Supervisor, Peer Review, Parallel Workers
-- [ ] Message types: task._, review._, approval.request, agent.message
+- [ ] Message types: `task.*`, `review.*`, approval.request, agent.message
 - [ ] Vai (role) trong workflow: hướng dẫn, quyền, agent cho phép; gán agent vào vai theo cấu hình lượt chạy
 - [ ] Bảng ngữ cảnh chung tối thiểu: mục tiêu/kế hoạch/quyết định/artifact (hash), nguồn từng mục, lọc theo vai (test: agent chỉ nhận phần được thấy)
 - [ ] Workflow mẫu Claude implement → Codex review (e2e thật)

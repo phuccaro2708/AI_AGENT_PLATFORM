@@ -58,6 +58,6 @@ Backpressure: when stdout has more than 1 MiB pending, `task.message` events are
 
 ### Tauri bridge
 
-Rust (`apps/desktop/src-tauri/src/sidecar.rs`) owns the child; a reader thread routes `id` lines to waiting requests (concurrent, matched by id, 30 s timeout) and `event` lines to the Tauri event `sidecar://event`. The UI calls `sidecar_call {method, params}` (`apps/desktop/src/sidecar.ts`); Rust only forwards the allowlist: health, queryTask, agents._, projects._, workflows._, tasks._, roles/context/approvals/artifacts/worktrees queries, logs.query (never `shutdown` or `runStub`). A dead sidecar is respawned on the next call; its pending requests fail with "sidecar exited".
+Rust (`apps/desktop/src-tauri/src/sidecar.rs`) owns the child; a reader thread routes `id` lines to waiting requests (concurrent, matched by id, 30 s timeout) and `event` lines to the Tauri event `sidecar://event`. The UI calls `sidecar_call {method, params}` (`apps/desktop/src/sidecar.ts`); Rust only forwards the allowlist: health, queryTask, `agents.*`, `projects.*`, `workflows.*`, `tasks.*`, roles/context/approvals/artifacts/worktrees queries, logs.query (never `shutdown` or `runStub`). A dead sidecar is respawned on the next call; its pending requests fail with "sidecar exited".
 
 Not yet: real-app run of the bridge (needs the bundled sidecar), claude tool_use/resume with the real CLI, real adapters (C2/C3 partly), path/approval policy for `rootPath` (Phase 4).

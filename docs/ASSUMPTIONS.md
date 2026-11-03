@@ -102,7 +102,7 @@ Repo git tạm ngoài repo dự án, prompt rất ngắn. Chưa lưu fixture; ch
 
 ## IPC Phase 2 (bước 7)
 
-- **Method mới (UI gọi được):** `tasks.list`, `workflows.startPeerReview`, `roles.list`, `context.list`, `approvals.list`, `approvals.resolve`, `artifacts.list`, `artifacts.diff`, `worktrees.list`. UI không gửi `cwd`, quyền hay worktree; sidecar tự chọn. `approvals.request` cố ý KHÔNG có: chỉ orchestrator tạo approval.
+- **Method mới (UI gọi được):** `tasks.list`, `workflows.startPeerReview`, `roles.list`, `context.list`, `approvals.list`, `approvals.resolve`, `artifacts.list`, `artifacts.diff`, `worktrees.list`. UI không gửi `cwd`, quyền hay worktree; sidecar tự chọn. `approvals.request` cố ý KHÔNG có: chỉ orchestrator được tạo approval (hiện chưa có đường production nào gọi).
 - **Chưa có:** `workflows.createDag`, `roles.upsert`/gán vai tùy biến (vai Peer Review được định nghĩa cố định trong `defineRoles`), và `SidecarEvent` mới (workflow/approval/worktree). UI khôi phục trạng thái bằng truy vấn (`tasks.list` là nguồn sự thật), không có push cho workflow.
 - **Scheduler khởi động lười:** chỉ chạy sau `workflows.startPeerReview` đầu tiên của tiến trình; `approvals.list/resolve` quét hết hạn khi được gọi (chưa có timer). Số task chạy song song vẫn mặc định 2, chưa đọc từ `settings`.
 - **Hạn chế còn lại:** restart giữa chừng vẫn để workflow `running` mà engine không tự tiếp tục (bookkeeping bước trong bộ nhớ); hủy một task `queued` của engine bằng `tasks.cancel` không báo cho engine nên workflow có thể kẹt `running`; project không phải repo git → task implementer `failed` kèm lý do, workflow `failed`.
@@ -114,4 +114,4 @@ Repo git tạm ngoài repo dự án, prompt rất ngắn. Chưa lưu fixture; ch
 - Workflows have no push events: the UI polls `tasks.list` and `approvals.list` every 1.5 s while a run is unsettled.
 - The sidecar has no "list workflows" method, so the UI remembers run ids (workflow, project, goal, agents) in `localStorage` and restores tasks and state with `tasks.list` after a restart. Clearing site data forgets the runs, not the work.
 - Task roles on the board are derived from creation order (implement, review, implement, ...), which holds for Peer Review only.
-- Approvals shown are those the orchestrator creates; real CLIs do not emit them yet.
+- No production code path creates an approval yet (`ApprovalService.request` is only called from tests), so the Approval Center is empty in real runs.

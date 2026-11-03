@@ -102,7 +102,7 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
       return { messages, nextAfterSequence: messages.at(-1)?.sequence ?? p.afterSequence };
     }
     case "workflows.startPeerReview":
-      return { started: true }; // the browser preview has no real workflow engine
+      return { workflowId: String(p.workflowId), state: "running" }; // preview has no real workflow engine
     case "tasks.list":
       return { workflowState: "pending", tasks: [] };
     case "roles.list":
@@ -111,6 +111,10 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
       return { items: [] };
     case "approvals.list":
       return { approvals: [] };
+    case "approvals.resolve":
+      return { resolved: true };
+    case "artifacts.diff":
+      return { patch: "", truncated: false };
     case "artifacts.list":
       return { artifacts: [] };
     case "worktrees.list":

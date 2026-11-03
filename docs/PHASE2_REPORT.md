@@ -31,7 +31,7 @@ CI GitHub: lần chạy đầu (`64532f8`) đỏ vì (1) `scripts/build-sidecar.
 - Chưa chạy luồng này qua UI trong app Tauri; UI Peer Review chỉ được kiểm bằng typecheck/build/test logic.
 - Engine không resume sau restart: task bị gián đoạn → `needs_reconciliation` nhưng workflow ở `running`, người dùng chưa có UI giải quyết reconciliation (Phase 7).
 - Supervisor và Parallel Workers chưa làm (R9); chỉ Peer Review.
-- Approval từ CLI thật chưa quan sát; Approval Center chỉ xử lý approval do orchestrator tạo. Chưa có timer hết hạn.
+- Approval từ CLI thật chưa quan sát; Approval Center đã nối `approvals.list/resolve` nhưng **chưa có đường production nào tạo approval** (`ApprovalService.request` chỉ được gọi trong test), nên khi chạy thật nó luôn rỗng. Chưa có timer hết hạn.
 - Quyền theo vai: cờ CLI + cwd + kiểm tra sau chạy (phát hiện, không ngăn). Ánh xạ tool ghi của Claude và read-only của Codex mới được thấy hoạt động trong một lần chạy đơn giản; chưa thử đối kháng. Worktree không phải sandbox.
 - Spike S4 (hủy khi đang ghi), perf-baseline sau bước 3 (R11), concurrency theo settings, `createDag`/`roles.upsert` IPC: chưa làm.
 - Chi phí chạy thật không đo chính xác (prompt rất ngắn, repo tạm).

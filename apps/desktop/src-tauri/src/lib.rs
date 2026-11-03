@@ -74,6 +74,7 @@ const ALLOWED_METHODS: &[&str] = &[
     "worktrees.list",
     "tasks.history",
     "logs.search",
+    "tasks.resolveReconciliation",
 ];
 
 fn is_allowed(method: &str) -> bool {
@@ -222,6 +223,7 @@ mod tests {
             "worktrees.list",
             "tasks.history",
             "logs.search",
+            "tasks.resolveReconciliation",
         ] {
             assert!(is_allowed(m), "{m:?}");
         }

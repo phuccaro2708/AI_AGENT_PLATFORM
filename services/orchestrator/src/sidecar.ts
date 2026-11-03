@@ -289,6 +289,23 @@ export class SidecarService {
           }
           return ok(req.id, { requested: false, state });
         }
+        case "tasks.resolveReconciliation": {
+          const { taskId, decision, note } = req.params;
+          const state = this.repo.getTaskState(taskId);
+          if (state === undefined) return fail(req.id, `Unknown task: ${taskId}`);
+          // Only an explicit user decision gets here; `requeue` is the one path that re-runs work.
+          this.orchestrator.resolveReconciliation(taskId, decision, note);
+          const next = this.repo.getTaskState(taskId);
+          if (next !== undefined) {
+            this.opts.onEvent?.({
+              event: "task.state",
+              taskId,
+              state: next,
+              reason: `reconciled by user: ${note}`,
+            });
+          }
+          return ok(req.id, { state: next });
+        }
         case "logs.query": {
           const { taskId, afterSequence, limit } = req.params;
           if (this.repo.getTaskState(taskId) === undefined) {

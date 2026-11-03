@@ -237,6 +237,16 @@ export const SidecarRequest = z.discriminatedUnion("method", [
   }),
   z.object({
     id: z.number().int(),
+    method: z.literal("tasks.resolveReconciliation"),
+    params: z.object({
+      taskId: z.string().min(1),
+      decision: z.enum(["completed", "failed", "cancelled", "requeue"]),
+      // What the person checked; kept in the audit trail, so it cannot be empty.
+      note: z.string().trim().min(3).max(2000),
+    }),
+  }),
+  z.object({
+    id: z.number().int(),
     method: z.literal("logs.search"),
     params: z.object({
       query: z.string().trim().min(2).max(200),

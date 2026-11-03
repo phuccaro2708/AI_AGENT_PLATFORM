@@ -107,6 +107,8 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
       return { workflowState: "pending", tasks: [] };
     case "tasks.history":
       return { tasks: [] };
+    case "tasks.resolveReconciliation":
+      return { state: String(p.decision) === "requeue" ? "queued" : String(p.decision) };
     case "logs.search":
       return { hits: [] };
     case "roles.list":

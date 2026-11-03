@@ -16,6 +16,7 @@ import { ArtifactRegistry } from "./artifacts.js";
 import { ContextBoard } from "./context-board.js";
 import { Orchestrator } from "./orchestrator.js";
 import { Scheduler } from "./scheduler.js";
+import { checkProjectRoot, duplicateOf } from "./project-policy.js";
 import { PeerReviewEngine } from "./workflow-engine.js";
 import { ProjectWorkspaces } from "./workspaces.js";
 
@@ -68,6 +69,23 @@ export class SidecarService {
   private readonly probes: Record<"claude" | "codex", () => Promise<ProbeResult>>;
   /** Tasks currently executing in this process. */
   private readonly active = new Map<string, { abort: AbortController; done: Promise<void> }>();
+
+  private get rootPolicy() {
+    return {
+      dbPath: this.opts.dbPath,
+      worktreesDir: this.opts.worktreesDir ?? join(dirname(this.opts.dbPath), "worktrees"),
+    };
+  }
+
+  /**
+   * Re-checks a stored root before work starts: the folder may have been moved or deleted since
+   * the project was created, and projects from before the policy existed were never checked.
+   */
+  private rootProblem(rootPath: string): string | null {
+    if (rootPath.startsWith("spike://")) return null; // Phase 0 spike project, no real folder
+    const r = checkProjectRoot(rootPath, this.rootPolicy);
+    return r.ok ? null : `Project folder unusable: ${r.reason}`;
+  }
 
   constructor(
     private readonly opts: SidecarOptions,
@@ -232,10 +250,15 @@ export class SidecarService {
         }
         case "agents.capabilities":
           return ok(req.id, { probe: this.repo.getAgentProbe(req.params.provider) ?? null });
-        case "projects.create":
-          return ok(req.id, {
-            projectId: this.repo.createProject(req.params.name, req.params.rootPath),
-          });
+        case "projects.create": {
+          const checked = checkProjectRoot(req.params.rootPath, this.rootPolicy);
+          if (!checked.ok) return fail(req.id, checked.reason);
+          const same = duplicateOf(checked.path, this.repo.listProjects());
+          if (same !== undefined) {
+            return fail(req.id, `This folder is already the project "${same}"`);
+          }
+          return ok(req.id, { projectId: this.repo.createProject(req.params.name, checked.path) });
+        }
         case "projects.list":
           return ok(req.id, { projects: this.repo.listProjects() });
         case "workflows.create": {
@@ -250,6 +273,8 @@ export class SidecarService {
           if (!this.registry.get(req.params.agentId)) {
             return fail(req.id, `Unknown agent: ${req.params.agentId}`);
           }
+          const bad = this.rootProblem(root.rootPath);
+          if (bad) return fail(req.id, bad);
           // Runs in the background so `tasks.cancel` and other requests are served meanwhile.
           const ac = new AbortController();
           let taskId = "";
@@ -353,6 +378,9 @@ export class SidecarService {
           for (const agent of [p.implementerAgent, p.reviewerAgent]) {
             if (!this.registry.get(agent)) return fail(req.id, `Unknown agent: ${agent}`);
           }
+          const peerRoot = this.repo.getWorkflowRoot(p.workflowId);
+          const badRoot = peerRoot ? this.rootProblem(peerRoot.rootPath) : null;
+          if (badRoot) return fail(req.id, badRoot);
           // Refuse a workflow that already started before roles are rewritten (start() checks again).
           const from = this.repo.getWorkflowState(p.workflowId)!;
           if (!canTransitionWorkflow(from, "running")) {

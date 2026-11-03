@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -9,6 +9,12 @@ import { createLogger } from "@agent-studio/shared-utils";
 import { SidecarService } from "./sidecar.js";
 
 let dir: string;
+/** A real project folder inside the test directory (the policy refuses folders that do not exist). */
+const folder = (name: string): string => {
+  const p = join(dir, "projects", name);
+  mkdirSync(p, { recursive: true });
+  return realpathSync(p);
+};
 let svc: SidecarService;
 const sink = new Writable({ write: (_c, _e, cb) => cb() });
 
@@ -92,7 +98,10 @@ const call = async (s: SidecarService, method: string, params?: unknown) => {
 
 describe("D1 IPC", () => {
   it("projects -> workflow -> start -> logs.query, with cwd taken from the project root", async () => {
-    const { result: p } = await call(svc, "projects.create", { name: "demo", rootPath: "C:/demo" });
+    const { result: p } = await call(svc, "projects.create", {
+      name: "demo",
+      rootPath: folder("demo"),
+    });
     const { result: w } = await call(svc, "workflows.create", { projectId: p?.projectId });
     const { result: s } = await call(svc, "workflows.start", {
       workflowId: w?.workflowId,
@@ -111,9 +120,11 @@ describe("D1 IPC", () => {
     });
     expect(page2.result?.messages.length).toBeGreaterThan(0);
     expect(page2.result?.messages[0].sequence).toBe(page1.result?.nextAfterSequence + 1);
-    expect(JSON.stringify(page2.result?.messages)).toContain("C:/demo"); // stub echoes cwd
+    expect(JSON.stringify(page2.result?.messages)).toContain(
+      JSON.stringify(folder("demo")).slice(1, -1), // stub echoes cwd; JSON escapes backslashes
+    );
     const listed = (await call(svc, "projects.list")).result?.projects as { rootPath: string }[];
-    expect(listed.map((x) => x.rootPath)).toContain("C:/demo");
+    expect(listed.map((x) => x.rootPath)).toContain(folder("demo"));
   });
 
   it("adds no project on a fresh start (the Phase 0 spike project is created only by runStub)", async () => {
@@ -135,7 +146,7 @@ describe("D1 IPC", () => {
       { dbPath: join(dir, "e.db"), onEvent: (e) => events.push(e) },
       createLogger({ name: "t", destination: sink }),
     );
-    const p = (await call(svc, "projects.create", { name: "e", rootPath: "C:/e" })).result;
+    const p = (await call(svc, "projects.create", { name: "e", rootPath: folder("e") })).result;
     const w = (await call(svc, "workflows.create", { projectId: p?.projectId })).result;
     const s = (
       await call(svc, "workflows.start", {
@@ -167,7 +178,7 @@ describe("D1 IPC", () => {
       },
       createLogger({ name: "t", destination: sink }),
     );
-    const p = (await call(svc, "projects.create", { name: "f", rootPath: "C:/f" })).result;
+    const p = (await call(svc, "projects.create", { name: "f", rootPath: folder("f") })).result;
     const w = (await call(svc, "workflows.create", { projectId: p?.projectId })).result;
     const s = (
       await call(svc, "workflows.start", {
@@ -194,7 +205,7 @@ describe("D1 IPC", () => {
     expect((await call(svc, "logs.query", { taskId: "nope" })).error?.message).toMatch(
       /Unknown task/,
     );
-    const p = (await call(svc, "projects.create", { name: "a", rootPath: "C:/a" })).result;
+    const p = (await call(svc, "projects.create", { name: "a", rootPath: folder("a") })).result;
     const w = (await call(svc, "workflows.create", { projectId: p?.projectId })).result;
     expect(
       (
@@ -206,7 +217,7 @@ describe("D1 IPC", () => {
       ).error?.message,
     ).toMatch(/Unknown agent/);
     expect(
-      (await call(svc, "projects.create", { name: " ", rootPath: "C:/b" })).error?.message,
+      (await call(svc, "projects.create", { name: " ", rootPath: folder("b") })).error?.message,
     ).toBe("invalid request");
   });
 
@@ -217,7 +228,7 @@ describe("D1 IPC", () => {
       { dbPath: join(dir, "c.db"), extraAdapters: [slow] },
       createLogger({ name: "t", destination: sink }),
     );
-    const p = (await call(svc, "projects.create", { name: "c", rootPath: "C:/c" })).result;
+    const p = (await call(svc, "projects.create", { name: "c", rootPath: folder("c") })).result;
     const w = (await call(svc, "workflows.create", { projectId: p?.projectId })).result;
     const s = (
       await call(svc, "workflows.start", {

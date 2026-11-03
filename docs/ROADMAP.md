@@ -55,7 +55,11 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 
 ## Phase 1 — Single-Agent MVP (1–2 tuần)
 
-**Trạng thái:** backlog chia Sprint A (process manager, Job Object spike, state machine, migration) → B (probe CLI) → C (adapter) → D (IPC/UI) → E (đóng phase). Chi tiết: `docs/TODO.md`.
+**Trạng thái: ĐÓNG (2026-11-02), có ba ngoại lệ** — chi tiết và bằng chứng: `docs/PHASE1_REPORT.md`. CI xanh 5/5 job ở run `41551598060`. Claude 2.1.314 và Codex 0.165.0 chạy task thật và hủy được giữa chừng (adapter và nút Cancel trong app Tauri release), không còn tiến trình mồ côi. Ngoại lệ chuyển sang phase sau: "sai version" (Phase 6), bản release trên máy thứ hai/installer (Phase 5), tool ghi/phê duyệt của CLI thật (Phase 2/4). Nợ còn mở (`tasks.list`, UI phê duyệt, policy `projects.rootPath`, Browse…/Settings/theme trong app thật…) nằm ở `docs/TODO.md`.
+
+**Việc làm ngoài phạm vi Phase 1 (theo yêu cầu người dùng):** làm lại UI (theme sáng/tối, sidebar, Settings, bố cục 3 cột, composer, thẻ lỗi). Mode "Multi-agent" hiện chỉ gửi cùng mục tiêu cho ≥ 2 agent chạy độc lập, chưa điều phối (điều phối thật: Phase 2/9). Không giả lập tính năng backend chưa có.
+
+**Bước tiếp theo: Phase 2** (thứ tự đã chốt 2 → 7 → 8 → 9).
 
 - Process Manager: spawn `shell:false`, resolve shim `.cmd`/`.exe` trên Windows, stream stdout/stderr, timeout, cancel (kill process tree qua Job Object / `taskkill /T`).
 - CLI detection + **compatibility probe** (version, flags thực tế) cho Claude Code và Codex; lưu kết quả vào `agents.capabilities`.

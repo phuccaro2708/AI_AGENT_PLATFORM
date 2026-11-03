@@ -2,49 +2,35 @@
 
 Đánh dấu `[x]` khi xong **và đã kiểm chứng**. Ngữ cảnh/acceptance: `docs/ROADMAP.md`.
 
-## Trạng thái hiện tại (cập nhật 2026-11-02)
+## Trạng thái hiện tại (cập nhật 2026-11-02, commit `63d7ef5`)
 
-- **Phase 0: PASS (có hạn chế)** — xem `docs/PHASE0_REPORT.md`, `docs/reports/phase0-windows/README.md`. CI xanh trên runner Windows/Ubuntu (run 9, commit `d9cf954`); đã xác minh trên máy Windows vật lý (Legion) bằng bản `tauri dev`.
-- **Phase 1: đang làm.** Xong Sprint A, C1, C4; B1–B4 xong một phần (đã có help thật của Claude 2.1.314 và Codex 0.165.0 từ máy Legion). Codex chỉ có npm shim → `process-manager` map `codex.cmd` sang `node <script>` (`unwrapNpmShim`). Chưa có: adapter C2/C3, Sprint D, fixture `stream-json`/JSONL.
-- **Cập nhật 2026-11-02:** Sprint D1–D4 đã có và chạy được trong app Tauri thật. Đã kiểm bằng tay trong webview thật (qua CDP): thêm project, Detect CLIs, chạy task StubAdapter, badge cập nhật theo event. Sidecar giờ được tạo ở trạng thái treo → gán vào Job Object → resume (`JobObject::spawn`, ADR-004), `cargo test` 7/7, clippy sạch, selftest Tauri qua lại vẫn pass. Kill cứng `agent-studio.exe` không để lại sidecar. Chưa kiểm: Cancel trong app thật (cần adapter chậm), nhánh lỗi của `JobObject::spawn` (assign/resume thất bại) chưa có test, một project lạ `spike-6844` từng xuất hiện trong DB mới (chưa rõ nguyên nhân), claude thật (`tool_use`, `--resume`, stdin, cờ cô lập).
-- **Hướng mở rộng (2026-11-02):** thêm Phase 7–10 trong `docs/ROADMAP.md` (ngang AionUi về trải nghiệm, hơn ở an toàn/tin cậy/multi-agent có cấu trúc/nhẹ). Chỉ bắt đầu sau Phase 2.
+- **Phase 0: PASS (có hạn chế)** — `docs/PHASE0_REPORT.md`.
+- **Phase 1: ĐÓNG (có ba ngoại lệ)** — `docs/PHASE1_REPORT.md`. CI xanh 5/5 job ở run `41551598060`; `pnpm test` 168 test pass; `cargo test` 7/7, clippy sạch. Claude 2.1.314 và Codex 0.165.0 đã chạy task thật và hủy được khi tool đang chạy (cả qua adapter lẫn nút Cancel trong app Tauri release), không để lại tiến trình mồ côi.
+- **Phase 2: chưa bắt đầu.** Thứ tự đã chốt: 2 → 7 → 8 → 9 (10 song song 5–6).
 - Chưa có PR; nhánh làm việc `claude/loving-lovelace-32lh71`.
 
-## Đối chiếu với ROADMAP (2026-11-02, commit `982232a`)
+### Ngoại lệ chuyển từ Phase 1
 
-Bằng chứng cục bộ: `pnpm test` 17 file / 165 test pass; lint, format, typecheck, build xanh (lần chạy gần nhất khi làm UI). CI từng đỏ ở run `41520802510`, `41521937556`, `41524725428`; **đã xanh 5/5 job ở run `41551598060`** sau khi sửa (ghim Node cho job Tauri, polling thoát sidecar, chấp nhận 1 phát hiện secret scan đã xem).
+- [ ] "Sai version" — cần ma trận tương thích (Phase 6).
+- [ ] Bản release trên máy thứ hai; installer (Phase 5).
+- [ ] Tool ghi/phê duyệt của CLI thật; Claude `--include-partial-messages`; Codex `turn.failed`, resume, `app-server` + approval, ép read-only (Phase 2/4; xem ASSUMPTIONS).
 
-### Đã làm (có bằng chứng)
+### Nợ kỹ thuật còn mở (không chặn phase nào đã đóng)
 
-- **Phase 0:** PASS có hạn chế (xem PHASE0_REPORT).
-- **Phase 1, đạt:** Process Manager + Job Object (A1–A5); probe Claude/Codex bằng fixture thật (B1–B3, B4 một phần); `ClaudeAdapter` và `CodexAdapter` chạy task thật mỗi bên một lần (C2, C3); contract suite dùng chung (C1); `needs_reconciliation` (C4); IPC sidecar + cầu nối Tauri + event stream (D1, D2); phục hồi task khi khởi động (D4, phía backend); baseline hiệu năng (E1).
-- **Ngoài ROADMAP (làm theo yêu cầu người dùng, không tính vào acceptance gate):** làm lại UI — theme sáng/tối, sidebar kiểu Claude Code, trang Settings + biệt danh hiển thị, bố cục 3 cột (header, Inspector thu gọn được), composer "task trước", trạng thái rỗng 3 bước, thẻ lỗi có hành động (Retry / Show details / Dismiss). Đây là phần lấn sang Phase 5/7 về hình thức nhưng chỉ có giao diện, chưa kèm backend tương ứng.
-- Mode "Multi-agent" hiện tại = cùng một mục tiêu gửi cho ≥ 2 agent, chạy độc lập song song, **không điều phối** (điều phối thật là Phase 2/9).
+- [ ] `tasks.list` — session chỉ nằm trong bộ nhớ, mất khi mở lại app (Phase 7).
+- [ ] UI phê duyệt (Phase 2 cơ bản, Phase 7 đầy đủ).
+- [ ] Policy cho `projects.rootPath` (Phase 4/7); test nhánh lỗi của `JobObject::spawn`.
+- [ ] Nút Browse… (plugin dialog, quyền `dialog:allow-open`), Settings, theme, bố cục hẹp (< 800 px) chưa kiểm trong app Tauri thật.
+- [ ] `cargo audit` cho plugin dialog; ẩn adapter `stub` ngoài chế độ dev.
+- [ ] Hai cảnh báo `pnpm audit` mức moderate và hai cảnh báo `cargo audit` (từ Phase 0).
+- [ ] Độ ổn định test Rust trên runner CI: đã nới timeout; nếu job Tauri đỏ lại thì điều tra nguyên nhân, không nới tiếp.
+- [x] Project lạ `spike-NNNN` (nguyên nhân: `SidecarService` tạo mỗi lần khởi động; nay tạo lười trong `runStub`, có test).
 
-### Chưa làm / chưa đạt
+### Việc làm ngoài ROADMAP (theo yêu cầu người dùng)
 
-**Chặn việc đóng Phase 1**
-
-- [x] CI xanh (run `41551598060`). Hai nguyên nhân đã gặp đã thấy trong log run `41521937556`: (1) job _Tauri shell_: 3/7 test Rust trong `sidecar.rs` fail trên runner Windows (`pushed_events_reach_the_callback_and_errors_become_err`, `a_request_times_out_and_a_dead_sidecar_fails_waiters_and_later_calls`, `replies_match_by_id_even_when_they_finish_out_of_order`) dù pass 7/7 trên máy Legion — chưa điều tra, nghi test phụ thuộc thời gian/sidecar giả; (2) job _Security_: secret scan báo 23 phát hiện so với 7 đã chấp nhận, toàn bộ ở `docs/reports/phase0-windows/spike-report.json` (Base64 High Entropy) — cần xác nhận là dữ liệu spike vô hại rồi thêm vào danh sách chấp nhận trong `scripts/secret-scan.py`, hoặc bỏ file khỏi repo. Không được coi là "xanh" khi chưa chạy lại.
-- [x] Hủy một CLI thật đang chạy tool; bấm Cancel trong app Tauri thật (2026-11-02, claude + codex, 0 orphan; state `needs_reconciliation`).
-- [ ] Chưa kiểm trong app Tauri thật: các thay đổi UI sau `818431e`, nút Browse… (plugin dialog, quyền `dialog:allow-open`), bản release trên máy thứ hai.
-- [x] PHASE1_REPORT đã cập nhật số CI.
-
-**Nợ kỹ thuật Phase 1 (nêu trong báo cáo, chưa làm)**
-
-- [ ] `tasks.list` — danh sách session hiện chỉ nằm trong bộ nhớ, mất khi mở lại app (chuyển sang Phase 7).
-- [ ] UI phê duyệt (approval) — chưa có; chuyển sang Phase 2/7.
-- [ ] Policy cho `projects.rootPath`; test nhánh lỗi của `JobObject::spawn`; (đã xong: project lạ `spike-NNNN` do `SidecarService` tạo mỗi lần khởi động, nay tạo lười trong `runStub`).
-- [ ] Claude: tool ghi/phê duyệt, `--include-partial-messages`, hủy giữa chừng chưa kiểm với CLI thật. Codex: `turn.failed`, item khác, resume, app-server + approval, ép read-only chưa kiểm (ghi trong ASSUMPTIONS).
-- [ ] `cargo audit` cho plugin dialog; ẩn adapter `stub` ngoài chế độ dev; chưa kiểm bố cục hẹp (< 800 px).
-- [ ] Hai cảnh báo `pnpm audit` mức moderate và hai cảnh báo `cargo audit` (từ Phase 0) vẫn mở.
-
-**Giao diện đã vẽ nhưng backend chưa hỗ trợ (cố ý không giả lập)**
-
-- Danh sách file thay đổi, tab Plan/Files, nhánh git / lần mở gần nhất, mở log từ thẻ lỗi, "Diagnose", sửa đường dẫn project, command palette, remote agent.
-- Ô "Logs" trong Inspector chỉ là khung xem tool_call/tool_result **chỉ đọc**, không phải terminal; `node-pty` vẫn chưa spike (Phase 5).
-
-**Các phase sau:** Phase 2–10 chưa bắt đầu (toàn bộ checklist bên dưới còn `[ ]`). Thứ tự đã chốt: 2 → 7 → 8 → 9. Lưu ý cho Phase 2: bảng ngữ cảnh chung và vai là mức tối thiểu của Phase 2, chưa có dòng code nào.
+- Làm lại UI: theme sáng/tối, sidebar kiểu Claude Code (Projects, Search, tab Agent/Multi-agent, "…" ẩn session), trang Settings + biệt danh hiển thị (mặc định "Admin", không có quyền hạn), bố cục 3 cột, Inspector thu gọn (Context/Activity/Tools/Logs), composer "task trước", trạng thái rỗng 3 bước, thẻ lỗi có hành động. Phần lấn sang Phase 5/7 về hình thức; chỉ là giao diện trên backend sẵn có.
+- Mode "Multi-agent" hiện = cùng mục tiêu gửi cho ≥ 2 agent, chạy độc lập, **không điều phối** (điều phối thật: Phase 2/9).
+- Cố ý không giả lập vì backend chưa có: danh sách file thay đổi, tab Plan/Files, nhánh git, "Diagnose", sửa đường dẫn project, command palette, remote agent, terminal thật (`node-pty` chưa spike, Phase 5). Ô Logs chỉ là khung xem tool_call/tool_result chỉ đọc.
 
 ## Phase 0 — Foundation (HOÀN THÀNH, có hạn chế)
 
@@ -88,7 +74,7 @@ Bằng chứng cục bộ: `pnpm test` 17 file / 165 test pass; lint, format, ty
 - [ ] Hai cảnh báo `pnpm audit` mức moderate (dev-only) và hai cảnh báo `cargo audit` (transitive)
 - [ ] Spike `node-pty` trên Windows
 
-## Phase 1 — Single-Agent MVP (đang làm, chưa đóng)
+## Phase 1 — Single-Agent MVP (ĐÓNG 2026-11-02, có ba ngoại lệ; xem `docs/PHASE1_REPORT.md`)
 
 Điều kiện cần quyết định trước: CLI nào đã cài/đăng nhập trên Legion; chi phí test thật (ưu tiên fixture); Job Object ở Rust hay `taskkill /T` (ADR-004).
 
@@ -102,31 +88,31 @@ Bằng chứng cục bộ: `pnpm test` 17 file / 165 test pass; lint, format, ty
 
 ### Sprint B — Phát hiện CLI và probe
 
-- [~] B1. Detection + probe Claude Code (version, flags thực tế) — `packages/cli-probe`; đã chạy thật với `claude` 2.1.316 (container Linux) và 2.1.314 trên máy Legion (2026-11-01, `claude.exe`, fixture `claude/2.1.314/`; `--help` giống hệt); chưa chạy `packages/cli-probe` trên Legion
-- [~] B2. Detection + probe Codex (version, `app-server`, `exec --json`) — code xong; đã có output thật trên máy Legion (`codex-cli 0.165.0`, 2026-11-01, fixture `codex/0.165.0/`: `app-server`, `exec --json` có trong help). Codex cài qua npm shim (`codex` sh + `codex.cmd`, không có `.exe`) → đã chọn map sang `node <npm>/@openai/codex/bin/codex.js` (`unwrapNpmShim`, shell:false; test bằng shim giả). Probe đã chạy với fixture thật (test). Chưa kiểm chứng event JSONL
-- [~] B3. (chỉ có fixture `claude --help`/`--version`; chưa có output stream-json hay Codex; đã có bảng `agents` lưu capabilities) Fixture output thật → `tests/contracts/fixtures`; cập nhật ASSUMPTIONS; lưu `agents.capabilities`
-- [~] B4. Lỗi CLI báo rõ, không crash — xong: chưa cài, shim, exit ≠ 0, timeout, spawn lỗi, version không đọc được. CHƯA làm: "sai version" (chưa có version tối thiểu được kiểm chứng) và JSON hỏng (thuộc adapter, Sprint C)
+- [x] B1. Detection + probe Claude Code — `packages/cli-probe`; fixture thật `claude` 2.1.316 (Linux) và 2.1.314 (Windows, Legion)
+- [x] B2. Detection + probe Codex — fixture thật `codex-cli 0.165.0`; npm shim `codex.cmd` map sang `node <npm>/@openai/codex/bin/codex.js` (`unwrapNpmShim`, shell:false); event JSONL đã quan sát qua hai luồng thật
+- [x] B3. Fixture output thật → `tests/contracts/fixtures`; ASSUMPTIONS cập nhật; `agents.capabilities` lưu trong DB (các dạng event chưa quan sát được ghi trong ASSUMPTIONS)
+- [x] B4. Lỗi CLI báo rõ, không crash — chưa cài, shim, exit ≠ 0, timeout, spawn lỗi, version không đọc được, JSON hỏng (adapter nêu số dòng không hợp lệ). Ngoại lệ: "sai version" (chưa có version tối thiểu được kiểm chứng → Phase 6)
 
 ### Sprint C — Adapter
 
 - [x] C1. Contract test suite dùng chung — `tests/contract/adapter-contract.ts` (suite) + validators `validateEventStream`/`validateCapabilities` trong `agent-core`. Mới chạy với StubAdapter; adapter claude/codex (C2/C3) phải gọi `describeAdapterContract`.
-- [~] C2. `adapter-claude` — xong: `packages/adapter-claude` (parser stream-json → AgentEvent, spawn `shell:false`, prompt qua stdin, cancel kill-tree, lỗi → event `error`), qua contract suite chung + test với fixture thật và CLI giả; đã đăng ký trong sidecar. Đã chạy thật 2 task qua adapter (2026-11-02): stdin, tool_use/tool_result, --resume đều khớp; `--safe-mode` mặc định. CHƯA: partial, hủy giữa chừng, tool ghi/phê duyệt, chạy contract suite với claude thật
-- [~] C3. `adapter-codex` — xong: `packages/adapter-codex` (`codex exec --json -s read-only -`, prompt qua stdin, shell:false qua `unwrapNpmShim`, parser JSONL → AgentEvent, cancel kill-tree, lỗi → event `error`), qua contract suite chung + fixture thật 0.165.0 (text, command_execution) + CLI giả; đã đăng ký trong sidecar; đã chạy thật 1 task qua adapter (completed + thread id). Codex từ chối thư mục không phải git (không tự thêm `--skip-git-repo-check`). CHƯA: `turn.failed`/item khác/hủy khi đang chạy tool với CLI thật, xác minh sandbox, resume, app-server + approval (xem ASSUMPTIONS)
+- [x] C2. `adapter-claude` — parser stream-json, prompt qua stdin, `--safe-mode` mặc định, cancel kill-tree; qua contract suite + fixture thật; đã chạy task thật và hủy giữa chừng (tool Bash) với Claude 2.1.314. CHƯA: partial messages, tool ghi/phê duyệt (Phase 2/4)
+- [x] C3. `adapter-codex` — `codex exec --json -s read-only -`, shell:false qua `unwrapNpmShim`, cancel kill-tree; qua contract suite + fixture thật; đã chạy task thật và hủy giữa chừng với Codex 0.165.0. CHƯA: `turn.failed` thật, resume, `app-server`, approval (Phase 2/4)
 - [x] C4. Side effect không xác minh được → `needs_reconciliation` — `classifyOutcome` + `Orchestrator.resolveReconciliation`. Quy tắc: số `tool_call` > số `tool_result` (kể cả khi bị hủy) → `needs_reconciliation`; không tự chạy lại, chỉ `requeue` tường minh mới tăng `attempt`. Giới hạn: không phân biệt tool chỉ-đọc/ghi; phụ thuộc adapter báo `tool_call` trung thực; chưa kiểm với CLI thật.
 
 ### Sprint D — IPC và UI
 
-- [~] D1. IPC: agents.detect/list/capabilities, projects.create/list, workflows.create/start, tasks.cancel, logs.query — xong ở sidecar (`SidecarRequest`, test bằng StubAdapter + adapter chậm cho cancel); `cwd` lấy từ project root, UI không gửi. Cầu nối Tauri: `sidecar_call` (allowlist) + event `sidecar://event`, reader thread, test Rust với sidecar giả (7 test, clippy sạch). Đã chạy `tauri dev` thật với `AGENT_STUDIO_SIDECAR_DIR=sidecar-dist` (build-sidecar.mjs, node.exe đóng gói): selftest webview→Rust→Node→SQLite→StubAdapter `completed`, sidecar thoát sạch, không process mồ côi. CHƯA: quyền `event:listen` và luồng UI bằng tay chưa kiểm ở runtime, policy cho `rootPath`
-- [~] D2. Event stream tới UI + backpressure — xong phía sidecar: `task.message`/`task.state` đẩy trên stdout (`SidecarEvent`), bỏ `task.message` khi stdout > 1 MiB (client bù bằng `logs.query`), listener lỗi không ảnh hưởng task. Cầu nối Tauri xong (xem D1). CHƯA: chạy trong app thật với sidecar đóng gói, UI (D3)
-- [~] D3. UI: Projects, Agents, New Task, Output stream, Cancel — xong: `apps/desktop/src` (App, `useTaskLog` = events + `logs.query` catch-up khi hụt `sequence`/khi task kết thúc, logic thuần `taskLog.ts` có 5 test). Đã thử trong trình duyệt với preview giả (chỉ DEV): thêm project, chạy task, stream, Cancel. CHƯA: chạy trong app Tauri thật, danh sách task qua các lần chạy (chưa có `tasks.list`), chọn thư mục bằng dialog, approval UI, giao diện dạng shadcn/Tailwind (đang dùng CSS thuần)
-- [~] D4. Crash detection khi khởi động → `needs_reconciliation` — xong phía backend: `Repo.recoverInterruptedTasks()` chạy trong constructor `SidecarService` (task `running`/`waiting_approval` → `needs_reconciliation`, không tự chạy lại, `attempt` giữ nguyên; `health` trả `recoveredTasks`). Test: storage + sidecar (khởi động lại trên cùng DB). CHƯA: UI hiển thị/giải quyết (cần D1/D3), kiểm tra với process thật bị kill giữa chừng
+- [x] D1. IPC sidecar + cầu nối Tauri (allowlist `sidecar_call`): agents.detect/list/capabilities, projects.create/list, workflows.create/start, tasks.cancel, logs.query; `cwd` lấy từ project root, UI không gửi. Chưa có `tasks.list` (nợ)
+- [x] D2. Event stream tới UI + backpressure — `task.message`/`task.state` trên stdout, bỏ `task.message` khi stdout > 1 MiB (client bù bằng `logs.query`); đã chạy trong app Tauri release với sidecar đóng gói
+- [x] D3. UI: Projects, Agents, New Task, Output stream, Cancel — đã chạy trong app Tauri thật (task Claude/Codex thật + Cancel qua WebView2). Nợ: Browse…/Settings/theme/bố cục hẹp chưa kiểm trong app thật, `tasks.list`, UI phê duyệt, shadcn/Tailwind (đang dùng CSS thuần)
+- [x] D4. Crash detection khi khởi động → `needs_reconciliation` — `Repo.recoverInterruptedTasks()`, không tự chạy lại; kiểm trong app thật (hủy khi có tool_call chưa có tool_result → `needs_reconciliation`). UI giải quyết reconciliation: Phase 2/7
 
 ### Sprint E — Đóng phase
 
 - [x] E1. Đo baseline → `docs/PERF_BUDGET.md` (`scripts/perf-baseline.mjs`; một máy, chưa ép trong CI)
-- [~] E2. Bản release trên Windows vật lý: `tauri build --no-bundle` + selftest 5/5 pass tại `818431e` (cần `AGENT_STUDIO_SIDECAR_DIR`; chưa có installer). Chưa kiểm trên máy thứ hai
-- [~] E3. lint/format/typecheck/test(165)/build/cargo test/clippy pass cục bộ. CI đã chạy sau khi push nhưng **đỏ** (3 test Rust sidecar fail trên runner Windows; secret scan 23 vs 7 phát hiện) — xem mục "Đối chiếu với ROADMAP"
-- [x] E4. `docs/PHASE1_REPORT.md` — kết luận: Phase 1 CHƯA đóng (thiếu task Claude thật)
+- [~] E2. Bản release Windows: `tauri build --no-bundle` + selftest 5/5 pass (cần `AGENT_STUDIO_SIDECAR_DIR` hoặc thư mục `sidecar` cạnh exe; chưa có installer). Chưa kiểm trên máy thứ hai (ngoại lệ → Phase 5)
+- [x] E3. lint/format/typecheck/test (168)/build/cargo test (7)/clippy pass; CI xanh 5/5 ở run `41551598060` (commit `63d7ef5`)
+- [x] E4. `docs/PHASE1_REPORT.md` — kết luận: Phase 1 ĐÓNG (2026-11-02) có ba ngoại lệ
 
 ## Phase 2 — Multi-Agent
 

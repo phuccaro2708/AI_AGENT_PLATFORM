@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Minimal capability for the main window. No shell, fs or http access; only the native open-folder dialog.",
+  "description": "Minimal capability for the main window. No shell, fs, http or dialog access from the webview; the folder picker is a native command (pick_folder).",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open"]
+  "permissions": ["core:default"]
 }

@@ -158,6 +158,36 @@ async fn sidecar_run_stub(
     Ok(r)
 }
 
+fn path_text(p: PathBuf) -> Result<String, String> {
+    p.into_os_string()
+        .into_string()
+        .map_err(|_| "the chosen folder has a name that is not valid text".to_string())
+}
+
+/// Native folder picker, opened from the native side so the webview needs no dialog permission.
+/// Returns `None` when the person cancels. The path is only a suggestion: the sidecar's project
+/// policy decides whether it can be a project folder.
+#[tauri::command]
+async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("Choose project folder")
+            .blocking_pick_folder()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    match picked {
+        None => Ok(None),
+        Some(p) => p
+            .into_path()
+            .map_err(|e| e.to_string())
+            .and_then(path_text)
+            .map(Some),
+    }
+}
+
 /// True only when CI/automation asks the app to verify itself and exit.
 #[tauri::command]
 fn selftest_mode() -> bool {
@@ -186,6 +216,7 @@ pub fn run() {
             sidecar_call,
             sidecar_health,
             sidecar_run_stub,
+            pick_folder,
             selftest_mode,
             selftest_finish
         ])
@@ -237,6 +268,14 @@ mod tests {
         ] {
             assert!(!is_allowed(m), "{m:?}");
         }
+    }
+
+    #[test]
+    fn a_chosen_folder_becomes_text() {
+        assert_eq!(
+            path_text(PathBuf::from("some").join("folder")).unwrap(),
+            PathBuf::from("some").join("folder").to_string_lossy()
+        );
     }
 
     #[test]

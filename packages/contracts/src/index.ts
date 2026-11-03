@@ -221,6 +221,30 @@ export const SidecarRequest = z.discriminatedUnion("method", [
     method: z.literal("worktrees.list"),
     params: z.object({ workflowId: z.string().min(1) }),
   }),
+  // ---- Phase 7A: history and log search (read-only) ----
+  z.object({
+    id: z.number().int(),
+    method: z.literal("tasks.history"),
+    params: z
+      .object({
+        projectId: z.string().min(1).optional(),
+        agentId: z.string().min(1).optional(),
+        state: TaskState.optional(),
+        limit: z.number().int().min(1).max(200).default(50),
+        offset: z.number().int().min(0).default(0),
+      })
+      .default({ limit: 50, offset: 0 }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("logs.search"),
+    params: z.object({
+      query: z.string().trim().min(2).max(200),
+      projectId: z.string().min(1).optional(),
+      taskId: z.string().min(1).optional(),
+      limit: z.number().int().min(1).max(200).default(50),
+    }),
+  }),
   z.object({ id: z.number().int(), method: z.literal("shutdown") }),
 ]);
 export type SidecarRequest = z.infer<typeof SidecarRequest>;

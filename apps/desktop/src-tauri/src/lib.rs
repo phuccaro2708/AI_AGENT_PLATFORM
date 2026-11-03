@@ -72,6 +72,8 @@ const ALLOWED_METHODS: &[&str] = &[
     "artifacts.list",
     "artifacts.diff",
     "worktrees.list",
+    "tasks.history",
+    "logs.search",
 ];
 
 fn is_allowed(method: &str) -> bool {
@@ -218,6 +220,8 @@ mod tests {
             "artifacts.list",
             "artifacts.diff",
             "worktrees.list",
+            "tasks.history",
+            "logs.search",
         ] {
             assert!(is_allowed(m), "{m:?}");
         }

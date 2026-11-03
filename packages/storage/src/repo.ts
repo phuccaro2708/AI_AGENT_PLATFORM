@@ -208,6 +208,74 @@ export class Repo {
       .all();
   }
 
+  /** Task history across workflows, newest first. Filters are exact matches; paging is offset-based. */
+  listTaskHistory(f: {
+    projectId?: string | undefined;
+    agentId?: string | undefined;
+    state?: TaskState | undefined;
+    limit: number;
+    offset: number;
+  }) {
+    const conds = [
+      f.projectId ? eq(workflows.projectId, f.projectId) : undefined,
+      f.agentId ? eq(tasks.agentId, f.agentId) : undefined,
+      f.state ? eq(tasks.state, f.state) : undefined,
+    ].filter((c) => c !== undefined);
+    return this.db
+      .select({
+        taskId: tasks.id,
+        workflowId: tasks.workflowId,
+        projectId: workflows.projectId,
+        projectName: projects.name,
+        agentId: tasks.agentId,
+        state: tasks.state,
+        attempt: tasks.attempt,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+      })
+      .from(tasks)
+      .innerJoin(workflows, eq(workflows.id, tasks.workflowId))
+      .innerJoin(projects, eq(projects.id, workflows.projectId))
+      .where(conds.length > 0 ? and(...conds) : undefined)
+      .orderBy(desc(tasks.createdAt), desc(tasks.id))
+      .limit(f.limit)
+      .offset(f.offset)
+      .all();
+  }
+
+  /**
+   * Case-insensitive substring search over stored message payloads. `%`, `_` and `\` in the query
+   * are matched literally. Returns the matching messages, newest first.
+   */
+  searchMessages(f: {
+    query: string;
+    projectId?: string | undefined;
+    taskId?: string | undefined;
+    limit: number;
+  }) {
+    const pattern = `%${f.query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const conds = [
+      sql`${messages.payloadJson} LIKE ${pattern} ESCAPE '\\'`,
+      f.taskId ? eq(messages.taskId, f.taskId) : undefined,
+      f.projectId ? eq(workflows.projectId, f.projectId) : undefined,
+    ].filter((c) => c !== undefined);
+    return this.db
+      .select({
+        taskId: messages.taskId,
+        sequence: messages.sequence,
+        type: messages.messageType,
+        payloadJson: messages.payloadJson,
+        createdAt: messages.createdAt,
+      })
+      .from(messages)
+      .innerJoin(tasks, eq(tasks.id, messages.taskId))
+      .innerJoin(workflows, eq(workflows.id, tasks.workflowId))
+      .where(and(...conds))
+      .orderBy(desc(messages.createdAt), desc(messages.sequence))
+      .limit(f.limit)
+      .all();
+  }
+
   getTaskAttempt(taskId: string): number | undefined {
     return this.db.select({ a: tasks.attempt }).from(tasks).where(eq(tasks.id, taskId)).get()?.a;
   }

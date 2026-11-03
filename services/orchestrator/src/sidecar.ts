@@ -45,6 +45,14 @@ const fail = (id: number, message: string) => ({
 });
 
 /** Transport-independent request handler (unit-testable). */
+/** ~120 characters of stored payload around the first (case-insensitive) match. */
+function snippetAround(payloadJson: string, query: string): string {
+  const at = payloadJson.toLowerCase().indexOf(query.toLowerCase());
+  const start = Math.max(0, (at < 0 ? 0 : at) - 50);
+  const end = Math.min(payloadJson.length, start + 120);
+  return `${start > 0 ? "…" : ""}${payloadJson.slice(start, end)}${end < payloadJson.length ? "…" : ""}`;
+}
+
 export class SidecarService {
   readonly db: StudioDb;
   private readonly repo: Repo;
@@ -296,6 +304,18 @@ export class SidecarService {
           const workflowState = this.repo.getWorkflowState(req.params.workflowId);
           if (!workflowState) return fail(req.id, `Unknown workflow: ${req.params.workflowId}`);
           return ok(req.id, { workflowState, tasks: this.repo.listTasks(req.params.workflowId) });
+        }
+        case "tasks.history":
+          return ok(req.id, { tasks: this.repo.listTaskHistory(req.params) });
+        case "logs.search": {
+          const hits = this.repo.searchMessages(req.params).map((h) => ({
+            taskId: h.taskId,
+            sequence: h.sequence,
+            type: h.type,
+            createdAt: h.createdAt,
+            snippet: snippetAround(h.payloadJson, req.params.query),
+          }));
+          return ok(req.id, { hits });
         }
         case "workflows.startPeerReview": {
           const p = req.params;

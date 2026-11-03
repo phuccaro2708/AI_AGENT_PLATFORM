@@ -105,6 +105,10 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
       return { workflowId: String(p.workflowId), state: "running" }; // preview has no real workflow engine
     case "tasks.list":
       return { workflowState: "pending", tasks: [] };
+    case "tasks.history":
+      return { tasks: [] };
+    case "logs.search":
+      return { hits: [] };
     case "roles.list":
       return { roles: [] };
     case "context.list":

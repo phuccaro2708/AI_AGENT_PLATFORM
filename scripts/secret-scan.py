@@ -25,6 +25,8 @@ ACCEPTED_HISTORY = {
 # report holds a generated task id (ULID) inside a JSON string, flagged only by entropy.
 ACCEPTED_ANYWHERE = {
     ("docs/reports/phase0-windows/spike-report.json", "Base64 High Entropy String", 28),
+    # Line 42 asserts the namespaced branch name for fake ids (agent-studio/abc12345/def67890).
+    ("packages/git-worktrees/src/git-worktrees.test.ts", "Base64 High Entropy String", 42),
 }
 
 EXCLUDE =r"(pnpm-lock\.yaml|Cargo\.lock|\.png|\.ico|\.icns)$"

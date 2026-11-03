@@ -79,3 +79,9 @@ Repo git tạm ngoài repo dự án, prompt rất ngắn. Chưa lưu fixture; ch
 - Claude: `read-only` → `--tools Read,Grep,Glob` (đã kiểm chứng `--tools Read` chặn ghi). `workspace-write` → `--tools Read,Grep,Glob,Edit,Write --permission-mode acceptEdits`: **tên tool `Edit`/`Write` và hành vi `acceptEdits` dưới `-p` chưa quan sát**, cần probe trước khi dùng cho worker ghi.
 - Codex: ánh xạ thẳng sang `-s`; `read-only` chỉ mang tính tư vấn trên máy này (spike S2). Vì vậy bước 5 phải kiểm tra sau chạy (git status/hash) thay vì tin vào cờ.
 - `callId`: Claude lấy từ `tool_use.id` ↔ `tool_result.tool_use_id` (đã quan sát ở spike S3); Codex dùng `item.id`. Thiếu id → `classifyOutcome` quay về đếm.
+
+## Evidence: packages/git-worktrees (Phase 2, bước 4)
+
+- QUAN SÁT (git 2.55.0, Windows, test tự động trên repo tạm): `worktree add -b`, `list --porcelain` (có `prunable`), `remove` (từ chối khi dirty nếu không `--force`), `prune`, `merge-tree --write-tree --name-only` (exit 1 + tên tệp xung đột, không đụng cây làm việc).
+- Thiết kế: id ngoài được làm sạch (`[A-Za-z0-9_-]`, đuôi 12 ký tự) nên không thoát khỏi `baseDir`; đường dẫn dài hơn `maxPathLength` (mặc định 200) bị từ chối trước khi gọi git; `remove` thử lại 3 lần vì Windows có thể còn giữ handle (retry này chưa được kiểm chứng với handle bị giữ thật).
+- Chưa làm: gắn với bảng `worktrees` và dọn `orphaned` khi khởi động (bước 5), không tự gộp vào nhánh chính. Worktree KHÔNG phải sandbox.

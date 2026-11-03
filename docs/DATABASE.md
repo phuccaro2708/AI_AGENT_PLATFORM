@@ -7,10 +7,12 @@ Pragmas on open: `journal_mode=WAL`, `foreign_keys=ON`, `busy_timeout=5000`. WAL
 Tables: `projects`, `workflows`, `tasks`, `task_dependencies`, `messages`, `events`, `settings`.
 
 - CHECK constraints mirror `WorkflowState` / `TaskState` in contracts.
-- `task_dependencies` forbids self-dependency (cycle detection beyond that is Phase 2).
+- `task_dependencies` forbids self-dependency (cycles — including indirect — and cross-workflow edges are rejected by `Repo.addDependency`).
 - `messages` is `UNIQUE(task_id, sequence)`.
 - `Repo.setTaskState` checks the transition against `TASK_TRANSITIONS` (contracts), updates `tasks` with compare-and-set on the previous state, and appends an `events` row (`{from, state}`) in one transaction. Illegal moves throw `IllegalTransitionError`.
 - Phase 1 (migration `0001`): `sessions` (task/agent ↔ provider native session id), `execution_runs` (pid, exit code, signal, timestamps; `Repo.startRun/finishRun`), `artifacts` (path + 64-char sha256), `approvals` (`pending|approved|denied|expired`).
 - Timestamps are ISO-8601 text.
 
 Deferred (needed before multi-agent concurrency): `agents`, `worktrees`, outbox/delivery ledger.
+
+Scheduling (Phase 2): a task is _ready_ when `queued` and every dependency is `completed`; order is `priority DESC, created_at, id`. Concurrency counts `running` tasks only. `lease_expires_at` is set while `running` and cleared on any other state; a lapsed lease means `needs_reconciliation`, never an automatic re-queue.

@@ -272,3 +272,79 @@ describe("outbox / inbox (Phase 2 router storage)", () => {
     expect(repo.claimDueDeliveries(T0, 10)).toHaveLength(1);
   });
 });
+
+describe("task DAG & leases (Phase 2 scheduler storage)", () => {
+  const T0 = "2026-01-01T00:00:00.000Z";
+  const plus = (ms: number) => new Date(Date.parse(T0) + ms).toISOString();
+  let seq = 0;
+  const wfWith = (n: number, priorities: number[] = []) => {
+    const w = repo.createWorkflow(repo.createProject("p", `/p${seq++}`));
+    const ids = Array.from({ length: n }, (_, i) =>
+      repo.createTask(w, "stub", { priority: priorities[i] ?? 0 }),
+    );
+    return { w, ids };
+  };
+
+  it("rejects self, cross-workflow and cyclic dependencies", () => {
+    const { ids } = wfWith(3);
+    const [a, b, c] = ids as [string, string, string];
+    repo.addDependency(b, a); // b depends on a
+    repo.addDependency(c, b);
+    expect(() => repo.addDependency(a, c)).toThrow(/cycle/i); // a→c→b→a
+    expect(() => repo.addDependency(a, a)).toThrow();
+    const other = wfWith(1).ids[0]!;
+    expect(() => repo.addDependency(a, other)).toThrow(/workflow/i);
+    repo.addDependency(b, a); // idempotent
+  });
+
+  it("claims only tasks whose dependencies are completed, highest priority first", () => {
+    const { ids } = wfWith(3, [0, 5, 9]);
+    const [a, b, c] = ids as [string, string, string];
+    repo.addDependency(c, a); // c (prio 9) waits for a
+    expect(repo.claimNextReady({ now: T0, leaseMs: 1000, maxConcurrent: 5 })).toBe(b);
+    expect(repo.claimNextReady({ now: T0, leaseMs: 1000, maxConcurrent: 5 })).toBe(a);
+    expect(repo.claimNextReady({ now: T0, leaseMs: 1000, maxConcurrent: 5 })).toBeUndefined(); // c blocked
+    repo.setTaskState(a, "completed");
+    expect(repo.claimNextReady({ now: T0, leaseMs: 1000, maxConcurrent: 5 })).toBe(c);
+  });
+
+  it("respects maxConcurrent and frees a slot when a task finishes", () => {
+    const { ids } = wfWith(3);
+    const claim = () => repo.claimNextReady({ now: T0, leaseMs: 1000, maxConcurrent: 2 });
+    const first = claim();
+    expect(first).toBeDefined();
+    expect(claim()).toBeDefined();
+    expect(claim()).toBeUndefined();
+    repo.setTaskState(first!, "completed");
+    expect(claim()).toBeDefined();
+    expect(ids).toHaveLength(3);
+  });
+
+  it("listBlockedTasks reports queued tasks behind a failed dependency", () => {
+    const { ids } = wfWith(2);
+    const [a, b] = ids as [string, string];
+    repo.addDependency(b, a);
+    expect(repo.claimNextReady({ now: T0, leaseMs: 1000, maxConcurrent: 5 })).toBe(a);
+    repo.setTaskState(a, "failed");
+    expect(repo.listBlockedTasks()).toEqual([b]);
+    expect(repo.claimNextReady({ now: T0, leaseMs: 1000, maxConcurrent: 5 })).toBeUndefined();
+  });
+
+  it("heartbeat extends a lease; an expired lease becomes needs_reconciliation, never re-queued", () => {
+    const { ids } = wfWith(2);
+    const a = repo.claimNextReady({ now: T0, leaseMs: 1000, maxConcurrent: 5 })!;
+    expect(repo.heartbeat(a, plus(500), 1000)).toBe(true); // lease → +1500
+    expect(repo.expireLeases(plus(1200))).toEqual([]);
+    expect(repo.expireLeases(plus(1600))).toEqual([a]);
+    expect(repo.getTaskState(a)).toBe("needs_reconciliation");
+    expect(repo.heartbeat(a, plus(1700), 1000)).toBe(false);
+    expect(ids).toContain(a);
+  });
+
+  it("clears the lease when a task leaves running", () => {
+    wfWith(1);
+    const a = repo.claimNextReady({ now: T0, leaseMs: 1000, maxConcurrent: 5 })!;
+    repo.setTaskState(a, "completed");
+    expect(repo.expireLeases(plus(99_999))).toEqual([]);
+  });
+});

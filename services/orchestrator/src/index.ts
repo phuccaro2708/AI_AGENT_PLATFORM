@@ -6,3 +6,5 @@ export { classifyOutcome } from "./outcome.js";
 export type { FinalState, Outcome } from "./outcome.js";
 export { Router, backoffMs } from "./router.js";
 export type { DeliveryHandler, RouterOptions, TickResult } from "./router.js";
+export { Scheduler } from "./scheduler.js";
+export type { SchedulerOptions, SchedulerTick } from "./scheduler.js";

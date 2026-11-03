@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import {
   AgentMessage,
   IllegalTransitionError,
@@ -15,6 +15,7 @@ import {
   messages,
   outbox,
   projects,
+  taskDependencies,
   tasks,
   workflows,
 } from "./schema.js";
@@ -37,7 +38,7 @@ export class Repo {
     return id;
   }
 
-  createTask(workflowId: string, agentId?: string): string {
+  createTask(workflowId: string, agentId?: string, opts: { priority?: number } = {}): string {
     const id = newId("task");
     const ts = now();
     this.db
@@ -47,11 +48,122 @@ export class Repo {
         workflowId,
         agentId: agentId ?? null,
         state: "queued",
+        priority: opts.priority ?? 0,
         createdAt: ts,
         updatedAt: ts,
       })
       .run();
     return id;
+  }
+
+  /**
+   * `taskId` waits for `dependencyId`. Both must be in the same workflow and the edge must not
+   * close a cycle (checked inside the transaction). Re-adding an existing edge is a no-op.
+   */
+  addDependency(taskId: string, dependencyId: string): void {
+    if (taskId === dependencyId) throw new Error("a task cannot depend on itself");
+    this.db.transaction((tx) => {
+      const pair = tx
+        .select({ id: tasks.id, wf: tasks.workflowId })
+        .from(tasks)
+        .where(inArray(tasks.id, [taskId, dependencyId]))
+        .all();
+      if (pair.length !== 2) throw new Error("unknown task in dependency");
+      if (pair[0]!.wf !== pair[1]!.wf) throw new Error("dependency must be in the same workflow");
+      // cycle iff taskId is reachable from dependencyId by following "depends on" edges
+      const seen = new Set<string>();
+      const stack = [dependencyId];
+      while (stack.length) {
+        const cur = stack.pop()!;
+        if (cur === taskId) throw new Error(`dependency cycle: ${taskId} <-> ${dependencyId}`);
+        if (seen.has(cur)) continue;
+        seen.add(cur);
+        for (const e of tx
+          .select({ d: taskDependencies.dependencyId })
+          .from(taskDependencies)
+          .where(eq(taskDependencies.taskId, cur))
+          .all())
+          stack.push(e.d);
+      }
+      tx.insert(taskDependencies).values({ taskId, dependencyId }).onConflictDoNothing().run();
+    });
+  }
+
+  /**
+   * Atomically starts the best ready task: `queued`, every dependency `completed`, highest priority
+   * then oldest. Returns undefined when nothing is ready or `maxConcurrent` tasks are already running.
+   */
+  claimNextReady(o: { now: string; leaseMs: number; maxConcurrent: number }): string | undefined {
+    return this.db.transaction((tx) => {
+      const running = tx
+        .select({ n: sql<number>`count(*)` })
+        .from(tasks)
+        .where(eq(tasks.state, "running"))
+        .get()!.n;
+      if (running >= o.maxConcurrent) return undefined;
+      const next = tx
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.state, "queued"),
+            sql`NOT EXISTS (SELECT 1 FROM ${taskDependencies} d JOIN ${tasks} dep ON dep.id = d.dependency_id WHERE d.task_id = ${tasks.id} AND dep.state != 'completed')`,
+          ),
+        )
+        .orderBy(desc(tasks.priority), asc(tasks.createdAt), asc(tasks.id))
+        .limit(1)
+        .get();
+      if (!next) return undefined;
+      this.setTaskState(next.id, "running", {
+        leaseExpiresAt: new Date(Date.parse(o.now) + o.leaseMs).toISOString(),
+      });
+      return next.id;
+    });
+  }
+
+  /** Queued tasks that can never start because a dependency ended failed/cancelled/needs_reconciliation. */
+  listBlockedTasks(): string[] {
+    return this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.state, "queued"),
+          sql`EXISTS (SELECT 1 FROM ${taskDependencies} d JOIN ${tasks} dep ON dep.id = d.dependency_id WHERE d.task_id = ${tasks.id} AND dep.state IN ('failed','cancelled','needs_reconciliation'))`,
+        ),
+      )
+      .orderBy(asc(tasks.createdAt), asc(tasks.id))
+      .all()
+      .map((r) => r.id);
+  }
+
+  /** Extends the lease of a `running` task; false when the task is no longer running. */
+  heartbeat(taskId: string, nowIso: string, leaseMs: number): boolean {
+    return (
+      this.db
+        .update(tasks)
+        .set({ leaseExpiresAt: new Date(Date.parse(nowIso) + leaseMs).toISOString() })
+        .where(and(eq(tasks.id, taskId), eq(tasks.state, "running")))
+        .run().changes === 1
+    );
+  }
+
+  /**
+   * `running` tasks whose lease has lapsed lost their worker: side effects unknown, so they become
+   * `needs_reconciliation` (never re-queued automatically). Returns the affected ids.
+   */
+  expireLeases(nowIso: string): string[] {
+    const lapsed = this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.state, "running"), lte(tasks.leaseExpiresAt, nowIso)))
+      .all();
+    for (const { id } of lapsed) {
+      this.setTaskState(id, "needs_reconciliation", {
+        reason: "lease expired: worker stopped heartbeating",
+      });
+    }
+    return lapsed.map((r) => r.id);
   }
 
   listProjects() {
@@ -85,7 +197,7 @@ export class Repo {
   setTaskState(
     taskId: string,
     state: TaskState,
-    opts: { reason?: string; incrementAttempt?: boolean } = {},
+    opts: { reason?: string; incrementAttempt?: boolean; leaseExpiresAt?: string } = {},
   ): void {
     this.db.transaction((tx) => {
       const ts = now();
@@ -98,6 +210,8 @@ export class Repo {
         .set({
           state,
           updatedAt: ts,
+          // a lease only exists while running; leaving `running` always clears it
+          leaseExpiresAt: state === "running" ? (opts.leaseExpiresAt ?? null) : null,
           ...(opts.incrementAttempt ? { attempt: sql`${tasks.attempt} + 1` } : {}),
         })
         .where(and(eq(tasks.id, taskId), eq(tasks.state, from)))

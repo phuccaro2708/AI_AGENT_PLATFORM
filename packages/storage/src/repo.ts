@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import {
   AgentMessage,
   IllegalTransitionError,
@@ -7,7 +7,17 @@ import {
 } from "@agent-studio/contracts";
 import { newId } from "@agent-studio/shared-utils";
 import type { StudioDb } from "./db.js";
-import { agents, events, executionRuns, messages, projects, tasks, workflows } from "./schema.js";
+import {
+  agents,
+  events,
+  executionRuns,
+  inbox,
+  messages,
+  outbox,
+  projects,
+  tasks,
+  workflows,
+} from "./schema.js";
 
 const now = () => new Date().toISOString();
 
@@ -212,6 +222,104 @@ export class Repo {
         createdAt: msg.createdAt,
       })
       .run();
+  }
+
+  /**
+   * Appends a message AND its pending delivery to `toAgent` in ONE transaction: a committed message
+   * always has a delivery row, and a failed insert leaves neither.
+   */
+  appendMessageWithOutbox(input: Omit<AgentMessage, "sequence">, sequence: number): void {
+    const msg = AgentMessage.parse({ ...input, sequence });
+    this.db.transaction((tx) => {
+      tx.insert(messages)
+        .values({
+          id: msg.id,
+          taskId: msg.taskId,
+          sequence: msg.sequence,
+          messageType: msg.type,
+          payloadJson: JSON.stringify(msg),
+          createdAt: msg.createdAt,
+        })
+        .run();
+      tx.insert(outbox)
+        .values({
+          id: newId("obx"),
+          messageId: msg.id,
+          recipient: msg.toAgent,
+          nextAttemptAt: msg.createdAt,
+          createdAt: msg.createdAt,
+        })
+        .run();
+    });
+  }
+
+  /** Pending deliveries whose retry time has come, oldest first. Does not lock: one router per DB. */
+  claimDueDeliveries(nowIso: string, limit: number) {
+    return this.db
+      .select()
+      .from(outbox)
+      .where(and(eq(outbox.state, "pending"), lte(outbox.nextAttemptAt, nowIso)))
+      .orderBy(asc(outbox.nextAttemptAt), asc(outbox.createdAt))
+      .limit(limit)
+      .all();
+  }
+
+  markDelivered(deliveryId: string, at: string): void {
+    this.db
+      .update(outbox)
+      .set({ state: "delivered", deliveredAt: at, lastError: null })
+      .where(eq(outbox.id, deliveryId))
+      .run();
+  }
+
+  /** Counts the failed attempt; returns "dead" (dead-letter) once `maxAttempts` is reached, else "pending". */
+  recordDeliveryFailure(
+    deliveryId: string,
+    error: string,
+    nextAttemptAt: string,
+    maxAttempts: number,
+  ): "pending" | "dead" {
+    return this.db.transaction((tx) => {
+      const row = tx.select().from(outbox).where(eq(outbox.id, deliveryId)).get();
+      if (!row) throw new Error(`unknown delivery ${deliveryId}`);
+      const attempts = row.attempts + 1;
+      const state = attempts >= maxAttempts ? "dead" : "pending";
+      tx.update(outbox)
+        .set({ attempts, state, lastError: error, nextAttemptAt })
+        .where(eq(outbox.id, deliveryId))
+        .run();
+      return state;
+    });
+  }
+
+  listDeadLetters() {
+    return this.db.select().from(outbox).where(eq(outbox.state, "dead")).all();
+  }
+
+  hasInbound(recipient: string, messageId: string): boolean {
+    return (
+      this.db
+        .select()
+        .from(inbox)
+        .where(and(eq(inbox.recipient, recipient), eq(inbox.messageId, messageId)))
+        .get() !== undefined
+    );
+  }
+
+  getMessage(messageId: string): AgentMessage | undefined {
+    const r = this.db.select().from(messages).where(eq(messages.id, messageId)).get();
+    return r ? AgentMessage.parse(JSON.parse(r.payloadJson)) : undefined;
+  }
+
+  /** Records receipt; returns false when this (recipient, message) was already accepted (duplicate). */
+  acceptInbound(recipient: string, messageId: string, at: string): boolean {
+    return (
+      this.db
+        .insert(inbox)
+        .values({ recipient, messageId, receivedAt: at })
+        .onConflictDoNothing()
+        .run().changes === 1
+    );
   }
 
   listMessages(taskId: string): AgentMessage[] {

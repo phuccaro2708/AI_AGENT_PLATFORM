@@ -200,3 +200,42 @@ export const agents = sqliteTable(
     ),
   ],
 );
+
+/**
+ * Delivery ledger: one row per (message, recipient). Written in the SAME transaction as the message,
+ * so a committed message always has a pending delivery. Payload lives only in `messages`.
+ */
+export const outbox = sqliteTable(
+  "outbox",
+  {
+    id: text("id").primaryKey(),
+    messageId: text("message_id")
+      .notNull()
+      .references(() => messages.id),
+    recipient: text("recipient").notNull(),
+    state: text("state").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: text("next_attempt_at").notNull(),
+    lastError: text("last_error"),
+    createdAt: text("created_at").notNull(),
+    deliveredAt: text("delivered_at"),
+  },
+  (t) => [
+    unique("outbox_message_recipient_unique").on(t.messageId, t.recipient),
+    index("idx_outbox_due").on(t.state, t.nextAttemptAt),
+    check("outbox_state_check", sql`${t.state} IN ('pending','delivered','dead')`),
+  ],
+);
+
+/** Receiver-side dedupe: a (recipient, message) pair is processed at most once. */
+export const inbox = sqliteTable(
+  "inbox",
+  {
+    recipient: text("recipient").notNull(),
+    messageId: text("message_id")
+      .notNull()
+      .references(() => messages.id),
+    receivedAt: text("received_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.recipient, t.messageId] })],
+);

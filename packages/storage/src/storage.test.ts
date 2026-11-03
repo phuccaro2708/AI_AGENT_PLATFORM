@@ -207,3 +207,68 @@ describe("Repo", () => {
     ).toThrow();
   });
 });
+
+describe("outbox / inbox (Phase 2 router storage)", () => {
+  const T0 = "2026-01-01T00:00:00.000Z";
+  const at0 = (taskId: string, id: string) => ({ ...msg(taskId, id), createdAt: T0 });
+
+  it("writes message and its delivery row in one transaction", () => {
+    const { t } = seed();
+    repo.appendMessageWithOutbox(at0(t, "m1"), 0);
+    expect(repo.listMessages(t)).toHaveLength(1);
+    const due = repo.claimDueDeliveries(T0, 10);
+    expect(due).toHaveLength(1);
+    expect(due[0]).toMatchObject({ messageId: "m1", recipient: "orchestrator", attempts: 0 });
+  });
+
+  it("rolls back the message when the outbox insert fails (atomicity)", () => {
+    const { t } = seed();
+    repo.appendMessageWithOutbox(at0(t, "m1"), 0);
+    // duplicate id → message insert fails → nothing else may remain
+    expect(() => repo.appendMessageWithOutbox(at0(t, "m1"), 1)).toThrow();
+    expect(repo.listMessages(t)).toHaveLength(1);
+    expect(repo.claimDueDeliveries(T0, 10)).toHaveLength(1);
+  });
+
+  it("markDelivered removes the row from the due set", () => {
+    const { t } = seed();
+    repo.appendMessageWithOutbox(at0(t, "m1"), 0);
+    const [d] = repo.claimDueDeliveries(T0, 10);
+    repo.markDelivered(d!.id, T0);
+    expect(repo.claimDueDeliveries(T0, 10)).toHaveLength(0);
+  });
+
+  it("recordDeliveryFailure reschedules, then dead-letters at maxAttempts", () => {
+    const { t } = seed();
+    repo.appendMessageWithOutbox(at0(t, "m1"), 0);
+    const [d] = repo.claimDueDeliveries(T0, 10);
+    expect(repo.recordDeliveryFailure(d!.id, "boom", "2026-01-01T00:01:00.000Z", 2)).toBe(
+      "pending",
+    );
+    expect(repo.claimDueDeliveries(T0, 10)).toHaveLength(0); // not due yet
+    expect(repo.claimDueDeliveries("2026-01-01T00:01:00.000Z", 10)).toHaveLength(1);
+    expect(repo.recordDeliveryFailure(d!.id, "boom2", "2026-01-01T00:02:00.000Z", 2)).toBe("dead");
+    expect(repo.claimDueDeliveries("2030-01-01T00:00:00.000Z", 10)).toHaveLength(0);
+    expect(repo.listDeadLetters()).toMatchObject([
+      { messageId: "m1", attempts: 2, lastError: "boom2" },
+    ]);
+  });
+
+  it("acceptInbound dedupes per (recipient, message)", () => {
+    const { t } = seed();
+    repo.appendMessageWithOutbox(at0(t, "m1"), 0);
+    expect(repo.acceptInbound("orchestrator", "m1", T0)).toBe(true);
+    expect(repo.acceptInbound("orchestrator", "m1", T0)).toBe(false);
+    expect(repo.acceptInbound("claude", "m1", T0)).toBe(true);
+  });
+
+  it("deliveries survive a reopen of the database (no lost committed message)", () => {
+    const { t } = seed();
+    repo.appendMessageWithOutbox(at0(t, "m1"), 0);
+    db.$client.close();
+    db = openDatabase(join(dir, "test.db"));
+    runMigrations(db);
+    repo = new Repo(db);
+    expect(repo.claimDueDeliveries(T0, 10)).toHaveLength(1);
+  });
+});

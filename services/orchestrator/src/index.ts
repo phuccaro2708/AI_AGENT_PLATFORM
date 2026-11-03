@@ -4,3 +4,5 @@ export { SidecarService } from "./sidecar.js";
 export type { SidecarOptions } from "./sidecar.js";
 export { classifyOutcome } from "./outcome.js";
 export type { FinalState, Outcome } from "./outcome.js";
+export { Router, backoffMs } from "./router.js";
+export type { DeliveryHandler, RouterOptions, TickResult } from "./router.js";

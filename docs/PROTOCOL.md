@@ -18,9 +18,9 @@ Ordering is guaranteed only within one task stream (`UNIQUE(task_id, sequence)`)
 
 `task.accepted` → every adapter event as `task.progress` → final `task.completed` (on `completed`) or `task.failed` (on `error`/exception).
 
-## Delivery semantics (target, NOT implemented yet)
+## Delivery semantics (partly implemented, Phase 2 slice 1)
 
-At-least-once, idempotent handlers, outbox/inbox, retry with backoff+jitter, dead-letter queue — Phase 2.
+At-least-once with idempotent handlers. `appendMessageWithOutbox` writes the message and a pending `outbox` row (one per recipient) in one transaction. `Router.deliverDue` runs due rows, records receipt in `inbox` (dedupe by message id), retries with exponential backoff + full jitter (1 s base, 60 s cap), dead-letters after `maxAttempts`. Not yet: dedupe by `correlationId`, background tick loop, wiring into the orchestrator.
 
 ## Sidecar IPC (D1)
 

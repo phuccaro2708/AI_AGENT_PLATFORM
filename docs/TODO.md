@@ -6,7 +6,7 @@
 
 - **Phase 0: PASS (có hạn chế)** — `docs/PHASE0_REPORT.md`.
 - **Phase 1: ĐÓNG (có ba ngoại lệ)** — `docs/PHASE1_REPORT.md`. CI xanh 5/5 job ở run `41551598060`; `pnpm test` 168 test pass; `cargo test` 7/7, clippy sạch. Claude 2.1.314 và Codex 0.165.0 đã chạy task thật và hủy được khi tool đang chạy (cả qua adapter lẫn nút Cancel trong app Tauri release), không để lại tiến trình mồ côi.
-- **Phase 2: chưa bắt đầu.** Thứ tự đã chốt: 2 → 7 → 8 → 9 (10 song song 5–6).
+- **Phase 2: ĐANG LÀM** — lát 1 xong (outbox/inbox + Router lõi), còn lại xem mục Phase 2. Thứ tự đã chốt: 2 → 7 → 8 → 9 (10 song song 5–6).
 - Chưa có PR; nhánh làm việc `claude/loving-lovelace-32lh71`.
 
 ### Ngoại lệ chuyển từ Phase 1
@@ -116,9 +116,9 @@
 
 ## Phase 2 — Multi-Agent
 
-- [ ] Outbox/inbox + delivery ledger + migration
-- [ ] Router: sequence per task, ack, dedupe, retry backoff+jitter, dead-letter, backpressure
-- [ ] Transaction: state change + outbox atomic (test crash giữa chừng)
+- [x] Outbox/inbox + delivery ledger + migration (`0003_outbox_inbox`; test mở lại DB vẫn còn delivery)
+- [~] Router: sequence per task, ack, dedupe, retry backoff+jitter, dead-letter, backpressure — `services/orchestrator/src/router.ts` có test (ack = markDelivered, dedupe theo message id qua inbox, batchSize). CHƯA: dedupe theo `correlationId`, vòng lặp tick nền, nối vào Orchestrator/sidecar
+- [~] Transaction: message + outbox atomic (`appendMessageWithOutbox`, test rollback). CHƯA: đổi state task + outbox cùng transaction; test kill process thật
 - [ ] Task DAG: cycle detection, ready-set, priority, lease/heartbeat
 - [ ] Scheduler giới hạn concurrency (mặc định 2, cấu hình)
 - [ ] `git-worktrees`: create/remove/list, branch naming, dirty check, conflict detect, cleanup khi hủy

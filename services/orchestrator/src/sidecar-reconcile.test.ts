@@ -29,7 +29,10 @@ function seedCrashedTask(id: string) {
   const ts = new Date().toISOString();
   const run = (q: string, ...a: unknown[]) => svc.db.$client.prepare(q).run(...a);
   run("insert or ignore into projects (id,name,root_path,created_at) values ('p','n','r',?)", ts);
-  run("insert or ignore into workflows (id,project_id,state,created_at) values ('w','p','running',?)", ts);
+  run(
+    "insert or ignore into workflows (id,project_id,state,created_at) values ('w','p','running',?)",
+    ts,
+  );
   run(
     "insert into tasks (id,workflow_id,state,created_at,updated_at) values (?,'w','running',?,?)",
     id,

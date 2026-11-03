@@ -161,7 +161,8 @@ export class PeerReviewEngine {
     if (tasks.length === 0) return;
     const steps = tasks.map((_t, i) => this.rebuildStep(workflowId, tasks, i));
     tasks.forEach((t, i) => {
-      if (!this.steps.has(t.id) && !isSettled(t.state as TaskState)) this.steps.set(t.id, steps[i]!);
+      if (!this.steps.has(t.id) && !isSettled(t.state as TaskState))
+        this.steps.set(t.id, steps[i]!);
     });
     const last = tasks.at(-1)!;
     const state = last.state as TaskState;

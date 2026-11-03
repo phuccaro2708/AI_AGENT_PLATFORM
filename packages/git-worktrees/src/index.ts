@@ -115,6 +115,38 @@ export class GitWorktrees {
   }
 
   /**
+   * Checkpoint commit of everything in a worktree (tracked, modified and untracked). No-op when clean.
+   * Identity and signing are pinned so the commit never depends on (or prompts for) user config;
+   * repository hooks still run, and a failing hook surfaces as an error.
+   */
+  async commitAll(path: string, message: string): Promise<{ committed: boolean; sha: string }> {
+    const head = async () => (await this.git(["rev-parse", "HEAD"], path)).stdout.trim();
+    if (!(await this.status(path)).dirty) return { committed: false, sha: await head() };
+    await this.git(["add", "-A"], path);
+    await this.git(
+      [
+        "-c",
+        "user.name=Agent Studio",
+        "-c",
+        "user.email=agent-studio@localhost",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-m",
+        message,
+      ],
+      path,
+    );
+    return { committed: true, sha: await head() };
+  }
+
+  /** `git diff --stat from..to`: a verified summary of what a branch changed. */
+  async diffStat(from: string, to: string): Promise<string> {
+    for (const r of [from, to]) if (r.startsWith("-")) throw new Error(`invalid ref: ${r}`);
+    return (await this.git(["diff", "--stat", `${from}..${to}`])).stdout.trim();
+  }
+
+  /**
    * Would merging `branch` into `into` conflict? Uses an in-memory merge (`merge-tree --write-tree`,
    * git >= 2.38): no working tree or index is touched, although it may write unreferenced objects.
    */

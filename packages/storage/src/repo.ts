@@ -39,6 +39,21 @@ export class Repo {
     return id;
   }
 
+  setWorkflowState(
+    workflowId: string,
+    state: "pending" | "running" | "paused" | "completed" | "failed" | "cancelled",
+  ): void {
+    this.db.update(workflows).set({ state }).where(eq(workflows.id, workflowId)).run();
+  }
+
+  getWorkflowState(workflowId: string): string | undefined {
+    return this.db
+      .select({ s: workflows.state })
+      .from(workflows)
+      .where(eq(workflows.id, workflowId))
+      .get()?.s;
+  }
+
   createTask(workflowId: string, agentId?: string, opts: { priority?: number } = {}): string {
     const id = newId("task");
     const ts = now();

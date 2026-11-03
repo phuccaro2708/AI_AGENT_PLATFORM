@@ -109,6 +109,11 @@ export class TaskRunner {
     return this.d.repo.getTaskState(taskId);
   }
 
+  /** Settles when a task started by this runner finishes; undefined if it is not running here. */
+  whenDone(taskId: string): Promise<void> | undefined {
+    return this.active.get(taskId)?.done;
+  }
+
   /** Resolves once every task started by this runner has finished (including cleanup). */
   async settle(): Promise<void> {
     while (this.active.size > 0) await Promise.all([...this.active.values()].map((a) => a.done));

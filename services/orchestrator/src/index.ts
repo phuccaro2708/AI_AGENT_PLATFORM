@@ -10,3 +10,14 @@ export { Scheduler } from "./scheduler.js";
 export type { SchedulerOptions, SchedulerTick } from "./scheduler.js";
 export { TaskRunner } from "./runner.js";
 export type { TaskRunnerDeps } from "./runner.js";
+export { WorkflowEngine } from "./workflow-engine.js";
+export type {
+  ParallelResult,
+  PeerReviewOutcome,
+  PeerReviewResult,
+  RoleAssignment,
+  StepInfo,
+  WorkflowEngineDeps,
+} from "./workflow-engine.js";
+export { assignRole, buildRolePrompt, parseVerdict } from "./roles.js";
+export type { RoleDef, Verdict } from "./roles.js";

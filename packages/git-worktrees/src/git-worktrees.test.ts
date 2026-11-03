@@ -104,3 +104,23 @@ describe("GitWorktrees", () => {
     await expect(gw.remove({ taskId: "ghost" })).resolves.toBeUndefined();
   });
 });
+
+describe("GitWorktrees.commitAll / diffStat", () => {
+  it("checkpoints tracked, modified and untracked files; no-op when clean", async () => {
+    const w = await gw.create({ taskId: "t1" });
+    expect(await gw.commitAll(w.path, "noop")).toMatchObject({ committed: false });
+    writeFileSync(join(w.path, "a.txt"), "changed\n");
+    writeFileSync(join(w.path, "new.txt"), "n\n");
+    const r = await gw.commitAll(w.path, "checkpoint");
+    expect(r.committed).toBe(true);
+    expect(r.sha).toBe(git(w.path, "rev-parse", "HEAD"));
+    expect((await gw.status(w.path)).dirty).toBe(false);
+    expect(git(w.path, "log", "-1", "--format=%an <%ae>")).toBe(
+      "Agent Studio <agent-studio@localhost>",
+    );
+    const stat = await gw.diffStat(w.baseSha, w.branch);
+    expect(stat).toContain("a.txt");
+    expect(stat).toContain("new.txt");
+    await expect(gw.diffStat("--output=x", w.branch)).rejects.toThrow();
+  });
+});

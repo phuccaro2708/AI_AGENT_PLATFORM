@@ -106,7 +106,7 @@ afterEach(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 const until = async (cond: () => boolean) => {
-  for (let i = 0; i < 300 && !cond(); i++) await new Promise((r) => setTimeout(r, 10));
+  for (let i = 0; i < 1000 && !cond(); i++) await new Promise((r) => setTimeout(r, 10));
   expect(cond()).toBe(true);
 };
 

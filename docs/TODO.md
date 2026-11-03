@@ -6,7 +6,7 @@
 
 - **Phase 0: PASS (có hạn chế)** — `docs/PHASE0_REPORT.md`.
 - **Phase 1: ĐÓNG (có ba ngoại lệ)** — `docs/PHASE1_REPORT.md`. CI xanh 5/5 job ở run `41551598060`; `pnpm test` 168 test pass; `cargo test` 7/7, clippy sạch. Claude 2.1.314 và Codex 0.165.0 đã chạy task thật và hủy được khi tool đang chạy (cả qua adapter lẫn nút Cancel trong app Tauri release), không để lại tiến trình mồ côi.
-- **Phase 2: ĐANG LÀM** — lát 1 (outbox/inbox + Router lõi) và lát 2 (Task DAG + Scheduler), lát 3 (git-worktrees), lát 4 (nối Scheduler + worktree vào Orchestrator qua `TaskRunner`) xong, còn lại xem mục Phase 2. Thứ tự đã chốt: 2 → 7 → 8 → 9 (10 song song 5–6).
+- **Phase 2: ĐANG LÀM** — lát 1 (outbox/inbox + Router lõi) và lát 2 (Task DAG + Scheduler), lát 3 (git-worktrees), lát 4 (nối Scheduler + worktree vào Orchestrator qua `TaskRunner`), lát 5 (WorkflowEngine: vai, Peer Review, Parallel Workers) xong, còn lại xem mục Phase 2. Thứ tự đã chốt: 2 → 7 → 8 → 9 (10 song song 5–6).
 - Chưa có PR; nhánh làm việc `claude/loving-lovelace-32lh71`.
 
 ### Ngoại lệ chuyển từ Phase 1
@@ -122,11 +122,11 @@
 - [x] Task DAG: cycle detection (kể cả gián tiếp), ready-set, priority, lease/heartbeat — `Repo.addDependency/claimNextReady/heartbeat/expireLeases/listBlockedTasks`; lease hết hạn → `needs_reconciliation`, không tự retry
 - [~] Scheduler giới hạn concurrency (mặc định 2, cấu hình) — `services/orchestrator/src/scheduler.ts` (tick: hết hạn lease → lấp slot → báo blocked). Đã nối: `TaskRunner` (submit/pump/cancel) chạy task đã claim + heartbeat. CHƯA: nối vào sidecar/UI (`workflows.start` vẫn dùng `runTask` cũ), tick nền, slot theo agent/worktree
 - [x] `git-worktrees`: create/remove/list, branch naming (`agent/<taskId>`, id được whitelist), dirty check, conflict detect (`merge-tree --write-tree`, không đụng working tree), cleanup (từ chối khi dirty trừ `force`; giữ branch trừ `deleteBranch`) — `packages/git-worktrees`, test với git thật; bảng `worktrees` (`0004`). Đã nối qua `TaskRunner` (tạo khi claim, huỷ+sạch → xoá, huỷ+dirty → giữ). CHƯA: dọn worktree task completed/failed, merge/đưa kết quả về nhánh chính, nối vào sidecar
-- [ ] Workflow engine: Supervisor, Peer Review, Parallel Workers
-- [ ] Message types: task._, review._, approval.request, agent.message
-- [ ] Vai (role) trong workflow: hướng dẫn, quyền, agent cho phép; gán agent vào vai theo cấu hình lượt chạy
+- [~] Workflow engine: Peer Review (implement → checkpoint commit → review trên nhánh của implementer, verdict `VERDICT:` agent-reported) và Parallel Workers (worktree riêng + phát hiện conflict từng cặp) — `services/orchestrator/src/workflow-engine.ts`, test bằng adapter giả có ghi file. CHƯA: Supervisor (cần agent phân rã kế hoạch), nối sidecar/UI, gate e2e bằng CLI thật (adapter hiện chỉ read-only, cần ghi + approval ở Phase 4)
+- [~] Message types: `review.request`/`review.result` đã ghi vào luồng task khi handoff (append thường, chưa qua outbox). CHƯA: approval.request, agent.message
+- [~] Vai (role): `RoleDef` (hướng dẫn, `access` khai báo, agent cho phép), gán theo từng lượt chạy, từ chối gán sai (`roles.ts`). CHƯA: `access` chưa được ép theo task — adapter cố định sandbox lúc tạo (hiện cả hai read-only); ép quyền thật cần Phase 4
 - [ ] Bảng ngữ cảnh chung tối thiểu: mục tiêu/kế hoạch/quyết định/artifact (hash), nguồn từng mục, lọc theo vai (test: agent chỉ nhận phần được thấy)
-- [ ] Workflow mẫu Claude implement → Codex review (e2e thật)
+- [ ] Workflow mẫu Claude implement → Codex review (e2e thật) — engine sẵn sàng và đã kiểm bằng adapter giả; e2e thật bị chặn bởi: adapter chưa có chế độ ghi + approval
 - [ ] Artifact registry (hash) + Diff Viewer
 - [ ] Approval Center (`approvals.resolve`), expiry
 - [ ] Message Timeline + Task Board UI

@@ -61,3 +61,10 @@ Ba prompt rất nhỏ, `-s read-only`, `--ephemeral` (2 lần đầu), thư mụ
 - Mỗi CLI giữ phiên riêng (Claude `--resume <session_id>` đã kiểm chứng; Codex resume chưa dùng). Không có bộ nhớ dùng chung giữa Claude và Codex: "ngữ cảnh chung" chỉ là văn bản do Agent Studio đưa vào prompt của từng lần chạy.
 - Chi phí token tăng theo kích thước bảng ngữ cảnh chung và số agent; chưa đo. Cần giới hạn cỡ và đo trước khi chốt mặc định.
 - Việc agent có tôn trọng đúng phần ngữ cảnh/vai được giao (không tự đọc ngoài phạm vi) chưa kiểm chứng; quyền thực tế vẫn do chế độ chỉ đọc/ghi của CLI và worktree quyết định, và worktree không phải sandbox bảo mật.
+
+## Workflow engine (Phase 2) — chưa kiểm chứng
+
+- Reviewer kết thúc bằng dòng `VERDICT: APPROVE|CHANGES_REQUESTED`: agent thật có tuân thủ prompt hay không chưa được thử; thiếu/sai định dạng → `verdict_unknown`, workflow `paused` chờ người.
+- Commit checkpoint chạy hook của repo (không bỏ qua hook); hook lỗi → bước đó lỗi.
+- `git merge-tree --write-tree` cần git ≥ 2.38; chưa kiểm trên CI Linux/macOS.
+- Role `access` chỉ là khai báo; chưa có cơ chế ép theo task.

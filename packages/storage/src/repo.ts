@@ -380,6 +380,16 @@ export class Repo {
       .all();
   }
 
+  /** Undelivered (pending) rows owed to one destination; the router's backpressure signal. */
+  countPendingOutbox(toAgent: string): number {
+    const row = this.db
+      .select({ n: sql<number>`count(*)` })
+      .from(outbox)
+      .where(and(eq(outbox.toAgent, toAgent), eq(outbox.status, "pending")))
+      .get();
+    return row?.n ?? 0;
+  }
+
   getOutbox(messageId: string) {
     return this.db.select().from(outbox).where(eq(outbox.messageId, messageId)).get();
   }
@@ -422,6 +432,15 @@ export class Repo {
       .onConflictDoNothing()
       .run();
     return res.changes === 1;
+  }
+
+  isInboxAcked(messageId: string, consumer: string): boolean {
+    const row = this.db
+      .select({ ackedAt: inbox.ackedAt })
+      .from(inbox)
+      .where(and(eq(inbox.messageId, messageId), eq(inbox.consumer, consumer)))
+      .get();
+    return row?.ackedAt != null;
   }
 
   /** True when this call recorded the ack (false if unknown or already acked). */

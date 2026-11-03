@@ -18,9 +18,13 @@ Ordering is guaranteed only within one task stream (`UNIQUE(task_id, sequence)`)
 
 `task.accepted` → every adapter event as `task.progress` → final `task.completed` (on `completed`) or `task.failed` (on `error`/exception).
 
-## Delivery semantics (target, NOT implemented yet)
+## Delivery semantics (`MessageRouter`, services/orchestrator/src/router.ts)
 
-At-least-once, idempotent handlers, outbox/inbox, retry with backoff+jitter, dead-letter queue — Phase 2.
+- `send` writes the message (DB-derived `sequence`) and its outbox row in one transaction; a duplicate `id` is a no-op. Per-destination backpressure (`maxPendingPerConsumer`) throws `BackpressureError`.
+- `tick` delivers due outbox rows: `inbox` row (message, consumer) → handler → ack + mark delivered in one transaction. At-least-once: a crash after the handler but before the ack repeats the handler, so handlers must be idempotent on `message.id`. An acked message is never handled again.
+- A failing handler or missing consumer is retried with capped exponential backoff and equal jitter; after `maxAttempts` the row becomes `dead_letter`.
+- Retry covers message **delivery** only. It never re-runs a task (CLAUDE.md #6).
+- Not done yet: dedupe by `correlationId`, wiring the router into `Orchestrator`/scheduler (step 3). This is an internal bus; it makes no A2A claim.
 
 ## Sidecar IPC (D1)
 

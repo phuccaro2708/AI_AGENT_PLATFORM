@@ -107,6 +107,16 @@ describe("outbox", () => {
     });
   });
 
+  it("counts only pending rows per destination", () => {
+    const t = repo.createTask(wf);
+    enqueue(t, "m1");
+    enqueue(t, "m2");
+    expect(repo.countPendingOutbox("codex")).toBe(2);
+    expect(repo.countPendingOutbox("claude")).toBe(0);
+    repo.markOutboxDelivered(repo.getOutbox("m1")!.id);
+    expect(repo.countPendingOutbox("codex")).toBe(1);
+  });
+
   it("markOutboxDelivered removes the row from the due list", () => {
     const t = repo.createTask(wf);
     enqueue(t, "m1");

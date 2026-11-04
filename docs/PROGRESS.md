@@ -272,3 +272,10 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Router: merge `399ce07` (đã push). Resource monitor: merge `021da4d` (chưa push). Xung đột chỉ ở `docs/PROGRESS.md` và `docs/TODO.md` (cả hai bên cùng thêm vào cuối file), giữ cả hai bên; mã không xung đột. Resource monitor thêm `SchedulerAdmission` vào `scheduler.ts` (chỉ giảm giới hạn, không vượt `concurrency`).
 - Đính chính: mục tổng kết trước ghi nhánh `claude/fervent-thompson-u83u2i` "không cập nhật PROGRESS/TODO/ASSUMPTIONS"; sai, nhánh có sửa cả ba (tôi đã cắt đầu ra `git diff --stat`). Nhánh chưa có `603d6fb` là đúng nhưng nay đã nằm trong nhánh chính.
 - Kiểm trên Windows sau `021da4d`: `pnpm install --frozen-lockfile`, `pnpm lint`, `prettier --check .`, `typecheck`, `build` thoát 0; `pnpm test`: 53 file, 517 qua, 2 bỏ qua, 0 đỏ. Chưa chạy: `cargo clippy`/`cargo test` (không đổi `src-tauri`), CI GitHub cho `021da4d`, resource monitor trên Windows với số đo thật.
+
+## 2026-11-05 (Windows): nút bật/tắt `agy` trong chế độ Auto
+
+- Quyết định của người dùng: không loại `agy` khỏi tự chọn, thêm nút để người dùng tự bật/tắt (mặc định bật).
+- `91317e4` (đã push): `workflows.start` nhận `excludeAgents` (chỉ khi bỏ trống `agentId`); sidecar ghép với `stub`. UI: lựa chọn "Auto (router picks)" trong ô Agent (trước đó UI luôn gửi tên agent nên router không bao giờ chạy từ UI) và ô tick trong Settings > Agents, lưu ở `localStorage`. Không thêm method IPC nên `lib.rs` không đổi.
+- Kiểm: `pnpm lint`, `prettier --check .`, `typecheck`, `build` thoát 0; `pnpm test` 54 file, 520 qua, 2 bỏ qua. Chưa chạy: app Tauri thật, `cargo` (không đổi Rust).
+- CI đọc qua GraphQL: `341190d` TypeScript ubuntu/windows, Tauri shell, spike ADR-001 xanh, Security đang chạy; `91317e4` mới có TypeScript ubuntu xanh, còn lại đang chạy.

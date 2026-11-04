@@ -24,6 +24,7 @@
     "@agent-studio/contracts": "workspace:*",
     "@agent-studio/git-worktrees": "workspace:*",
     "@agent-studio/process-manager": "workspace:*",
+    "@agent-studio/resource-monitor": "workspace:*",
     "@agent-studio/shared-utils": "workspace:*",
     "@agent-studio/storage": "workspace:*",
     "zod": "4.6.7"

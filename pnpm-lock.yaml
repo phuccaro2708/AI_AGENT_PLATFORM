@@ -191,6 +191,9 @@ importers:
       '@agent-studio/process-manager':
         specifier: workspace:*
         version: link:../../packages/process-manager
+      '@agent-studio/resource-monitor':
+        specifier: workspace:*
+        version: link:../../packages/resource-monitor
       '@agent-studio/shared-utils':
         specifier: workspace:*
         version: link:../../packages/shared-utils

@@ -285,3 +285,10 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Chạy `/know`, thấy docs cũ so với git: đầu nhánh là `0183a85` (đã push), router đã nối vào `workflows.start`, `policy-engine` đã tồn tại, số test hiện tại 520 qua. Đã sửa HANDOFF (vị trí, dòng Phase 3, CI, "Việc tiếp theo", mục kiểm) và ROADMAP (hàng Phase 3, Phase 4–6, ngày tiêu đề). Không đổi thứ tự phase, không đóng phase.
 - CI đọc qua GraphQL: `603d6fb` xanh đủ 5/5 (Security xanh); `341190d` còn Security chạy; `91317e4` và `0183a85` còn chạy. Chưa có kết luận.
 - Không chạy lại lint/test/build ở lượt này (chỉ đổi docs).
+
+## 2026-11-05 (Windows): nối resource monitor vào sidecar (NEXT_PLAN Bước 3)
+
+- `SidecarOptions` thêm `resourceSource?`, `resourceSampleMs?` (mặc định 1000), `schedulerConcurrency?` (mặc định 2). Khi có `resourceSource`, `SidecarService` tạo `ResourceMonitor` với `DEFAULT_THRESHOLDS` (không đặt số mới), `start()` và truyền vào `Scheduler` qua `admission`; `close()` gọi `stop()`. Không có `resourceSource` thì không có monitor (hành vi cũ). `sidecar-main.ts` truyền `NodeResourceSource`, nên chỉ tiến trình sidecar thật mới đọc CPU/RAM thật; mọi test cũ vẫn không đọc máy. Thêm dependency workspace `@agent-studio/resource-monitor` cho orchestrator (lockfile +3 dòng, không gói ngoài).
+- Test mới `sidecar-admission.test.ts` (8 test, nguồn đo giả + fake timer): bình thường chạy đủ `concurrency`; RAM 85% giảm một nửa, 77% vẫn giữ (hysteresis), 50% trở lại; RAM 95% không khởi động task mới nhưng không đụng task đang chạy; CPU 90% giảm; không vượt `concurrency` qua chuỗi tải bất kỳ; nguồn ném lỗi thì giữ mức cũ; `close()` không còn timer và dừng lấy mẫu. Đã thử phá: bỏ `admission` làm 4 test đỏ, bỏ `stop()` làm 1 test đỏ.
+- Chưa làm: VRAM (Node không có API), `trackedPids` (RSS tiến trình con; trên Windows `NodeResourceSource` cũng trả `undefined` cho pid khác), cấu hình ngưỡng, hiển thị trong UI, IPC; chưa đo trên Windows bằng số thật dưới tải agent thật.
+- Kiểm trên Windows: `pnpm lint`, `prettier --check .`, `typecheck`, `build` thoát 0; `pnpm test` 55 file, 528 qua, 2 bỏ qua, 0 đỏ.

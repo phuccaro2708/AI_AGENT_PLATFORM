@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { AgentsSettings } from "./AgentsSettings";
+import { PresetsSettings } from "./PresetsSettings";
+import type { usePresets } from "./presets";
+import { SHORTCUTS } from "./shortcuts";
 import { DEFAULT_NICKNAME } from "./profile";
 import type { Theme } from "./theme";
 
@@ -10,6 +13,8 @@ export function SettingsView({
   onTheme,
   version,
   onClose,
+  presetStore,
+  adapterIds,
 }: {
   nickname: string;
   onNickname: (v: string) => void;
@@ -17,6 +22,8 @@ export function SettingsView({
   onTheme: (t: Theme) => void;
   version: string;
   onClose: () => void;
+  presetStore: ReturnType<typeof usePresets>;
+  adapterIds: string[];
 }) {
   const [draft, setDraft] = useState(nickname);
   const themes = [
@@ -73,6 +80,22 @@ export function SettingsView({
       </div>
 
       <AgentsSettings />
+
+      <PresetsSettings store={presetStore} adapterIds={adapterIds} />
+
+      <div className="card">
+        <h2>Keyboard shortcuts</h2>
+        <ul className="muted small">
+          {SHORTCUTS.map((s) => (
+            <li key={s.keys}>
+              <kbd>{s.keys}</kbd> {s.label}
+            </li>
+          ))}
+          <li>
+            <kbd>Ctrl+Enter</kbd> Run the task in the composer
+          </li>
+        </ul>
+      </div>
 
       <div className="card">
         <h2>About</h2>

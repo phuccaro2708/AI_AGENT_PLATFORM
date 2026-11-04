@@ -211,8 +211,10 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 ### Còn lại của Phase 7
 
 - [~] Approval UI đầy đủ (một lần / trong phạm vi / từ chối) + nhật ký quyết định: 7C-1 xong 2026-11-04 (thẻ chi tiết, ghi chú, nhật ký, timer hết hạn, `ApprovalScope` + `approval_grants`, nút phạm vi bị khoá); 7C-2 (cấp quyền thường trực, nguồn approval thật) chờ Policy Engine Phase 4
-- [ ] Tailwind/shadcn, dark/light, phím tắt
-- [ ] Preset "assistant" cục bộ, export/import
+- [ ] Tailwind/shadcn (chưa làm: cần người dùng duyệt dependency — pin ≥ 2 tuần, audit, license, `docs/REFERENCES.md`); dark/light đã có
+- [x] Phím tắt cơ bản (`shortcuts.ts`: Ctrl+1/2/H/,/Shift+N; Ctrl+Enter gửi composer) — chỉ có test Vitest, chưa kiểm trong app Tauri thật
+- [x] Preset "assistant" cục bộ + export/import JSON (`presets.ts`, Settings → Presets; chỉ ghép chữ trước prompt, không cấp quyền) — chỉ có test Vitest, chưa kiểm trong app Tauri thật
+- [x] Danh sách radio "What happened?" xếp thành thẻ ngang (CSS; chưa nhìn bằng mắt trong app thật)
 - [ ] E2E "cài đặt → project → task thật" không đụng terminal
 - [ ] PHASE7_REPORT.md
 

@@ -135,10 +135,10 @@
 
 Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết reconciliation (Phase 7); Supervisor/Parallel Workers (Phase 9); đường tạo approval từ CLI thật (Phase 4); perf-baseline sau bước 3 (R11).
 
-## Phase 3 — Gemini & Local AI
+## Phase 3 — Quét CLI & Local AI
 
-- [ ] Probe Gemini CLI (headless, `stream-json`)
-- [ ] `adapter-gemini` + fixtures + contract tests
+- [ ] Quét CLI agent theo danh sách ứng viên khai báo bằng dữ liệu (PATH + vị trí cài Windows), hiển thị "đã phát hiện, chưa hỗ trợ"
+- [ ] Probe Antigravity (`agy`, quan sát `--print`, `--output-format stream-json`) rồi `adapter-antigravity` + fixtures + contract tests
 - [ ] `adapter-ollama`: HTTP client, discover models, stream
 - [ ] Tool loop riêng cho Ollama (whitelist tool, read-only mặc định, giới hạn vòng lặp)
 - [ ] Capability-based router

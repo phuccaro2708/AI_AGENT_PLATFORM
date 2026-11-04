@@ -17,15 +17,15 @@ Nguyên tắc ưu tiên: **Agent Runtime → Message Router → Durable Task Sta
 
 ## Tổng quan
 
-| Phase | Tên                    | Thời gian | Kết quả chính                                                                                |
-| ----- | ---------------------- | --------- | -------------------------------------------------------------------------------------------- |
-| 0     | Foundation             | 3–5 ngày  | Monorepo, Tauri shell, SQLite+migrations, contracts, stub adapter, logging, CI               |
-| 1     | Single-Agent MVP       | 1–2 tuần  | Claude + Codex chạy task độc lập, streaming, cancel, session mapping                         |
-| 2     | Multi-Agent            | 1–2 tuần  | Message router, task DAG, supervisor, QA handoff, worktrees → **MVP có giá trị**             |
-| 3     | Gemini & Local AI      | 1–2 tuần  | Gemini CLI, Ollama + tool loop, capability routing, resource-aware scheduler                 |
-| 4     | Security & Reliability | 2–3 tuần  | Policy engine, sandbox tests, recovery, observability                                        |
-| 5     | Desktop Beta           | 1–2 tuần  | UI hoàn chỉnh, settings, installer Windows, beta test                                        |
-| 6     | Production 1.0         | 2–4 tuần  | Release engineering, update có chữ ký, MCP gateway tối thiểu, tài liệu vận hành (A2A → v1.1) |
+| Phase | Tên                    | Thời gian | Kết quả chính                                                                                   |
+| ----- | ---------------------- | --------- | ----------------------------------------------------------------------------------------------- |
+| 0     | Foundation             | 3–5 ngày  | Monorepo, Tauri shell, SQLite+migrations, contracts, stub adapter, logging, CI                  |
+| 1     | Single-Agent MVP       | 1–2 tuần  | Claude + Codex chạy task độc lập, streaming, cancel, session mapping                            |
+| 2     | Multi-Agent            | 1–2 tuần  | Message router, task DAG, supervisor, QA handoff, worktrees → **MVP có giá trị**                |
+| 3     | Quét CLI & Local AI    | 1–2 tuần  | Quét CLI agent trên máy, Antigravity (`agy`), Ollama + tool loop, capability routing, scheduler |
+| 4     | Security & Reliability | 2–3 tuần  | Policy engine, sandbox tests, recovery, observability                                           |
+| 5     | Desktop Beta           | 1–2 tuần  | UI hoàn chỉnh, settings, installer Windows, beta test                                           |
+| 6     | Production 1.0         | 2–4 tuần  | Release engineering, update có chữ ký, MCP gateway tối thiểu, tài liệu vận hành (A2A → v1.1)    |
 
 Tổng Phase 0–6 ≈ 9–18 tuần. Phase 7–10 (mở rộng sản phẩm) ≈ 8–14 tuần thêm.
 
@@ -102,9 +102,10 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 - [x] Task side-effect không rõ → `needs_reconciliation`, không auto-retry.
 - [x] Gán vai cho agent trong một workflow thật; agent chỉ nhận đúng phần bảng ngữ cảnh mà vai được thấy (test).
 
-## Phase 3 — Gemini & Local AI (1–2 tuần)
+## Phase 3 — Quét CLI & Local AI (1–2 tuần)
 
-- `GeminiAdapter`: headless + `--output-format stream-json`, parse JSONL (init/message/tool_use/tool_result/error/result), theo probe thực tế.
+- **Quét CLI agent (nâng cấp):** danh sách ứng viên khai báo bằng dữ liệu (tên lệnh, cờ `--version`/`--help`), dò trong PATH và vị trí cài thường gặp trên Windows; mỗi CLI tìm thấy được ghi đường dẫn, version và bảng capability suy từ `--help`. Chỉ CLI đã có adapter và qua contract test mới chạy được task; CLI chỉ được phát hiện thì hiển thị "đã phát hiện, chưa hỗ trợ" (không giả lập). Gemini CLI không nằm trong phạm vi.
+- `AntigravityAdapter` (lệnh `agy`): chỉ làm sau khi probe thật trên máy chứng minh `--print` + `--output-format stream-json`; parse theo fixture thật, ghi vào `docs/ASSUMPTIONS.md`.
 - `OllamaAdapter`: HTTP API streaming, discover models, tool-calling loop riêng với tool whitelist; mặc định read-only.
 - Capability-based routing (không hard-code theo tên agent).
 - Resource-Aware Scheduler: theo dõi RAM/VRAM, 1 model Ollama tại một thời điểm, tạm ngừng nhận local inference khi thiếu tài nguyên.
@@ -112,7 +113,7 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 
 **Acceptance gate**
 
-- [ ] 4 adapter qua cùng bộ contract test.
+- [ ] Mọi adapter (Claude, Codex, Antigravity, Ollama) qua cùng bộ contract test.
 - [ ] Thêm adapter mới không sửa Orchestrator core.
 - [ ] Hết VRAM/RAM → hệ thống degrade có kiểm soát, không treo máy.
 

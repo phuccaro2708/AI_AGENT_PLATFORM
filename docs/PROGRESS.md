@@ -167,3 +167,26 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Dọn UI: History phân trang 30/30/9 đúng, Older tắt ở trang cuối; ngày cũ hiện kèm giờ ("Sep 30, 2026 07:39 PM"); sidebar ở 700×720 không còn bị cắt (`max-height: none`). Trường hợp đúng 30 hàng chỉ kiểm bằng test đơn vị.
 - Phát hiện chưa sửa: danh sách "What happened?" trong thẻ reconciliation (7A) xếp radio và nhãn thành cột dọc, trông lỏng; không ảnh hưởng chức năng.
 - Chưa kiểm: Settings > Agents Save/Use defaults; Peer Review chạy CLI thật qua UI.
+
+## 2026-11-04 (khuya, push và CI)
+
+- Push `1540a4f..f75a72b` lên `claude/repo-current-status-acfd51`, rồi fast-forward nhánh gốc `claude/loving-lovelace-32lh71` lên `f75a72b` (không force). Gồm: `98e28c5`, `f81f20f` (B1), `bf7ba01` (dọn UI), `52d489d` (7C-1), `f75a72b` (bố cục thẻ phê duyệt, ghi kiểm UI thật).
+- CI `1540a4f` (đọc bằng GraphQL): xanh cả 10 check run; Security 7,1 phút (push) và 5,9 phút (pull_request) so với khoảng 41 phút trước.
+- CI `f75a72b`: lúc đọc cuối còn IN_PROGRESS/QUEUED, chưa có kết luận.
+
+## 2026-11-04 (đêm, tích hợp hai luồng song song)
+
+- Hai phiên con chạy song song trong worktree riêng, rồi được gộp vào `claude/repo-current-status-acfd51` bằng merge commit: Phase 7 UI (`c2fef0a` radio thẻ ngang, `6b2f4c6` preset "assistant" + export/import, `d0a3565` phím tắt cơ bản, `2d73308` docs) → `48ff83e`; Phase 3 (`efa3a47` adapter `agy`, `623fb75` đăng ký vào sidecar, `d0e43b0` capability router, `ddfbf9f` PHASE3_REPORT + ASSUMPTIONS) → `7275822`.
+- Kiểm sau merge trên cây `7275822`: `pnpm install --frozen-lockfile`, `lint`, `prettier --check`, `typecheck`, `build` qua; `pnpm test` 48 file / 433 test qua (một lần chạy giữa chừng có 1 test `sidecar-resume` hết 5 giây khi máy tải, chạy lại qua); `cargo clippy --all-targets -- -D warnings` sạch, `cargo test` 12 qua / 1 bỏ qua.
+- Đã push `759aca6..48ff83e` rồi `48ff83e..7275822` lên nhánh làm việc. Nhánh gốc `claude/loving-lovelace-32lh71` chưa được fast-forward.
+- Chưa làm / chưa xác minh: CI của `48ff83e` và `7275822` (phiên `ci-read-48ff83e` đang đọc, chưa có kết luận); `agy` thật chưa chạy qua adapter (lượt probe thứ 3 cần người dùng cho phép); UI preset, phím tắt, thẻ radio chưa kiểm trong app Tauri thật; Tailwind/shadcn chưa làm (cần duyệt dependency).
+
+## 2026-11-04 (đêm, push docs và mở PR #2)
+
+- Push `7275822..a4d8c86` (commit `a4d8c86` docs: record night progress) lên `claude/repo-current-status-acfd51`; mở PR #2 vào `claude/loving-lovelace-32lh71` (12 commit, 32 file). `mergeable`: MERGEABLE; chưa merge.
+- CI: `7275822` TypeScript ubuntu và windows xanh, Tauri/Security/spike còn chạy lúc đọc cuối; PR #2 có 10 check đang chờ, chưa có kết luận.
+
+## 2026-11-04 (đêm, cập nhật CI)
+
+- CI `7275822` (phiên con đọc bằng GraphQL): TypeScript ubuntu (1 phút 26 giây), TypeScript windows (2 phút 25 giây), Tauri shell (5 phút 13 giây), spike sidecar (5 phút 27 giây) đều xanh; Security còn IN_PROGRESS, chưa có kết luận.
+- Commit docs `cdd2c06` chưa push.

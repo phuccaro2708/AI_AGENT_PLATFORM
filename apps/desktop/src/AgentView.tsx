@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { AdapterInfo, Project } from "./api";
 import { AGENT_TASK_REQUIRES, capabilityBlocker } from "./capabilityGap";
 import { Composer, StartSteps } from "./Composer";
+import type { Preset } from "./presets";
 import { TaskLogView, type TaskRef } from "./components";
 
 /** Mode 1: one agent, one project, one task at a time. */
@@ -16,6 +17,9 @@ export function AgentView({
   onDetect,
   task,
   onStart,
+  presets,
+  presetId,
+  onPreset,
   onError,
 }: {
   projects: Project[];
@@ -28,6 +32,9 @@ export function AgentView({
   onDetect: () => void;
   task: TaskRef | null;
   onStart: (prompt: string) => void;
+  presets: Preset[];
+  presetId: string;
+  onPreset: (id: string) => void;
   onError: (m: string) => void;
 }) {
   const [prompt, setPrompt] = useState("");
@@ -81,17 +88,38 @@ export function AgentView({
         onProject={onProject}
         onNewProject={onNewProject}
         agents={
-          <label className="picker">
-            <span className="muted small">Agent</span>
-            <select aria-label="Agent" value={agentId} onChange={(e) => onAgent(e.target.value)}>
-              {adapters.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.id}
-                  {a.available ? "" : " (not found)"}
-                </option>
-              ))}
-            </select>
-          </label>
+          <>
+            <label className="picker">
+              <span className="muted small">Agent</span>
+              <select aria-label="Agent" value={agentId} onChange={(e) => onAgent(e.target.value)}>
+                {adapters.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.id}
+                    {a.available ? "" : " (not found)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="picker">
+              <span className="muted small">Preset</span>
+              <select
+                aria-label="Preset"
+                value={presetId}
+                onChange={(e) => {
+                  onPreset(e.target.value);
+                  const want = presets.find((p) => p.id === e.target.value)?.agentId;
+                  if (want && adapters.some((a) => a.id === want && a.available)) onAgent(want);
+                }}
+              >
+                <option value="">None</option>
+                {presets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
         }
         value={prompt}
         onChange={setPrompt}

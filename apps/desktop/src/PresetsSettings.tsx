@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  BUILTIN_PRESETS,
   MAX_INSTRUCTIONS,
   newPresetId,
   parsePresets,
@@ -34,13 +35,21 @@ export function PresetsSettings({
   };
 
   return (
-    <div className="card">
+    <div className="card presets-settings">
       <h2>Presets</h2>
       <p className="muted small">
         Instructions added before your prompt in Agent sessions. They only change the text sent and
-        grant no permission. &quot;assistant&quot; is built in.
+        grant no permission. Built-in presets are read-only.
       </p>
       <ul className="plain">
+        {BUILTIN_PRESETS.map((p) => (
+          <li key={p.id} className="field-row">
+            <span>
+              {p.name}
+              <span className="muted small"> · built in</span>
+            </span>
+          </li>
+        ))}
         {store.presets.map((p) => (
           <li key={p.id} className="field-row">
             <span>

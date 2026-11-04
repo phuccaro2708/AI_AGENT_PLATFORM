@@ -147,7 +147,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [ ] Resource monitor (RAM/VRAM) + Resource-Aware Scheduler
 - [ ] UI hiển thị capability thiếu (có helper `describeCapabilityGap`; phần render ở `apps/desktop` chưa làm)
 - [x] Test thêm adapter giả không sửa core (cho routing; xem PHASE3_REPORT về giới hạn của sidecar)
-- [ ] PHASE3_REPORT.md
+- [~] PHASE3_REPORT.md (có bản nháp trung thực; Phase 3 chưa đóng: còn Ollama, resource monitor, UI capability thiếu, adapter `agy` chưa chạy CLI thật)
 
 ## Phase 4 — Security & Reliability
 

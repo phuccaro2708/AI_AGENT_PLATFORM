@@ -1,11 +1,11 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `603d6fb`, đã push). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `021da4d`; `399ce07` đã push, `021da4d` chưa push). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Vị trí
 
 - Nhánh chính `claude/loving-lovelace-32lh71` (`603d6fb`, đã push) chứa toàn bộ công việc, kể cả nhánh `claude/repo-current-status-acfd51` (`2826397`, đã push, chưa có `603d6fb`). PR #2 đã MERGED. Worktree còn lại: checkout chính, `repo-current-status-acfd51`, `fix-pm-abort-flaky-7e3a1f`. Các nhánh khác còn trong git nhưng đã nằm trong nhánh chính, riêng `claude/phase-2-kickoff-8a5732` có 10 commit riêng (không gộp).
-- Nhánh CHƯA ghép: `claude/fix-pm-abort-flaky-7e3a1f` (`cf97850`, chỉ ghi chú PROGRESS, chưa push); nhánh cloud `claude/gracious-ritchie-ut3238` (`ba05f5b`, router vào `workflows.start`) và `claude/fervent-thompson-u83u2i` (`d6456b0`, `packages/resource-monitor`). Hai nhánh cloud merge sạch riêng lẻ nhưng XUNG ĐỘT với nhau; chưa chạy CI/test của chúng trên Windows. Nhánh resource-monitor không cập nhật PROGRESS/TODO/ASSUMPTIONS như brief và chưa có `603d6fb`.
+- Nhánh CHƯA ghép: `claude/fix-pm-abort-flaky-7e3a1f` (`cf97850`, chỉ ghi chú PROGRESS, chưa push). Hai nhánh cloud (router `ba05f5b`, resource-monitor `d6456b0`) đã ghép vào nhánh chính (`399ce07`, `021da4d`); chạy lint/test/build trên Windows qua (53 file, 517 test qua, 2 bỏ qua). Resource monitor mới là mã thuần, CHƯA nối vào sidecar; router có thể chọn `agy` (adapter chỉ qua CLI giả) khi `claude` không dùng được: chờ người dùng quyết có loại `agy` khỏi tự chọn không. Cloud thêm vào cả ba file tài liệu (đính chính: trước đó tôi ghi nhầm nhánh resource-monitor không cập nhật tài liệu).
 - Thứ tự phase đã chốt lại 2026-11-04 (ADR-005, ROADMAP mục "Thứ tự thực hiện"): Phase 7 (phần không cần policy) song song Phase 3 → Phase 4 (+ 7C-2, đóng Phase 7) → Phase 5 → Phase 6 (`mcp-gateway` đầu) → Phase 8 → Phase 9; Phase 10 xuyên suốt.
 - Ứng dụng: **Agent Workspace** (Tauri 2 + React/Vite, sidecar Node orchestrator, SQLite/Drizzle, pnpm monorepo).
 - Giữ nguyên `identifier` `dev.agentstudio.desktop`, gói `@agent-studio/*`, service Credential Manager `agent-studio` (đổi sẽ mất dữ liệu và secret đã lưu).
@@ -44,7 +44,7 @@ Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `603
 ## Việc tiếp theo (theo thứ tự)
 
 1. Đọc kết luận Security của `603d6fb`; áp `603d6fb` vào `repo-current-status` nếu còn dùng nhánh đó.
-2. Phase 3 còn lại: kiểm và ghép hai nhánh cloud (router vào `workflows.start`, resource monitor; giải xung đột giữa chúng, bắt buộc chạy lint/test/build trên Windows); chạy `agy` thật qua adapter (xin phép lượt probe). Ollama hoãn (máy chưa cài).
+2. Phase 3 còn lại: nối resource monitor vào sidecar/scheduler (cần quyết định thiết kế), quyết định loại `agy` khỏi tự chọn của router; chạy `agy` thật qua adapter (xin phép lượt probe). Ollama hoãn (máy chưa cài).
 3. Phase 7 còn lại: Tailwind/shadcn (cần duyệt dependency: pin ≥ 2 tuần, audit, license, `docs/REFERENCES.md`), kiểm preset/phím tắt trong app thật, E2E người dùng mới. (`CLAUDE.md` đã sửa trong `c85d130`.) 7C-2 và đóng Phase 7 chờ Phase 4.
 
 ## Chờ người dùng quyết

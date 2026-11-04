@@ -266,3 +266,9 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Không làm: nối vào sidecar/`workflows.start`, IPC, UI, settings, `src-tauri`, `policy-engine`, `process-manager`; không thêm dependency (lockfile chỉ thêm importer rỗng).
 - Kiểm chứng (Linux/Node 22.23.4/pnpm 10.28.0): `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm exec prettier --check .`, `pnpm typecheck`, `pnpm test` (52 file, 507 qua, 5 bỏ qua: đều là test chỉ-Windows có sẵn, không có test mới nào bị bỏ qua), `pnpm build` đều qua. 20 test mới trong gói + 5 test admission của scheduler (tổng +25 so với 482 qua trước đó).
 - Chỉ chạy trên Linux: mọi test trên. Một test đọc OS thật (`NodeResourceSource` với `os` và pid của chính test) chạy trên Linux; còn nhánh `/proc` được kiểm bằng dữ liệu giả. Chưa chạy: Windows (số đo `os.cpus()`/`os.freemem()`, RSS tiến trình con trả `undefined` ở đó), Job Object, CI GitHub, `cargo`, app Tauri thật.
+
+## 2026-11-05 (Windows): ghép hai nhánh cloud vào nhánh chính
+
+- Router: merge `399ce07` (đã push). Resource monitor: merge `021da4d` (chưa push). Xung đột chỉ ở `docs/PROGRESS.md` và `docs/TODO.md` (cả hai bên cùng thêm vào cuối file), giữ cả hai bên; mã không xung đột. Resource monitor thêm `SchedulerAdmission` vào `scheduler.ts` (chỉ giảm giới hạn, không vượt `concurrency`).
+- Đính chính: mục tổng kết trước ghi nhánh `claude/fervent-thompson-u83u2i` "không cập nhật PROGRESS/TODO/ASSUMPTIONS"; sai, nhánh có sửa cả ba (tôi đã cắt đầu ra `git diff --stat`). Nhánh chưa có `603d6fb` là đúng nhưng nay đã nằm trong nhánh chính.
+- Kiểm trên Windows sau `021da4d`: `pnpm install --frozen-lockfile`, `pnpm lint`, `prettier --check .`, `typecheck`, `build` thoát 0; `pnpm test`: 53 file, 517 qua, 2 bỏ qua, 0 đỏ. Chưa chạy: `cargo clippy`/`cargo test` (không đổi `src-tauri`), CI GitHub cho `021da4d`, resource monitor trên Windows với số đo thật.

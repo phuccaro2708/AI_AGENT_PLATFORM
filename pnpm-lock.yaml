@@ -124,6 +124,12 @@ importers:
         specifier: workspace:*
         version: link:../process-manager
 
+  packages/policy-engine:
+    dependencies:
+      '@agent-studio/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/process-manager: {}
 
   packages/shared-utils:

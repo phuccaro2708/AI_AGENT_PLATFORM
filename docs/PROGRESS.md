@@ -180,3 +180,8 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Kiểm sau merge trên cây `7275822`: `pnpm install --frozen-lockfile`, `lint`, `prettier --check`, `typecheck`, `build` qua; `pnpm test` 48 file / 433 test qua (một lần chạy giữa chừng có 1 test `sidecar-resume` hết 5 giây khi máy tải, chạy lại qua); `cargo clippy --all-targets -- -D warnings` sạch, `cargo test` 12 qua / 1 bỏ qua.
 - Đã push `759aca6..48ff83e` rồi `48ff83e..7275822` lên nhánh làm việc. Nhánh gốc `claude/loving-lovelace-32lh71` chưa được fast-forward.
 - Chưa làm / chưa xác minh: CI của `48ff83e` và `7275822` (phiên `ci-read-48ff83e` đang đọc, chưa có kết luận); `agy` thật chưa chạy qua adapter (lượt probe thứ 3 cần người dùng cho phép); UI preset, phím tắt, thẻ radio chưa kiểm trong app Tauri thật; Tailwind/shadcn chưa làm (cần duyệt dependency).
+
+## 2026-11-04 (đêm, push docs và mở PR #2)
+
+- Push `7275822..a4d8c86` (commit `a4d8c86` docs: record night progress) lên `claude/repo-current-status-acfd51`; mở PR #2 vào `claude/loving-lovelace-32lh71` (12 commit, 32 file). `mergeable`: MERGEABLE; chưa merge.
+- CI: `7275822` TypeScript ubuntu và windows xanh, Tauri/Security/spike còn chạy lúc đọc cuối; PR #2 có 10 check đang chờ, chưa có kết luận.

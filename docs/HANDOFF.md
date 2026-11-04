@@ -1,10 +1,10 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-04 (đêm; nhánh làm việc ở `7275822`, nhánh gốc còn ở `f75a72b`). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-04 (đêm; nhánh làm việc ở `a4d8c86`, nhánh gốc còn ở `f75a72b`). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Vị trí
 
-- Nhánh làm việc `claude/repo-current-status-acfd51` đã push tới `7275822` (gồm merge Phase 7 UI và Phase 3). Nhánh gốc `claude/loving-lovelace-32lh71` (cũng là `origin/HEAD`) còn ở `f75a72b`, chưa fast-forward. PR #1 đã MERGED.
+- Nhánh làm việc `claude/repo-current-status-acfd51` đã push tới `a4d8c86` (gồm merge Phase 7 UI và Phase 3); PR #2 vào nhánh gốc đang mở (chưa merge, auto-fix bật, auto-merge tắt). Nhánh gốc `claude/loving-lovelace-32lh71` (cũng là `origin/HEAD`) còn ở `f75a72b`, chưa fast-forward. PR #1 đã MERGED.
 - Thứ tự phase đã chốt lại 2026-11-04 (ADR-005, ROADMAP mục "Thứ tự thực hiện"): Phase 7 (phần không cần policy) song song Phase 3 → Phase 4 (+ 7C-2, đóng Phase 7) → Phase 5 → Phase 6 (`mcp-gateway` đầu) → Phase 8 → Phase 9; Phase 10 xuyên suốt.
 - Ứng dụng: **Agent Workspace** (Tauri 2 + React/Vite, sidecar Node orchestrator, SQLite/Drizzle, pnpm monorepo).
 - Giữ nguyên `identifier` `dev.agentstudio.desktop`, gói `@agent-studio/*`, service Credential Manager `agent-studio` (đổi sẽ mất dữ liệu và secret đã lưu).
@@ -33,7 +33,8 @@ Cập nhật: 2026-11-04 (đêm; nhánh làm việc ở `7275822`, nhánh gốc 
 - `babca05` đỏ do Prettier lệch ở `docs/HANDOFF.md`; `868daef` (đã format lại) xanh đủ 5/5 job (2026-11-04). PR #1 đã merged nên không còn PR nào được ứng dụng theo dõi.
 - `3d5925f`: TypeScript (ubuntu, windows), Tauri và một lượt Security (bản quét mới, lần đầu trên Linux) xanh; chưa đọc đủ kết luận các lượt còn lại.
 - `1540a4f`: xanh cả 10 check run (2026-11-04). Security chạy 7,1 phút (push) và 5,9 phút (pull_request) với bản quét mới, so với khoảng 41 phút trước đó.
-- `f75a72b`, `48ff83e`, `7275822`: chưa có kết luận (lần đọc gần nhất của `f75a72b`: TypeScript ubuntu xanh, các job khác còn chạy/xếp hàng). Việc đầu tiên: đọc lại bằng GraphQL.
+- `f75a72b`: chưa có kết luận (lần đọc gần nhất: TypeScript ubuntu xanh, các job khác còn chạy/xếp hàng).
+- `7275822`: TypeScript ubuntu và windows xanh; Tauri, Security, spike còn IN_PROGRESS lúc đọc cuối (phiên con `ci-read-48ff83e`). PR #2 (commit `a4d8c86`): 10 check đang chờ lúc mở, chưa có kết luận. Việc đầu tiên: đọc lại bằng GraphQL.
 - Đọc CI bằng GraphQL (`checkSuites`/`checkRuns`), không dùng `gh run view`/`gh run watch` (REST từng chạm trần 5000/giờ, trả 403).
 - `3a9a85b` có chuỗi secret giả trong test. Nếu bộ quét báo, chỉ thêm đúng tuple đã rà soát vào danh sách chấp nhận của `scripts/secret-scan.py`, không nới lỏng bộ quét.
 

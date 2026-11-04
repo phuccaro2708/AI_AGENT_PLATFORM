@@ -7,6 +7,7 @@ import {
   type ResolveDecision,
   type WorkflowTask,
 } from "./api";
+import { PEER_REVIEW_REQUIRES, capabilityBlocker, gapOf } from "./capabilityGap";
 import { Composer, StartSteps } from "./Composer";
 import { Badge, msg, TaskLogView } from "./components";
 import { whenText } from "./history";
@@ -58,15 +59,24 @@ export function PeerReviewView({
   const [reviewer, setReviewer] = useState("");
   const project = projects.find((p) => p.id === projectId);
   const usable = adapters.filter((a) => a.available);
-  const impl = implementer || usable[0]?.id || "";
-  const rev = reviewer || usable[1]?.id || usable[0]?.id || "";
+  // Defaults prefer agents that meet the requirement; any agent can still be picked by hand.
+  const fit = usable.filter((a) => gapOf(a, PEER_REVIEW_REQUIRES).missing.length === 0);
+  const defaults = fit.length > 0 ? fit : usable;
+  const impl = implementer || defaults[0]?.id || "";
+  const rev = reviewer || defaults[1]?.id || defaults[0]?.id || "";
   const blocker = !project
     ? "Choose a project first"
     : impl === "" || rev === ""
       ? "No agent is available"
-      : goal.trim() === ""
-        ? "Describe the goal"
-        : null;
+      : (capabilityBlocker(
+          adapters.find((a) => a.id === impl),
+          PEER_REVIEW_REQUIRES,
+        ) ??
+        capabilityBlocker(
+          adapters.find((a) => a.id === rev),
+          PEER_REVIEW_REQUIRES,
+        ) ??
+        (goal.trim() === "" ? "Describe the goal" : null));
 
   if (run) {
     return (
@@ -92,6 +102,7 @@ export function PeerReviewView({
           <option key={a.id} value={a.id} disabled={!a.available}>
             {a.id}
             {a.available ? "" : " (not found)"}
+            {capabilityBlocker(a, PEER_REVIEW_REQUIRES) ? " (thiếu capability)" : ""}
           </option>
         ))}
       </select>

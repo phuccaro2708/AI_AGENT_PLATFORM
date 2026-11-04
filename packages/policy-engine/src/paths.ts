@@ -1,5 +1,7 @@
+import * as fsCb from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { promisify } from "node:util";
 
 const MAX_LINK_DEPTH = 40;
 
@@ -8,6 +10,17 @@ export class PathError extends Error {}
 const IS_WINDOWS = path.sep === "\\";
 /** Verbatim (`\\?\`) and device (`\\.\`) prefixes: Win32 does NOT collapse `..` in them, so they bypass the lexical rule below. */
 const VERBATIM_OR_DEVICE = /^[\\/]{2}[?.][\\/]/;
+
+/** UNC root: `\\server\share` (verbatim/device prefixes are rejected earlier). */
+const UNC_ROOT = /^[\\/]{2}/;
+
+/**
+ * Windows: the native (libuv / GetFinalPathNameByHandle) realpath, so a user-typed 8.3 name (`RUNNER~1`) comes back in
+ * its long form and compares correctly in `isWithin`. POSIX keeps `fs.promises.realpath` unchanged.
+ */
+const realpath: (p: string) => Promise<string> = IS_WINDOWS
+  ? promisify(fsCb.realpath.native)
+  : (p) => fs.realpath(p);
 
 function splitSegments(rest: string): string[] {
   const sep = path.sep === "\\" ? /[\\/]+/ : /\/+/;
@@ -27,7 +40,7 @@ function isMissing(e: unknown): boolean {
  * Canonical absolute path of `input`: symlinks resolved, `..` resolved the way the OS does it. POSIX: a `..` after
  * a symlink goes to the link TARGET's parent, so it is never collapsed lexically first. Windows (Win32 API): `..`
  * is collapsed lexically before the file system is touched, so it is collapsed first here too; `\?\` and `\.\`
- * paths (no such collapsing) are rejected.
+ * paths (no such collapsing), UNC paths and NTFS alternate data streams are rejected (ASSUMPTIONS.md, Phase 4).
  *
  * The path need not exist: the longest existing prefix is resolved with `realpath`, the rest is appended. A
  * dangling symlink is followed to where it would create a file. Relative paths, NUL bytes, symlink loops and
@@ -44,7 +57,15 @@ export async function canonicalize(input: string, depth = 0): Promise<string> {
     throw new PathError("verbatim and device paths are not allowed");
   }
   if (!path.isAbsolute(input)) throw new PathError("path must be absolute");
-  if (IS_WINDOWS) input = path.normalize(input);
+  if (IS_WINDOWS) {
+    input = path.normalize(input);
+    // UNC: would hit the network (slow, attacker-chosen server) and cannot be vetted as a local scope: deny.
+    if (UNC_ROOT.test(input)) throw new PathError("UNC paths are not allowed");
+    // After the drive root (`C:\`) a colon can only start an NTFS alternate data stream (`a.txt:s`, `a.txt::$DATA`).
+    if (input.slice(path.parse(input).root.length).includes(":")) {
+      throw new PathError("alternate data streams are not allowed");
+    }
+  }
   const { root } = path.parse(input);
   const segs = splitSegments(input.slice(root.length));
 
@@ -52,7 +73,7 @@ export async function canonicalize(input: string, depth = 0): Promise<string> {
     const prefix = joinRaw(root, segs.slice(0, i));
     const remaining = segs.slice(i);
     try {
-      return path.resolve(await fs.realpath(prefix), ...remaining);
+      return path.resolve(await realpath(prefix), ...remaining);
     } catch (e) {
       if (!isMissing(e)) throw new PathError("cannot resolve path");
     }

@@ -232,3 +232,9 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Nguyên nhân (suy luận, chưa chứng minh): `canonicalize` dựa vào `fs.realpath` với `..` giữ nguyên, kiểu POSIX (`..` sau symlink đi tới cha của đích). Trên Windows, Win32 gộp `..` theo từ vựng trước khi mở file nên `ws\link\..\x` thành `ws\x`; kết quả khác Linux. Hai test này chỉ chạy được khi tạo được symlink, nên cloud (Linux) thấy xanh. Điều đó khớp ghi chú trong ASSUMPTIONS rằng Windows chưa kiểm. Mức rủi ro thật chưa rõ: tiền tố `\?\` không gộp `..`, nên cần quyết định hành vi cho Windows (xem HANDOFF).
 - Lần chạy `pnpm test` đầu tiên có 1 test khác đỏ: `packages/process-manager` "cancels via AbortSignal" hết 30000ms. Chạy riêng `packages/process-manager` 2 lần: 20/20 qua cả hai. Nghi flaky khi máy tải, chưa điều tra, chưa nới timeout.
 - Chưa chạy: `cargo clippy -D warnings` và `cargo test` (`src-tauri` không đổi); CI trên GitHub cho `c85d130` (chưa push); kiểm trong app Tauri thật (không đổi UI); junction/UNC/8.3/ADS/tên thiết bị cho Policy Engine.
+
+## 2026-11-05 (Windows): sửa `..` của Policy Engine theo Win32
+
+- Quyết định của người dùng: theo Win32. `packages/policy-engine/src/paths.ts`: trên Windows `canonicalize` gộp `..` trước (`path.normalize`) rồi `realpath`; từ chối đường dẫn bắt đầu bằng `\?\` hoặc `\.\` (cả dạng `//?/`). POSIX giữ nguyên.
+- Test: hai test đỏ tách theo nền tảng (POSIX giữ nguyên kỳ vọng, Windows kỳ vọng gộp từ vựng) và thêm 2 test Windows (đường dẫn verbatim/device bị từ chối ở `canonicalize` và `evaluate`). Trên Windows 2 test POSIX bị bỏ qua đúng thiết kế.
+- Kiểm trên Windows: `pnpm lint`, `prettier --check .`, `typecheck`, `build` qua; `pnpm test`: 51 file, 485 qua, 2 bỏ qua, 0 đỏ (`process-manager` không timeout lần này). Chưa chạy lại trên Linux (đợi CI). `cargo clippy`/`cargo test`: chưa chạy. Chưa push.

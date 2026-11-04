@@ -5,6 +5,10 @@ const MAX_LINK_DEPTH = 40;
 
 export class PathError extends Error {}
 
+const IS_WINDOWS = path.sep === "\\";
+/** Verbatim (`\\?\`) and device (`\\.\`) prefixes: Win32 does NOT collapse `..` in them, so they bypass the lexical rule below. */
+const VERBATIM_OR_DEVICE = /^[\\/]{2}[?.][\\/]/;
+
 function splitSegments(rest: string): string[] {
   const sep = path.sep === "\\" ? /[\\/]+/ : /\/+/;
   return rest.split(sep).filter((s) => s !== "" && s !== ".");
@@ -20,8 +24,10 @@ function isMissing(e: unknown): boolean {
 }
 
 /**
- * Canonical absolute path of `input`: symlinks resolved, `..` resolved the way the OS does it (a `..` after a
- * symlink goes to the link TARGET's parent, so it is never collapsed lexically first).
+ * Canonical absolute path of `input`: symlinks resolved, `..` resolved the way the OS does it. POSIX: a `..` after
+ * a symlink goes to the link TARGET's parent, so it is never collapsed lexically first. Windows (Win32 API): `..`
+ * is collapsed lexically before the file system is touched, so it is collapsed first here too; `\?\` and `\.\`
+ * paths (no such collapsing) are rejected.
  *
  * The path need not exist: the longest existing prefix is resolved with `realpath`, the rest is appended. A
  * dangling symlink is followed to where it would create a file. Relative paths, NUL bytes, symlink loops and
@@ -34,7 +40,11 @@ export async function canonicalize(input: string, depth = 0): Promise<string> {
   if (typeof input !== "string" || input === "" || input.includes("\0")) {
     throw new PathError("invalid path");
   }
+  if (IS_WINDOWS && VERBATIM_OR_DEVICE.test(input)) {
+    throw new PathError("verbatim and device paths are not allowed");
+  }
   if (!path.isAbsolute(input)) throw new PathError("path must be absolute");
+  if (IS_WINDOWS) input = path.normalize(input);
   const { root } = path.parse(input);
   const segs = splitSegments(input.slice(root.length));
 

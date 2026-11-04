@@ -44,14 +44,34 @@ describe("canonicalize", () => {
     );
   });
 
-  it.skipIf(!symlinks)(
-    "resolves .. after a symlink against the link TARGET, not lexically",
+  it.skipIf(!symlinks || process.platform === "win32")(
+    "POSIX: resolves .. after a symlink against the link TARGET, not lexically",
     async () => {
       const { ws, outside } = tree();
       fs.mkdirSync(path.join(outside, "sub"));
       fs.symlinkSync(path.join(outside, "sub"), path.join(ws, "link"), "dir");
       // lexically ws/link/../x is ws/x; the OS goes to outside/x
       expect(await canonicalize(raw(ws, "link", "..", "x"))).toBe(path.join(outside, "x"));
+    },
+  );
+
+  it.skipIf(!symlinks || process.platform !== "win32")(
+    "Windows: collapses .. lexically before the file system, as Win32 does",
+    async () => {
+      const { ws, outside } = tree();
+      fs.mkdirSync(path.join(outside, "sub"));
+      fs.symlinkSync(path.join(outside, "sub"), path.join(ws, "link"), "dir");
+      expect(await canonicalize(raw(ws, "link", "..", "x"))).toBe(path.join(ws, "x"));
+    },
+  );
+
+  it.skipIf(process.platform !== "win32")(
+    "Windows: rejects verbatim and device paths",
+    async () => {
+      const { ws } = tree();
+      await expect(canonicalize("\\\\?\\" + ws)).rejects.toThrow();
+      await expect(canonicalize("\\\\.\\" + ws)).rejects.toThrow();
+      await expect(canonicalize("//?/" + ws)).rejects.toThrow();
     },
   );
 

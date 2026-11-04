@@ -74,17 +74,32 @@ describe("path scope", () => {
     ).toBe("deny");
   });
 
-  it.skipIf(!symlinks)("denies ../ that escapes only because of a symlink", async () => {
-    const { ws, outside } = tree();
-    fs.mkdirSync(path.join(outside, "sub"));
-    fs.symlinkSync(path.join(outside, "sub"), path.join(ws, "link"), "dir");
-    // lexically ws/link/../src/a.txt looks inside ws; really it is outside/src/a.txt
-    const d = await evaluate(policyFor("workspace_write", ws), {
-      kind: "fs.write",
-      path: raw(ws, "link", "..", "src", "a.txt"),
-    });
-    expect(d.effect).toBe("deny");
-  });
+  it.skipIf(!symlinks || process.platform === "win32")(
+    "POSIX: denies ../ that escapes only because of a symlink",
+    async () => {
+      const { ws, outside } = tree();
+      fs.mkdirSync(path.join(outside, "sub"));
+      fs.symlinkSync(path.join(outside, "sub"), path.join(ws, "link"), "dir");
+      // lexically ws/link/../src/a.txt looks inside ws; really it is outside/src/a.txt
+      const d = await evaluate(policyFor("workspace_write", ws), {
+        kind: "fs.write",
+        path: raw(ws, "link", "..", "src", "a.txt"),
+      });
+      expect(d.effect).toBe("deny");
+    },
+  );
+
+  it.skipIf(process.platform !== "win32")(
+    "Windows: denies a verbatim path that would skip .. collapsing",
+    async () => {
+      const { ws } = tree();
+      const d = await evaluate(policyFor("workspace_write", ws), {
+        kind: "fs.write",
+        path: "\\\\?\\" + raw(ws, "src", "..", "..", "outside", "x.txt"),
+      });
+      expect(d.effect).toBe("deny");
+    },
+  );
 
   it.skipIf(!symlinks)(
     "denies writing through a dangling symlink that points outside",

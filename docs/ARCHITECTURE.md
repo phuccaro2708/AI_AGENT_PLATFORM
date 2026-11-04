@@ -1,33 +1,30 @@
-# ARCHITECTURE — Agent Workspace (Phase 0)
+# ARCHITECTURE — Agent Workspace
 
-Windows-first, local-first desktop platform. Phase 0 delivers the foundation only; no real CLI agent is integrated yet.
+Windows-first, local-first desktop platform. Trạng thái theo `docs/TODO.md` (Phase 0–2 đã đóng, Phase 7 đang làm); file này mô tả cấu trúc hiện tại, không phải lộ trình.
 
 ## Layers
 
-| Layer        | Phase 0 status                                                              |
-| ------------ | --------------------------------------------------------------------------- |
-| Presentation | `apps/desktop` — Vite + React health screen; Tauri 2 shell (`src-tauri`)    |
-| Application  | `services/orchestrator` — runs ONE task on ONE adapter, persists messages   |
-| Adapter      | `packages/agent-core` — `AgentAdapter` interface, registry, `StubAdapter`   |
-| Execution    | Not implemented (Phase 1: process manager, `shell:false`, cancel tree-kill) |
-| Persistence  | `packages/storage` — SQLite (WAL) + Drizzle migrations + thin `Repo`        |
+| Layer        | Thành phần hiện có                                                                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Presentation | `apps/desktop` — Vite + React (Projects, Agents, Peer Review, History, Settings); Tauri 2 shell (`src-tauri`: `sidecar.rs`, `secrets.rs`, `job.rs`)                       |
+| Application  | `services/orchestrator` — sidecar Node: router/outbox, scheduler, workflow engine (Peer Review), approvals, artifacts, context board, project policy, secrets, workspaces |
+| Adapter      | `packages/agent-core` (interface + registry), `adapter-claude`, `adapter-codex`; adapter giả `stub` chỉ cho test/selftest                                                 |
+| Execution    | `packages/process-manager` (`shell:false`, cancel tree-kill), `packages/git-worktrees`, Job Object trong `src-tauri/src/job.rs`                                           |
+| Discovery    | `packages/cli-probe` — phát hiện, probe và quét CLI (`agents.scan`)                                                                                                       |
+| Persistence  | `packages/storage` — SQLite (WAL) + Drizzle migrations + `Repo`                                                                                                           |
 
-Shared: `packages/contracts` (Zod schemas = source of truth for types), `packages/shared-utils` (ULID ids, redaction, Pino logger).
+Shared: `packages/contracts` (Zod schemas = nguồn sự thật cho type), `packages/shared-utils` (ULID, redaction, Pino logger). Contract test dùng chung ở `tests/contract` và `tests/contracts`.
 
 ## Dependency direction
 
-`contracts` ← `shared-utils` ← `storage` / `agent-core` ← `orchestrator` ← (desktop via IPC, later)
+`contracts` ← `shared-utils` ← `storage` / `agent-core` / `process-manager` ← `adapter-*` / `cli-probe` / `git-worktrees` ← `orchestrator` ← desktop (qua IPC allowlist `sidecar_call`)
 
-The frontend never spawns CLIs. Its only native entry point in Phase 0 is the Tauri command `system_health`.
+The frontend never spawns CLIs. Mọi lệnh đi qua Tauri → sidecar NDJSON; method được phép nằm trong `ALLOWED_METHODS` (`src-tauri/src/lib.rs`).
 
 ## Module resolution
 
 Workspace packages expose `types` → `src/index.ts` (so typecheck/tests need no prior build) and `default` → `dist/index.js` (runtime). Vitest aliases packages to `src`.
 
-## Not in Phase 0
+## Chưa có
 
-Scheduler, router/outbox, DAG, worktrees, policy engine, real adapters, sidecar packaging (spike pending, see `DECISIONS.md` ADR-001).
-
-## Phase 2: điều phối nhiều agent
-
-Sidecar giữ thêm: `Scheduler` (lease, DAG, concurrency), `MessageRouter` (outbox/inbox bền, at-least-once + dedupe), `PeerReviewEngine` (implementer → reviewer, vòng `request_changes`), `ContextBoard` (lọc theo vai), `ApprovalService`, `ArtifactRegistry` và `ProjectWorkspaces` (git worktree riêng cho mỗi workflow). Task đang chạy mà lease hết hạn hoặc tiến trình chết → `needs_reconciliation`, không bao giờ tự chạy lại. Worktree và approval không phải sandbox. Chi tiết và ngoại lệ: `docs/PHASE2_REPORT.md`, `docs/ASSUMPTIONS.md`.
+Policy engine đầy đủ (Phase 4), Live Terminal (`node-pty`, Phase 5), installer (Phase 5), ACP/MCP/Skills (Phase 8), Supervisor/Parallel Workers (Phase 9). Chi tiết: `docs/ROADMAP.md`.

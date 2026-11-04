@@ -13,10 +13,14 @@ export function toFilter(f: {
     ...(f.projectId ? { projectId: f.projectId } : {}),
     ...(f.agentId ? { agentId: f.agentId } : {}),
     ...(f.state ? { state: f.state as NonNullable<HistoryFilter["state"]> } : {}),
-    limit: PAGE,
+    // One extra row tells us whether an older page exists (a full last page is not enough).
+    limit: PAGE + 1,
     offset: f.offset,
   };
 }
+
+export const hasOlder = <T>(rows: T[]): boolean => rows.length > PAGE;
+export const pageRows = <T>(rows: T[]): T[] => rows.slice(0, PAGE);
 
 /** Agents that appear in the loaded rows plus the known adapters, for the agent filter. */
 export function agentsIn(rows: HistoryRow[], known: string[]): string[] {
@@ -26,9 +30,10 @@ export function agentsIn(rows: HistoryRow[], known: string[]): string[] {
 export function whenText(iso: string, now = new Date()): string {
   const t = new Date(iso);
   if (Number.isNaN(t.getTime())) return iso;
+  const time = t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return t.toDateString() === now.toDateString()
-    ? t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : t.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+    ? time
+    : `${t.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" })} ${time}`;
 }
 
 /** Search needs at least two characters, like the sidecar. */

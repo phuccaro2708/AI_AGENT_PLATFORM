@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { TaskState } from "@agent-studio/contracts";
 import { api, type AdapterInfo, type HistoryRow, type LogHit, type Project } from "./api";
 import { Badge, msg, TaskLogView } from "./components";
-import { agentsIn, PAGE, searchable, toFilter, whenText } from "./history";
+import { agentsIn, hasOlder, PAGE, pageRows, searchable, toFilter, whenText } from "./history";
 
 const STATES: TaskState[] = [
   "queued",
@@ -164,7 +164,7 @@ export function HistoryView({
           <p className="muted small">No tasks match.</p>
         ) : (
           <ul className="board">
-            {rows.map((r) => (
+            {pageRows(rows).map((r) => (
               <li key={r.taskId}>
                 <span className="muted small">{whenText(r.createdAt)}</span>
                 <strong>{projectName(r.projectId)}</strong>
@@ -189,7 +189,7 @@ export function HistoryView({
           <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>
             Newer
           </button>
-          <button disabled={rows.length < PAGE} onClick={() => setOffset(offset + PAGE)}>
+          <button disabled={!hasOlder(rows)} onClick={() => setOffset(offset + PAGE)}>
             Older
           </button>
         </div>

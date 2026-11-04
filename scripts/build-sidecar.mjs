@@ -31,6 +31,7 @@ await build({
     "@agent-studio/cli-probe": join(root, "packages/cli-probe/src/index.ts"),
     "@agent-studio/adapter-claude": join(root, "packages/adapter-claude/src/index.ts"),
     "@agent-studio/adapter-codex": join(root, "packages/adapter-codex/src/index.ts"),
+    "@agent-studio/adapter-antigravity": join(root, "packages/adapter-antigravity/src/index.ts"),
   },
   banner: {
     js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);",

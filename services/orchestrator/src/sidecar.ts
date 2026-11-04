@@ -14,6 +14,7 @@ import {
 import { checkAgentSettings, type AgentLaunchSettings } from "./agent-settings.js";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAdapter } from "@agent-studio/adapter-codex";
+import { AntigravityAdapter } from "@agent-studio/adapter-antigravity";
 import {
   probeClaude,
   probeCodex,
@@ -52,6 +53,8 @@ export interface SidecarOptions {
   secrets?: ProviderSecrets;
   /** How often the scheduler looks for ready tasks once a workflow has started. Default 500. */
   schedulerIntervalMs?: number;
+  /** Interval of the approval expiry sweep (default 5 s). */
+  approvalSweepMs?: number;
 }
 
 const ok = (id: number, result: unknown) => ({
@@ -77,6 +80,12 @@ const REQUIRED_CAPABILITIES = {
   claude: ["print", "outputStreamJson"],
   codex: ["execSubcommand", "execJson"],
 } as const;
+
+/**
+ * CLIs that have an adapter but no settings-aware probe yet: scanned like any other candidate
+ * (generic help-based probe), yet allowed to run tasks. Their launch settings are not configurable.
+ */
+const SCAN_ONLY_ADAPTERS: ReadonlySet<string> = new Set(["agy"]);
 
 export class SidecarService {
   readonly db: StudioDb;
@@ -138,18 +147,18 @@ export class SidecarService {
    * and their probe stored. Only `supported` CLIs may be picked to run tasks.
    */
   private async scanAll() {
-    const supported = (id: string) => id in this.probes;
+    const supported = (id: string) => id in this.probes || SCAN_ONLY_ADAPTERS.has(id);
     const scanned = new Map(
       (
         await (this.opts.scan ?? scanClis)({
-          candidates: CLI_CANDIDATES.filter((c) => !supported(c.id)),
+          candidates: CLI_CANDIDATES.filter((c) => !(c.id in this.probes)),
         })
       ).map((s) => [s.provider, s]),
     );
     const out = [];
     for (const c of CLI_CANDIDATES) {
       let r: ProbeResult & { usable?: boolean };
-      if (supported(c.id)) {
+      if (c.id in this.probes) {
         r = await this.probeStored(c.id as "claude" | "codex");
         this.saveProbe(r);
         r.usable = r.status === "ok";
@@ -245,6 +254,7 @@ export class SidecarService {
     this.registry.register(new StubAdapter());
     this.registry.register(this.buildCliAdapter("claude", this.repo.getAgentSettings("claude")));
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
+    this.registry.register(new AntigravityAdapter());
     for (const a of opts.extraAdapters ?? []) this.registry.register(a);
     this.orchestrator = new Orchestrator(this.registry, this.repo, log, {
       redactor: this.redactor,
@@ -282,6 +292,9 @@ export class SidecarService {
       .resumeAll()
       .catch((err) => log.error({ err: this.redactor.text(String(err)) }, "resume failed"));
     this.approvals = new ApprovalService({ repo: this.repo });
+    this.approvals.startTimer(opts.approvalSweepMs, (err) =>
+      log.error({ err: this.redactor.text(String(err)) }, "approval expiry sweep failed"),
+    );
     this.artifacts = new ArtifactRegistry(this.repo, workspaces);
   }
 
@@ -611,7 +624,12 @@ export class SidecarService {
         }
         case "approvals.resolve": {
           this.approvals.expireDue();
-          this.approvals.resolve(req.params.approvalId, req.params.decision, req.params.note);
+          this.approvals.resolve(
+            req.params.approvalId,
+            req.params.decision,
+            req.params.note,
+            req.params.scope,
+          );
           return ok(req.id, { resolved: true });
         }
         case "artifacts.list":
@@ -637,6 +655,7 @@ export class SidecarService {
   }
 
   close(): void {
+    this.approvals.stopTimer();
     this.scheduler.stop();
     for (const a of this.active.values()) a.abort.abort();
     if (this.db.$client.open) this.db.$client.close();

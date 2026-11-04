@@ -15,5 +15,6 @@
 ## Not implemented yet (do not assume)
 
 - Process spawning (`shell:false`), path scope, command/network policy, approvals, Job Objects — Phase 1/4.
+- Policy Engine: `packages/policy-engine` có mã quyết định thuần (path scope, command/network policy, 4 mức quyền, grant) và test trên Linux, nhưng CHƯA được nối vào orchestrator/IPC/UI và chưa kiểm trên Windows; xem `docs/ASSUMPTIONS.md`, mục "Phase 4: Policy Engine". Không có nghĩa là agent đã bị giới hạn.
 - Secret scanning in CI (see ASSUMPTIONS.md).
 - Git worktrees are branch isolation, **not** a security sandbox. Isolation target for 1.0 is in ADR-002 and is explicitly not an OS-level sandbox.

@@ -28,7 +28,8 @@
   --fg: #e6edf3;
   --muted: #8d96a0;
   --accent: #4493f8;
-  --accent-fg: #ffffff;
+  /* White on this blue is only 3.1:1; the dark page colour gives about 6:1. */
+  --accent-fg: #0d1117;
   --accent-soft: #10243f;
   --ok: #3fb950;
   --ok-soft: #12261e;
@@ -267,7 +268,9 @@ body {
 @media (max-width: 800px) {
   .shell,
   .shell.with-inspector {
-    grid-template-columns: 1fr;
+    /* minmax(0, ...) lets the single column shrink below its content's min-content width;
+       a bare 1fr would keep it at least that wide and overflow the page horizontally. */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;
     grid-template-areas:
       "head"
@@ -280,7 +283,9 @@ body {
   .sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--line);
-    max-height: 50vh;
+    /* Narrow layout stacks everything and scrolls the page, so the sidebar must not be
+       clipped to a fraction of a short viewport. */
+    max-height: none;
   }
 }
 
@@ -1106,6 +1111,16 @@ button.primary:hover:not(:disabled) {
   align-items: center;
   gap: 10px;
 }
+/* One request per card: details on top, note, then the three buttons on one line. */
+.board li.approval-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px 0;
+}
+.approval-card .actions button {
+  white-space: nowrap;
+}
 .diff {
   margin: 0;
   max-height: 420px;
@@ -1135,7 +1150,29 @@ button.primary:hover:not(:disabled) {
   padding: 0;
   margin: 8px 0;
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+.chip {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.chip.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.chip-title {
+  display: flex;
+  align-items: center;
   gap: 6px;
+  font-weight: 600;
 }
 .choice {
   display: flex;
@@ -1179,6 +1216,41 @@ button.primary:hover:not(:disabled) {
   text-decoration: underline;
   cursor: pointer;
   color: inherit;
+}
+
+.presets-settings ul.plain {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.presets-settings .field-row {
+  align-items: center;
+}
+.presets-settings .field-row > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.presets-settings textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 6px 0;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.presets-settings .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.presets-settings h3 {
+  margin: 14px 0 6px;
+  font-size: 13px;
 }
 
 .agent-settings .field {

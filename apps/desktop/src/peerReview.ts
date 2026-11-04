@@ -82,6 +82,14 @@ export function approvalText(a: Approval): string {
   }
 }
 
+/** Answered or expired requests, newest first, at most 20 (the decision log shown under the cards). */
+export function decisionLog(all: Approval[]): Approval[] {
+  return all
+    .filter((a) => a.state !== "pending")
+    .sort((x, y) => (y.resolvedAt ?? y.createdAt).localeCompare(x.resolvedAt ?? x.createdAt))
+    .slice(0, 20);
+}
+
 /** Pending approvals that belong to this run's tasks. */
 export function approvalsFor(approvals: Approval[], tasks: WorkflowTask[]): Approval[] {
   const ids = new Set(tasks.map((t) => t.id));

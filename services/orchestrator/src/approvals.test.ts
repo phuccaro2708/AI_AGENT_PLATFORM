@@ -93,4 +93,37 @@ describe("ApprovalService", () => {
     expect(() => svc.resolve(id, "approved")).toThrow(/Illegal task transition/);
     expect(repo.listApprovals("pending").map((a) => a.id)).toEqual([id]);
   });
+
+  it("records who decided, the scope and the note in the decision log", () => {
+    const t = runningTask();
+    const id = svc.request(t, "run build");
+    svc.resolve(id, "approved", "looks fine");
+    const a = repo.getApproval(id);
+    expect(a).toMatchObject({
+      state: "approved",
+      decidedBy: "user",
+      decisionScope: "once",
+      decisionNote: "looks fine",
+    });
+  });
+
+  it("refuses any scope wider than once and leaves the request pending (fail closed)", () => {
+    const t = runningTask();
+    const id = svc.request(t, "run build");
+    expect(() => svc.resolve(id, "approved", undefined, "project")).toThrow(/Policy Engine/);
+    expect(repo.getApproval(id)?.state).toBe("pending");
+    expect(repo.getTaskState(t)).toBe("waiting_approval");
+    expect(repo.listApprovals("approved")).toEqual([]);
+  });
+
+  it("the timer settles overdue requests without anyone calling list/resolve", async () => {
+    const t = runningTask();
+    const id = svc.request(t, "run build", { ttlMs: 10 });
+    nowMs += 60_000;
+    svc.startTimer(5);
+    await new Promise((r) => setTimeout(r, 40));
+    svc.stopTimer();
+    expect(repo.getApproval(id)?.state).toBe("expired");
+    expect(repo.getTaskState(t)).toBe("needs_reconciliation");
+  });
 });

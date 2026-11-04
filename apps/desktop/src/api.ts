@@ -62,7 +62,12 @@ export interface Approval {
   taskId: string;
   state: string;
   requestJson: string;
+  createdAt: string;
   expiresAt: string | null;
+  resolvedAt: string | null;
+  decidedBy: string | null;
+  decisionScope: string | null;
+  decisionNote: string | null;
 }
 export interface ArtifactCheck {
   path: string;
@@ -151,8 +156,8 @@ export const api = {
     call<{ approvals: Approval[] }>("approvals.list", state ? { state } : {}).then(
       (r) => r.approvals,
     ),
-  resolveApproval: (approvalId: string, decision: "approved" | "denied") =>
-    call("approvals.resolve", { approvalId, decision }),
+  resolveApproval: (approvalId: string, decision: "approved" | "denied", note?: string) =>
+    call("approvals.resolve", { approvalId, decision, ...(note ? { note } : {}) }),
   artifacts: (taskId: string) =>
     call<{ artifacts: ArtifactCheck[] }>("artifacts.list", { taskId }).then((r) => r.artifacts),
   diff: (taskId: string) =>

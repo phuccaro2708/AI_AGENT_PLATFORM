@@ -29,7 +29,11 @@ class Gated implements AgentAdapter {
   }
   async cancel() {}
   release(prompt: string) {
-    this.gates.get(prompt)?.();
+    const gate = this.gates.get(prompt);
+    // A release with no gate would silently leave the task running and hang `idle()` until the test
+    // times out; fail loudly instead.
+    if (!gate) throw new Error(`release("${prompt}"): that task has not reached its gate`);
+    gate();
   }
   async *execute(task: AgentTask): AsyncIterable<AgentEvent> {
     this.executions++;
@@ -83,10 +87,31 @@ const enqueue = (prompt: string, extra: Partial<Parameters<Orchestrator["enqueue
   o.enqueue({ workflowId: wf, agentId: "gated", prompt, ...extra });
 const scheduler = (over: { concurrency?: number; leaseMs?: number } = {}) =>
   new Scheduler({ repo, orchestrator: o, clock, ...over });
+/** Polls `cond` until true; a bounded, explicit wait instead of relying on event-loop tick order. */
+const waitFor = async (cond: () => boolean, what: string, timeoutMs = 2000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (!cond()) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((res) => setTimeout(res, 1));
+  }
+};
 const tick = async (s: Scheduler) => {
+  const before = adapter.started.length;
   const r = await s.tick();
-  await new Promise((res) => setImmediate(res)); // let started tasks reach their gate
+  // Started tasks have reached their gate once the adapter has recorded them.
+  await waitFor(() => adapter.started.length >= before + r.started.length, "started tasks");
   return r;
+};
+
+/** Ticks until a tick starts something (a slot freed up), bounded in time. */
+const tickUntilStarted = async (s: Scheduler, timeoutMs = 2000) => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const r = await tick(s);
+    if (r.started.length > 0) return r.started;
+    if (Date.now() > deadline) throw new Error("timed out waiting for a freed slot to be refilled");
+    await new Promise((res) => setTimeout(res, 1));
+  }
 };
 
 describe("Orchestrator.enqueue / execute", () => {
@@ -145,21 +170,28 @@ describe("Scheduler", () => {
   });
 
   it("never runs more than `concurrency` tasks at once", async () => {
+    // Tasks enqueued in the same millisecond tie on priority and createdAt, and the ULID tiebreak is
+    // random within a millisecond, so which two start first is not fixed. Never assume "1" before "2":
+    // always act on what actually started (`adapter.started`).
     for (const p of ["1", "2", "3", "4"]) enqueue(p);
     const s = scheduler({ concurrency: 2 });
     expect((await tick(s)).started).toHaveLength(2);
     expect((await tick(s)).started).toHaveLength(0); // slots are full
     expect(adapter.active).toBe(2);
-    adapter.release("1");
-    await new Promise((res) => setImmediate(res));
-    expect((await tick(s)).started).toHaveLength(1);
+    adapter.release(adapter.started[0]!);
+    // The freed slot reaches the scheduler once the task settles; ticking again is harmless while full.
+    expect(await tickUntilStarted(s)).toHaveLength(1);
+    expect(adapter.active).toBe(2);
     expect(adapter.maxActive).toBe(2);
-    for (const p of ["2", "3"]) adapter.release(p);
+    for (const p of adapter.started.slice(1)) adapter.release(p);
     await s.idle();
-    await tick(s);
-    adapter.release("4");
+    expect(adapter.active).toBe(0);
+    expect((await tick(s)).started).toHaveLength(1); // the last task
+    adapter.release(adapter.started[3]!);
     await s.idle();
     expect(adapter.executions).toBe(4);
+    expect(new Set(adapter.started).size).toBe(4);
+    expect(adapter.maxActive).toBe(2);
   });
 
   it("starts higher priority tasks first", async () => {

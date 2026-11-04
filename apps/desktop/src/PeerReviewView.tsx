@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   api,
   type AdapterInfo,
@@ -7,10 +7,13 @@ import {
   type ResolveDecision,
   type WorkflowTask,
 } from "./api";
+import { PEER_REVIEW_REQUIRES, capabilityBlocker, gapOf } from "./capabilityGap";
 import { Composer, StartSteps } from "./Composer";
 import { Badge, msg, TaskLogView } from "./components";
+import { whenText } from "./history";
 import {
   approvalText,
+  decisionLog,
   approvalsFor,
   awaitingDecision,
   boardRows,
@@ -56,15 +59,24 @@ export function PeerReviewView({
   const [reviewer, setReviewer] = useState("");
   const project = projects.find((p) => p.id === projectId);
   const usable = adapters.filter((a) => a.available);
-  const impl = implementer || usable[0]?.id || "";
-  const rev = reviewer || usable[1]?.id || usable[0]?.id || "";
+  // Defaults prefer agents that meet the requirement; any agent can still be picked by hand.
+  const fit = usable.filter((a) => gapOf(a, PEER_REVIEW_REQUIRES).missing.length === 0);
+  const defaults = fit.length > 0 ? fit : usable;
+  const impl = implementer || defaults[0]?.id || "";
+  const rev = reviewer || defaults[1]?.id || defaults[0]?.id || "";
   const blocker = !project
     ? "Choose a project first"
     : impl === "" || rev === ""
       ? "No agent is available"
-      : goal.trim() === ""
-        ? "Describe the goal"
-        : null;
+      : (capabilityBlocker(
+          adapters.find((a) => a.id === impl),
+          PEER_REVIEW_REQUIRES,
+        ) ??
+        capabilityBlocker(
+          adapters.find((a) => a.id === rev),
+          PEER_REVIEW_REQUIRES,
+        ) ??
+        (goal.trim() === "" ? "Describe the goal" : null));
 
   if (run) {
     return (
@@ -90,6 +102,7 @@ export function PeerReviewView({
           <option key={a.id} value={a.id} disabled={!a.available}>
             {a.id}
             {a.available ? "" : " (not found)"}
+            {capabilityBlocker(a, PEER_REVIEW_REQUIRES) ? " (thiếu capability)" : ""}
           </option>
         ))}
       </select>
@@ -230,10 +243,26 @@ function ApprovalCenter({
   onError: (m: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [log, setLog] = useState<Approval[]>([]);
+  // Decision log: refreshed whenever the set of pending requests changes (an answer or an expiry).
+  const pendingKey = approvals.map((a) => a.id).join(",");
+  useEffect(() => {
+    let live = true;
+    api.approvals().then(
+      (all) => {
+        if (live) setLog(decisionLog(all));
+      },
+      (e: unknown) => onError(msg(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [pendingKey, onError]);
   const answer = (id: string, decision: "approved" | "denied") => {
     setBusy(true);
     api
-      .resolveApproval(id, decision)
+      .resolveApproval(id, decision, notes[id]?.trim())
       .then(onResolved, (e: unknown) => onError(msg(e)))
       .finally(() => setBusy(false));
   };
@@ -247,22 +276,59 @@ function ApprovalCenter({
       ) : (
         <ul className="board">
           {approvals.map((a) => (
-            <li key={a.id}>
-              <span>{approvalText(a)}</span>
-              <button disabled={busy} onClick={() => answer(a.id, "approved")}>
-                Approve
-              </button>
-              <button className="danger" disabled={busy} onClick={() => answer(a.id, "denied")}>
-                Deny
-              </button>
+            <li key={a.id} className="approval-card">
+              <strong>{approvalText(a)}</strong>
+              <span className="muted small">
+                Asked {whenText(a.createdAt)}
+                {a.expiresAt
+                  ? ` · expires ${whenText(a.expiresAt)}; no answer means the task needs reconciliation`
+                  : ""}
+              </span>
+              <input
+                aria-label="Note (optional)"
+                placeholder="Note (optional)"
+                maxLength={2000}
+                value={notes[a.id] ?? ""}
+                onChange={(e) => setNotes({ ...notes, [a.id]: e.target.value })}
+              />
+              <div className="actions">
+                <button disabled={busy} onClick={() => answer(a.id, "approved")}>
+                  Allow once
+                </button>
+                <button className="danger" disabled={busy} onClick={() => answer(a.id, "denied")}>
+                  Deny
+                </button>
+                <button
+                  disabled
+                  title="Standing permissions need the Policy Engine (Phase 4)"
+                  aria-label="Always allow in this scope (needs the Policy Engine, Phase 4)"
+                >
+                  Always allow in scope
+                </button>
+              </div>
             </li>
           ))}
         </ul>
       )}
       <p className="muted small">
         An approval pauses the task until you answer; it does not limit what an agent can already
-        do.
+        do. Nothing is chosen for you, and every answer applies to this one request only.
       </p>
+      {log.length > 0 && (
+        <>
+          <h3>Decision log</h3>
+          <ul className="board">
+            {log.map((a) => (
+              <li key={a.id}>
+                <span className="muted small">{whenText(a.resolvedAt ?? a.createdAt)}</span>
+                <span>{approvalText(a)}</span>
+                <span className="tag">{a.state}</span>
+                {a.decisionNote && <span className="muted small">“{a.decisionNote}”</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   );
 }
@@ -317,17 +383,19 @@ function ReconcileCard({
       <fieldset className="choices">
         <legend className="muted small">What happened?</legend>
         {CHOICES.map(([value, label, hint]) => (
-          <label key={value} className="choice">
-            <input
-              type="radio"
-              name={`decision-${row.task.id}`}
-              checked={decision === value}
-              onChange={() => {
-                setDecision(value);
-                setConfirmed(false);
-              }}
-            />
-            <span>{label}</span>
+          <label key={value} className={decision === value ? "chip active" : "chip"}>
+            <span className="chip-title">
+              <input
+                type="radio"
+                name={`decision-${row.task.id}`}
+                checked={decision === value}
+                onChange={() => {
+                  setDecision(value);
+                  setConfirmed(false);
+                }}
+              />
+              {label}
+            </span>
             <span className="muted small">{hint}</span>
           </label>
         ))}

@@ -112,6 +112,13 @@ export const AgentLaunchSettingsInput = z.object({
   env: z.record(z.string().max(128), z.string().max(1024)).default({}),
 });
 
+/**
+ * How far one approval reaches. `once` is the only scope that can be granted today; the others are modelled
+ * (and stored in `approval_grants`) for the Policy Engine of Phase 4 and are refused by the sidecar until then.
+ */
+export const ApprovalScope = z.enum(["once", "task", "project", "path", "command"]);
+export type ApprovalScope = z.infer<typeof ApprovalScope>;
+
 export const SidecarRequest = z.discriminatedUnion("method", [
   z.object({ id: z.number().int(), method: z.literal("health") }),
   z.object({
@@ -238,6 +245,8 @@ export const SidecarRequest = z.discriminatedUnion("method", [
       approvalId: z.string().min(1),
       decision: z.enum(["approved", "denied"]),
       note: z.string().max(2000).optional(),
+      /** Only "once" is honoured until the Policy Engine exists (Phase 4); other scopes are rejected, never downgraded silently. */
+      scope: ApprovalScope.default("once"),
     }),
   }),
   z.object({

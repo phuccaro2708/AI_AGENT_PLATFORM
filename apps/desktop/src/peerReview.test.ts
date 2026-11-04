@@ -5,6 +5,7 @@ import {
   approvalsFor,
   awaitingDecision,
   boardRows,
+  decisionLog,
   diffTask,
   parseRuns,
   resolutionBlocker,
@@ -22,7 +23,12 @@ const approval = (id: string, taskId: string, state = "pending"): Approval => ({
   taskId,
   state,
   requestJson: '{"description":"merge it"}',
+  createdAt: "2026-01-01T00:00:00.000Z",
   expiresAt: null,
+  resolvedAt: null,
+  decidedBy: null,
+  decisionScope: null,
+  decisionNote: null,
 });
 
 describe("peer review run logic", () => {
@@ -74,5 +80,18 @@ describe("reconciliation", () => {
     expect(resolutionBlocker("failed", "no file written", false)).toBeNull();
     expect(resolutionBlocker("requeue", "no file written", false)).toMatch(/Confirm/);
     expect(resolutionBlocker("requeue", "no file written", true)).toBeNull();
+  });
+
+  it("decision log lists answered and expired requests, newest first, never pending ones", () => {
+    const at = (id: string, state: string, resolvedAt: string) => ({
+      ...approval(id, "t", state),
+      resolvedAt,
+    });
+    const log = decisionLog([
+      approval("p", "t"),
+      at("old", "approved", "2026-01-02T00:00:00.000Z"),
+      at("new", "expired", "2026-01-03T00:00:00.000Z"),
+    ]);
+    expect(log.map((a) => a.id)).toEqual(["new", "old"]);
   });
 });

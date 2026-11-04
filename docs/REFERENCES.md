@@ -35,3 +35,7 @@ _None._
 ## Phase 2
 
 Không tham khảo repo công khai mới trong Phase 2; tài liệu và hành vi CLI lấy từ chính Claude Code 2.1.316 và codex-cli 0.165.0 chạy trên máy này (`scripts/e2e-peer-review.mjs`). Không sao chép code ngoài.
+
+## Phiên phụ 2026-11-04
+
+- https://github.com/github/spec-kit, tag `v1.3.0`, license MIT, xem 2026-11-04. Mục đích: so sánh thiết kế (integration/extension/preset/workflow/catalog, mô hình tin cậy cho mã thực thi). Chỉ đọc qua web; không sao chép code, không clone, không chạy script. Chưa dùng làm cơ sở tuyên bố tương thích.

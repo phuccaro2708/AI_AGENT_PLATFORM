@@ -20,7 +20,7 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 7. Không commit secrets, đường dẫn máy cá nhân, log chứa token. Secrets → OS credential store.
 8. Không sửa file ngoài repo; không cài global dependency âm thầm.
 9. Không gọi message bus nội bộ là "A2A-compatible" nếu chưa qua compatibility test.
-10. Mỗi phase chỉ đóng khi đạt acceptance criteria trong `docs/ROADMAP.md`; ghi báo cáo `docs/PHASEn_REPORT.md` với lệnh đã chạy và kết quả thật.
+10. Mỗi phase chỉ đóng khi đạt acceptance criteria trong `docs/ROADMAP.md`; ghi báo cáo `docs/PHASEn_REPORT.md` với lệnh đã chạy và kết quả thật. Thứ tự phase hiện hành: `docs/DECISIONS.md#adr-005-thứ-tự-phase-chốt-lại-2026-11-04` (Phase 4 Policy Engine đứng trước khi đóng Phase 7).
 
 ## Quy trình làm việc
 

@@ -21,3 +21,11 @@
 - **Bối cảnh:** MVP chỉ chạy trên một máy; giao thức nội bộ typed đủ dùng. A2A cần compatibility test đúng phiên bản spec.
 - **Quyết định:** 1.0 chỉ có giao thức nội bộ + MCP gateway tối thiểu. A2A gateway làm ở v1.1. Message nội bộ đã có `correlationId`/`causationId` để map sau.
 - **Ràng buộc:** không gọi hệ thống là "A2A-compatible" trước khi qua compatibility tests.
+
+## ADR-005: Thứ tự phase chốt lại (2026-11-04)
+
+- **Trạng thái:** Đã chốt theo yêu cầu người dùng, thay thế quyết định thứ tự 2 → 7 → 8 → 9 ngày 2026-11-02.
+- **Bối cảnh:** thứ tự cũ có phụ thuộc ngược (7C và 8 và 9 cần Policy Engine ở Phase 4; Phase 8 cần `mcp-gateway` ở Phase 6; gate Phase 7 về diagnostics cần Phase 4; Phase 5 và 7 trùng UI).
+- **Quyết định:** Phase 7 (phần không cần policy) song song Phase 3 → Phase 4 (+ 7C-2, đóng Phase 7) → Phase 5 → Phase 6 (kéo `mcp-gateway` lên đầu) → Phase 8 → Phase 9; Phase 10 xuyên suốt. Chi tiết bảng: ROADMAP, mục "Thứ tự thực hiện".
+- **Đánh đổi:** không còn phụ thuộc vòng; mọi quyền ghi đi qua Policy Engine; ra 1.0 trước khi mở rộng. Đổi lại ACP và đội agent (Phase 8, 9) đến muộn hơn và Phase 4 (2–3 tuần) chen trước các tính năng mới.
+- **Xem lại nếu:** có yêu cầu đưa ACP hoặc multi-agent lên sớm; khi đó phải có Policy Engine tối thiểu trước.

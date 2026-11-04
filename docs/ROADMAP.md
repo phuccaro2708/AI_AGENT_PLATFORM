@@ -15,6 +15,23 @@ Nguyên tắc ưu tiên: **Agent Runtime → Message Router → Durable Task Sta
 | 3–6   | Chưa bắt đầu                                                                                                                                                                                                                  |
 | 8–10  | Kế hoạch mở rộng "ngang AionUi, hơn ở an toàn / tin cậy / multi-agent / nhẹ" — xem cuối tài liệu; chưa bắt đầu                                                                                                                |
 
+## Thứ tự thực hiện (chốt lại 2026-11-04)
+
+Thay cho thứ tự 2 → 7 → 8 → 9 (chốt 2026-11-02), vì thứ tự cũ có phụ thuộc ngược: 7C cần Policy Engine (Phase 4); Phase 8 cần MCP gateway (Phase 6) và Policy Engine; Phase 9 (lịch chạy "không vượt policy") cần Policy Engine; gate Phase 7 về diagnostics cần Phase 4; Phase 5 và Phase 7 trùng phần UI. Lý do và đánh đổi: `docs/DECISIONS.md` (ADR-005).
+
+| Bước        | Nội dung                                                                                                                                                                                                                                        | Điều kiện vào                |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| 1           | **Phase 7 phần không cần policy**: nợ UI (A8/B6), kiểm 7A với CLI thật, 7C-1 (một lần / từ chối, nhật ký quyết định, timer hết hạn fail-closed, mô hình `ApprovalScope` với nút phạm vi bị khoá), 7D (Tailwind/shadcn, theme, phím tắt), preset | Phase 2 đóng                 |
+| 1 song song | **Phase 3** (probe `agy`, `adapter-antigravity`, capability routing, resource monitor). Ollama hoãn tới khi máy có                                                                                                                              | Không phụ thuộc              |
+| 2           | **Phase 4** (Policy Engine, cô lập, recovery, observability, diagnostics export, soak test) rồi **7C-2** (bật "Luôn cho phép trong phạm vi") và đóng Phase 7 (`PHASE7_REPORT.md`, E2E người dùng mới)                                           | Bước 1 xong                  |
+| 3           | **Phase 5** Desktop Beta: gộp phần UI trùng với Phase 7 (Approval Center, Diff Viewer, Settings), Live Terminal, installer, wizard, Playwright e2e, beta ≥ 3 dự án                                                                              | Phase 4 đóng                 |
+| 4           | **Phase 6** Production 1.0 (signing, auto-update, pipeline, ma trận tương thích CLI, tài liệu vận hành). **`mcp-gateway` tối thiểu kéo lên đầu bước này** vì Phase 8 cần                                                                        | Phase 5 đóng                 |
+| 5           | **Phase 8** ACP, MCP, Skills                                                                                                                                                                                                                    | Phase 4 đóng + `mcp-gateway` |
+| 6           | **Phase 9** Multi-agent có cấu trúc, lịch chạy                                                                                                                                                                                                  | Phase 4 và 8 đóng            |
+| xuyên suốt  | **Phase 10**: ngân sách hiệu năng chạy trong CI từ Phase 5; diagnostics một nút; ADR Remote/WebUI                                                                                                                                               | Song song Phase 5–6          |
+
+Mỗi phase vẫn chỉ đóng khi đạt Acceptance gate của chính nó.
+
 ## Tổng quan
 
 | Phase | Tên                    | Thời gian | Kết quả chính                                                                                   |
@@ -61,7 +78,7 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 
 **Việc làm ngoài phạm vi Phase 1 (theo yêu cầu người dùng):** làm lại UI (theme sáng/tối, sidebar, Settings, bố cục 3 cột, composer, thẻ lỗi). Mode "Multi-agent" hiện chỉ gửi cùng mục tiêu cho ≥ 2 agent chạy độc lập, chưa điều phối (điều phối thật: Phase 2/9). Không giả lập tính năng backend chưa có.
 
-**Phase 2: ĐÓNG (2026-11-03), có ngoại lệ** — xem `docs/PHASE2_REPORT.md`. **Bước tiếp theo: Phase 7** (thứ tự đã chốt 2 → 7 → 8 → 9).
+**Phase 2: ĐÓNG (2026-11-03), có ngoại lệ** — xem `docs/PHASE2_REPORT.md`. **Bước tiếp theo: Phase 7 (phần không cần policy) song song Phase 3, rồi Phase 4** (thứ tự chốt lại 2026-11-04, xem mục "Thứ tự thực hiện").
 
 - Process Manager: spawn `shell:false`, resolve shim `.cmd`/`.exe` trên Windows, stream stdout/stderr, timeout, cancel (kill process tree qua Job Object / `taskkill /T`).
 - CLI detection + **compatibility probe** (version, flags thực tế) cho Claude Code và Codex; lưu kết quả vào `agents.capabilities`.
@@ -195,7 +212,7 @@ Lấp khoảng trống UX so với AionUi, nhưng theo cách task-centric.
 
 - **ACP adapter** (Agent Client Protocol): chỉ sau khi có probe + contract test với ít nhất hai agent thật; ghi capability thực tế vào ASSUMPTIONS, không gọi "tương thích" khi chưa qua test.
 - Mọi permission request từ ACP đi qua cùng Policy Engine và Approval UI như CLI native.
-- **MCP**: quản lý danh sách MCP server theo project, bật/tắt từng tool, hiển thị quyền; gateway tối thiểu (xem Phase 6) là điều kiện tiên quyết.
+- **MCP**: quản lý danh sách MCP server theo project, bật/tắt từng tool, hiển thị quyền; gateway tối thiểu (xem Phase 6, kéo lên đầu bước 4) là điều kiện tiên quyết.
 - **Skills/prompt packs**: nạp từ thư mục project, hiển thị nguồn và hash; mặc định chỉ đọc; không tải mã từ mạng khi chưa có xác nhận.
 - Process registry khi khởi động: ghi PID + thời điểm tạo, chỉ dọn tiến trình mồ côi khi khớp danh tính, tránh kill nhầm.
 - Hạn mức thời gian khởi tạo cho từng CLI/ACP (lạnh dài hơn nóng) và báo lỗi có nguyên nhân.
@@ -224,7 +241,7 @@ Lấp khoảng trống UX so với AionUi, nhưng theo cách task-centric.
 - [ ] Lịch chạy không bao giờ vượt policy đã cấp, kể cả khi người dùng vắng mặt.
 - [ ] UI Multi-agent chạy một đội có vai và bảng ngữ cảnh chung trên dự án mẫu; người dùng thấy được agent nào nhận phần ngữ cảnh nào.
 
-**Đã chốt (2026-11-02):** giữ thứ tự Phase 2 → 7 → 8 → 9. Phần "đội, vai, ngữ cảnh" của Phase 9 không được đẩy lên trước Phase 7–8; phần tối thiểu (vai, bảng ngữ cảnh) vẫn nằm ở Phase 2.
+**Thứ tự (chốt lại 2026-11-04, thay cho 2 → 7 → 8 → 9 của 2026-11-02):** xem mục "Thứ tự thực hiện" đầu tài liệu. Phase 9 đứng sau Phase 4 và 8; phần "đội, vai, ngữ cảnh" của Phase 9 vẫn không được đẩy lên trước Phase 7–8; phần tối thiểu (vai, bảng ngữ cảnh) vẫn nằm ở Phase 2.
 
 ### Phase 10 — Nhẹ, nhanh, hoàn thiện sản phẩm (1–2 tuần, song song Phase 5–6)
 

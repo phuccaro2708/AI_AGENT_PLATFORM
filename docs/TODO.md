@@ -203,7 +203,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [x] Cấu hình agent theo provider (command/args/env), chỉ có hiệu lực sau probe tốt; env là allowlist
 - [x] Secrets trong Windows Credential Manager, chỉ ghi từ UI, tiêm vào sidecar khi spawn theo provider
 - [x] UI Settings → Agents
-- [x] Chạy 7B trong app Tauri thật (2026-11-03, WebView2 + CDP, DB tạm): Browse, policy rootPath, Agents, Secrets đạt; tìm ra `node.exe` lọt probe Claude và màu hộp Check — đã sửa (`52660f3`). Chưa kiểm lại màu mới trong app
+- [x] Chạy 7B trong app Tauri thật (2026-11-03, WebView2 + CDP, DB tạm): Browse, policy rootPath, Agents, Secrets đạt; tìm ra `node.exe` lọt probe Claude và màu hộp Check — đã sửa (`52660f3`). Đã kiểm lại màu hộp Check trong app thật ngày 2026-11-04 (xem PROGRESS)
 - [ ] `cargo audit` khi có công cụ
 - [x] CI xanh cho `52660f3` (5/5 job, 2026-11-04)
 - [ ] Đọc CI của `babca05` trên nhánh gốc; chạy lại `clippy` và `cargo test` sau khi gộp quét CLI

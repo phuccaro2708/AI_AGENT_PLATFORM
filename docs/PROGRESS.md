@@ -118,3 +118,13 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Đọc CI của `bfbe920` (GraphQL). Rủi ro: định dạng khoá đường dẫn của detect-secrets trên Linux chưa được chạy thử; thời gian job Security mới và dung lượng thư mục tạm chưa có số đo trên CI.
 - A7 (`cargo audit` cục bộ), A8 (màu hộp Check trong app thật), B6 (nợ UI: Open log, Newer/Older nhiều trang, bố cục hẹp, theme).
 - Sau đó: fast-forward nhánh gốc, rồi Đợt 2 (B1 kiểm CLI thật, B2 phần 7C-1 và `ApprovalScope`).
+
+## 2026-11-04 (đêm) — Fast-forward nhánh gốc, A7, probe agy, kiểm UI A8+B6
+
+- Nhánh gốc `claude/loving-lovelace-32lh71` fast-forward `868daef` tới `3d5925f` (không force). CI `3d5925f`: TypeScript (ubuntu, windows), Tauri và một lượt Security (bản quét mới, lần đầu trên Linux) xanh; lượt còn lại lúc ghi chưa xong.
+- A7: `cargo audit` 0.22.2 cục bộ, 424 crate, không lỗ hổng; hai cảnh báo transitive: `proc-macro-error` không bảo trì (RUSTSEC-2024-0370), `glib 0.18.5` unsound (RUSTSEC-2024-0429).
+- Probe `agy` 1.4.8 (2 trong 3 lượt gọi model): sự kiện `init`/`step_update`/`result`, usage 25 611 token cho lượt tối thiểu; `--mode plan` thoát 0 với `result` rỗng sau print timeout (commit `79dbf42`, fixture + `docs/ASSUMPTIONS.md`). Chưa có adapter.
+- Kiểm UI trong app Tauri thật (debug build, WebView2 + CDP, DB tạm, 65 task seed, không chạy task thật):
+  - A8 hộp Check: đạt cả sáng/tối (tương phản khoảng 4,6 sáng, 6,3 tối; hộp lỗi 5,2–5,4).
+  - B6: phân trang 30/30/5 đúng thứ tự, Newer/Older đúng trạng thái; Open log đúng 7/7 dòng; không tràn ngang ở 1100/800/700/600 px; cả 5 màn hình đọc được ở hai theme.
+  - Phát hiện: chữ trắng trên accent tối `#4493f8` chỉ 3,10:1 (logo, avatar, nút primary), dưới 4,5; sidebar < 800 px bị giới hạn 50vh nên danh sách project bị cắt ở chiều cao 720; nút Older vẫn bật khi tổng là bội số của 30 (suy ra từ mã, chưa test); lịch sử chỉ hiện ngày, không giờ. Chưa sửa; chưa kiểm Settings > Agents Save/Use defaults và Peer Review với CLI thật.

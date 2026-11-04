@@ -7,7 +7,8 @@
 - **Phase 0: PASS (có hạn chế)** — `docs/PHASE0_REPORT.md`.
 - **Phase 1: ĐÓNG (có ba ngoại lệ)** — `docs/PHASE1_REPORT.md`. CI xanh 5/5 job ở run `41551598060`; `pnpm test` 168 test pass; `cargo test` 7/7, clippy sạch. Claude 2.1.314 và Codex 0.165.0 đã chạy task thật và hủy được khi tool đang chạy (cả qua adapter lẫn nút Cancel trong app Tauri release), không để lại tiến trình mồ côi.
 - **Phase 2: đóng 2026-11-03 (có ngoại lệ, xem PHASE2_REPORT).** Tiếp theo: 7 → 8 → 9 (10 song song 5–6).
-- Cập nhật 2026-11-04: nhánh gốc `claude/loving-lovelace-32lh71` đã ở `babca05` (gồm 7A, 7B, quét CLI, redaction, bỏ Gemini); PR #1 đã MERGED. Kiểm cục bộ: lint, typecheck, 383 test, build đều qua. Chưa đọc CI của `babca05`.
+- Cập nhật 2026-11-04: nhánh gốc `claude/loving-lovelace-32lh71` đã ở `868daef` (gồm 7A, 7B, quét CLI, redaction, bỏ Gemini); PR #1 đã MERGED. Kiểm cục bộ: lint, typecheck, 383 test, build đều qua; `cargo clippy -D warnings` sạch, `cargo test` 12 qua / 1 bỏ qua. CI `babca05` đỏ vì Prettier lệch ở `docs/HANDOFF.md`; `868daef` (đã format lại) xanh 5/5 job.
+- Ollama: hoãn, bỏ khỏi kế hoạch hiện tại vì máy chưa cài (không có để probe). Làm lại khi có môi trường.
 
 ### Ngoại lệ chuyển từ Phase 1
 

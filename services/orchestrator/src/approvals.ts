@@ -54,14 +54,29 @@ export class ApprovalService {
   }
 
   /** Answers a pending approval exactly once. An overdue request is rejected here; `expireDue` settles it. */
-  resolve(approvalId: string, decision: "approved" | "denied", note?: string): void {
+  resolve(
+    approvalId: string,
+    decision: "approved" | "denied",
+    note?: string,
+    scope: string = "once",
+  ): void {
+    // Fail closed: a wider scope would need a standing grant, and there is no Policy Engine to honour it yet.
+    if (scope !== "once") {
+      throw new Error(
+        `Approval scope "${scope}" needs the Policy Engine (Phase 4); only "once" is available`,
+      );
+    }
     this.repo.tx((r) => {
       const approval = r.getApproval(approvalId);
       if (!approval) throw new Error(`Unknown approval: ${approvalId}`);
       if (approval.expiresAt !== null && approval.expiresAt < this.clock().toISOString()) {
         throw new Error(`Approval has expired: ${approvalId}`);
       }
-      r.resolveApproval(approvalId, decision);
+      r.resolveApproval(approvalId, decision, {
+        decidedBy: "user",
+        scope,
+        ...(note ? { note } : {}),
+      });
       const suffix = note ? `: ${note}` : "";
       if (decision === "approved") {
         r.setTaskState(approval.taskId, "running", { reason: `approved${suffix}` });
@@ -69,6 +84,26 @@ export class ApprovalService {
         r.setTaskState(approval.taskId, "failed", { reason: `approval denied${suffix}` });
       }
     });
+  }
+
+  private timer: NodeJS.Timeout | undefined;
+
+  /** Settles overdue approvals on a timer so a forgotten request cannot leave a task waiting forever. */
+  startTimer(intervalMs = 5_000, onError: (err: unknown) => void = () => undefined): void {
+    if (this.timer) return;
+    this.timer = setInterval(() => {
+      try {
+        this.expireDue();
+      } catch (err) {
+        onError(err);
+      }
+    }, intervalMs);
+    this.timer.unref();
+  }
+
+  stopTimer(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = undefined;
   }
 
   /** Expires every pending approval that is overdue; returns their ids. Call from a timer. */

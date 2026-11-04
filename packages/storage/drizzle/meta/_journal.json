@@ -43,6 +43,13 @@
       "when": 1793742925736,
       "tag": "0005_agent_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793809126854,
+      "tag": "0006_approval_decision_log",
+      "breakpoints": true
     }
   ]
 }

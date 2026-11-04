@@ -149,3 +149,11 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 
 - Chạy `node scripts/e2e-peer-review.mjs resume claude codex` và `resume codex claude` (CLI thật, có tốn usage, DB/repo tạm): cả hai lần kill → task `needs_reconciliation` → quyết định `requeue` → hai task `completed`, workflow `completed`, exit 0. Lần claude→codex in thêm "cleanup skipped: EPERM" (dọn thư mục tạm, không ảnh hưởng kết quả).
 - Chưa chạy: qua UI app Tauri thật; CI `1540a4f` còn chưa đọc kết luận; `3dab1ef` chưa push.
+
+## 2026-11-04 (khuya, 7C-1) — Approval: nhật ký, timer, phạm vi bị khoá
+
+- Thêm migration `0006_approval_decision_log`: cột `decided_by`, `decision_scope`, `decision_note` cho `approvals`; bảng `approval_grants` (chỉ schema, chưa có mã nào đọc/ghi).
+- `ApprovalScope` (`once|task|project|path|command`) trong contracts; `approvals.resolve` nhận `scope` mặc định `once`, service từ chối mọi phạm vi khác (fail closed, yêu cầu vẫn pending). Không thêm method IPC mới nên `lib.rs`/stub không phải đổi.
+- Timer quét hết hạn 5 giây trong sidecar (`approvalSweepMs`, dừng ở `close()`): quá hạn → `expired`, task → `needs_reconciliation` (giữ hành vi Phase 2, không chuyển `denied`).
+- UI: thẻ phê duyệt có thời điểm hỏi/hết hạn, ô ghi chú, "Allow once" / "Deny", nút "Always allow in scope" bị khoá kèm lý do; mục Decision log (20 mục gần nhất).
+- Kiểm: `pnpm lint`, `typecheck`, `test` (44 file, 389 test), `build` qua. Chưa kiểm trong app Tauri thật. Vẫn chưa có đường production tạo approval từ CLI thật (Phase 4), nên thẻ chỉ xuất hiện khi mã gọi `ApprovalService.request`.

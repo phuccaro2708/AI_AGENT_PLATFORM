@@ -52,6 +52,8 @@ export interface SidecarOptions {
   secrets?: ProviderSecrets;
   /** How often the scheduler looks for ready tasks once a workflow has started. Default 500. */
   schedulerIntervalMs?: number;
+  /** Interval of the approval expiry sweep (default 5 s). */
+  approvalSweepMs?: number;
 }
 
 const ok = (id: number, result: unknown) => ({
@@ -282,6 +284,9 @@ export class SidecarService {
       .resumeAll()
       .catch((err) => log.error({ err: this.redactor.text(String(err)) }, "resume failed"));
     this.approvals = new ApprovalService({ repo: this.repo });
+    this.approvals.startTimer(opts.approvalSweepMs, (err) =>
+      log.error({ err: this.redactor.text(String(err)) }, "approval expiry sweep failed"),
+    );
     this.artifacts = new ArtifactRegistry(this.repo, workspaces);
   }
 
@@ -611,7 +616,12 @@ export class SidecarService {
         }
         case "approvals.resolve": {
           this.approvals.expireDue();
-          this.approvals.resolve(req.params.approvalId, req.params.decision, req.params.note);
+          this.approvals.resolve(
+            req.params.approvalId,
+            req.params.decision,
+            req.params.note,
+            req.params.scope,
+          );
           return ok(req.id, { resolved: true });
         }
         case "artifacts.list":
@@ -637,6 +647,7 @@ export class SidecarService {
   }
 
   close(): void {
+    this.approvals.stopTimer();
     this.scheduler.stop();
     for (const a of this.active.values()) a.abort.abort();
     if (this.db.$client.open) this.db.$client.close();

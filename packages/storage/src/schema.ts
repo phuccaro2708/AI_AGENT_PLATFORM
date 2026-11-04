@@ -174,10 +174,38 @@ export const approvals = sqliteTable(
     createdAt: text("created_at").notNull(),
     expiresAt: text("expires_at"),
     resolvedAt: text("resolved_at"),
+    /** Decision log (7C-1): who decided, what scope was granted, and the note given. Null while pending/expired. */
+    decidedBy: text("decided_by"),
+    decisionScope: text("decision_scope"),
+    decisionNote: text("decision_note"),
   },
   (t) => [
     index("idx_approvals_task_state").on(t.taskId, t.state),
     check("approvals_state_check", sql`${t.state} IN ('pending','approved','denied','expired')`),
+  ],
+);
+
+/**
+ * Standing grants ("always allow in this scope"). Schema only: nothing writes or reads this table until the
+ * Policy Engine (Phase 4, 7C-2) exists, so every approval is a one-time decision today.
+ */
+export const approvalGrants = sqliteTable(
+  "approval_grants",
+  {
+    id: text("id").primaryKey(),
+    approvalId: text("approval_id")
+      .notNull()
+      .references(() => approvals.id),
+    scope: text("scope").notNull(),
+    /** Scope target (e.g. a project id or a canonical path prefix); meaning depends on `scope`. */
+    target: text("target"),
+    createdAt: text("created_at").notNull(),
+    expiresAt: text("expires_at"),
+    revokedAt: text("revoked_at"),
+  },
+  (t) => [
+    index("idx_approval_grants_approval").on(t.approvalId),
+    check("approval_grants_scope_check", sql`${t.scope} IN ('task','project','path','command')`),
   ],
 );
 

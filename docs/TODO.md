@@ -130,7 +130,7 @@
 - [x] Bảng ngữ cảnh chung tối thiểu: lọc theo vai, có test
 - [x] Workflow mẫu Claude implement → Codex review (e2e thật, `scripts/e2e-peer-review.mjs`; chưa qua UI trong app Tauri)
 - [x] Artifact registry (hash) + Diff Viewer
-- [~] Approval Center (`approvals.resolve`), expiry: có UI/IPC/service, **chưa có đường production tạo approval, chưa có timer hết hạn**
+- [~] Approval Center (`approvals.resolve`), expiry: có UI/IPC/service, **chưa có đường production tạo approval** (timer hết hạn đã có, 7C-1)
 - [x] Message Timeline + Task Board UI (chưa kiểm trong app thật; poll, không có push)
 - [x] Tests: kill giữa chừng (thật), duplicate delivery (fake), 2 agent song song (thật)
 - [x] PHASE2_REPORT.md → tag `mvp-phase2`
@@ -210,7 +210,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 
 ### Còn lại của Phase 7
 
-- [ ] Approval UI đầy đủ (một lần / trong phạm vi / từ chối) + nhật ký quyết định
+- [~] Approval UI đầy đủ (một lần / trong phạm vi / từ chối) + nhật ký quyết định: 7C-1 xong 2026-11-04 (thẻ chi tiết, ghi chú, nhật ký, timer hết hạn, `ApprovalScope` + `approval_grants`, nút phạm vi bị khoá); 7C-2 (cấp quyền thường trực, nguồn approval thật) chờ Policy Engine Phase 4
 - [ ] Tailwind/shadcn, dark/light, phím tắt
 - [ ] Preset "assistant" cục bộ, export/import
 - [ ] E2E "cài đặt → project → task thật" không đụng terminal

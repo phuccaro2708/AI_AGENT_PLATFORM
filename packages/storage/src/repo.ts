@@ -870,10 +870,20 @@ export class Repo {
   }
 
   /** Only a pending approval can be resolved, exactly once. */
-  resolveApproval(id: string, decision: "approved" | "denied"): void {
+  resolveApproval(
+    id: string,
+    decision: "approved" | "denied",
+    detail: { decidedBy?: string; scope?: string; note?: string } = {},
+  ): void {
     const res = this.db
       .update(approvals)
-      .set({ state: decision, resolvedAt: now() })
+      .set({
+        state: decision,
+        resolvedAt: now(),
+        decidedBy: detail.decidedBy ?? null,
+        decisionScope: detail.scope ?? null,
+        decisionNote: detail.note ?? null,
+      })
       .where(and(eq(approvals.id, id), eq(approvals.state, "pending")))
       .run();
     if (res.changes !== 1) throw new Error(`Approval is not pending: ${id}`);

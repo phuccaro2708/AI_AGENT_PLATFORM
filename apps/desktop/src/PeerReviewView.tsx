@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   api,
   type AdapterInfo,
@@ -9,8 +9,10 @@ import {
 } from "./api";
 import { Composer, StartSteps } from "./Composer";
 import { Badge, msg, TaskLogView } from "./components";
+import { whenText } from "./history";
 import {
   approvalText,
+  decisionLog,
   approvalsFor,
   awaitingDecision,
   boardRows,
@@ -230,10 +232,26 @@ function ApprovalCenter({
   onError: (m: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [log, setLog] = useState<Approval[]>([]);
+  // Decision log: refreshed whenever the set of pending requests changes (an answer or an expiry).
+  const pendingKey = approvals.map((a) => a.id).join(",");
+  useEffect(() => {
+    let live = true;
+    api.approvals().then(
+      (all) => {
+        if (live) setLog(decisionLog(all));
+      },
+      (e: unknown) => onError(msg(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [pendingKey, onError]);
   const answer = (id: string, decision: "approved" | "denied") => {
     setBusy(true);
     api
-      .resolveApproval(id, decision)
+      .resolveApproval(id, decision, notes[id]?.trim())
       .then(onResolved, (e: unknown) => onError(msg(e)))
       .finally(() => setBusy(false));
   };
@@ -247,22 +265,59 @@ function ApprovalCenter({
       ) : (
         <ul className="board">
           {approvals.map((a) => (
-            <li key={a.id}>
-              <span>{approvalText(a)}</span>
-              <button disabled={busy} onClick={() => answer(a.id, "approved")}>
-                Approve
-              </button>
-              <button className="danger" disabled={busy} onClick={() => answer(a.id, "denied")}>
-                Deny
-              </button>
+            <li key={a.id} className="approval-card">
+              <strong>{approvalText(a)}</strong>
+              <span className="muted small">
+                Asked {whenText(a.createdAt)}
+                {a.expiresAt
+                  ? ` · expires ${whenText(a.expiresAt)}; no answer means the task needs reconciliation`
+                  : ""}
+              </span>
+              <input
+                aria-label="Note (optional)"
+                placeholder="Note (optional)"
+                maxLength={2000}
+                value={notes[a.id] ?? ""}
+                onChange={(e) => setNotes({ ...notes, [a.id]: e.target.value })}
+              />
+              <div className="actions">
+                <button disabled={busy} onClick={() => answer(a.id, "approved")}>
+                  Allow once
+                </button>
+                <button className="danger" disabled={busy} onClick={() => answer(a.id, "denied")}>
+                  Deny
+                </button>
+                <button
+                  disabled
+                  title="Standing permissions need the Policy Engine (Phase 4)"
+                  aria-label="Always allow in this scope (needs the Policy Engine, Phase 4)"
+                >
+                  Always allow in scope
+                </button>
+              </div>
             </li>
           ))}
         </ul>
       )}
       <p className="muted small">
         An approval pauses the task until you answer; it does not limit what an agent can already
-        do.
+        do. Nothing is chosen for you, and every answer applies to this one request only.
       </p>
+      {log.length > 0 && (
+        <>
+          <h3>Decision log</h3>
+          <ul className="board">
+            {log.map((a) => (
+              <li key={a.id}>
+                <span className="muted small">{whenText(a.resolvedAt ?? a.createdAt)}</span>
+                <span>{approvalText(a)}</span>
+                <span className="tag">{a.state}</span>
+                {a.decisionNote && <span className="muted small">“{a.decisionNote}”</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   );
 }

@@ -1,10 +1,11 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-05 (nhánh làm việc ở `c85d130`, chưa push; nhánh gốc còn ở `f75a72b`). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `603d6fb`, đã push). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Vị trí
 
-- Nhánh làm việc `claude/repo-current-status-acfd51` có `8143aea` (gồm Phase 7 UI, Phase 3, sửa scheduler flaky, UI capability thiếu, sửa bố cục hẹp; đã kiểm trong app Tauri thật); PR #2 vào nhánh gốc đang mở (chưa merge, auto-fix bật, auto-merge tắt). Nhánh gốc `claude/loving-lovelace-32lh71` (cũng là `origin/HEAD`) còn ở `f75a72b`, chưa fast-forward. PR #1 đã MERGED.
+- Nhánh chính `claude/loving-lovelace-32lh71` (`603d6fb`, đã push) chứa toàn bộ công việc, kể cả nhánh `claude/repo-current-status-acfd51` (`2826397`, đã push, chưa có `603d6fb`). PR #2 đã MERGED. Worktree còn lại: checkout chính, `repo-current-status-acfd51`, `fix-pm-abort-flaky-7e3a1f`. Các nhánh khác còn trong git nhưng đã nằm trong nhánh chính, riêng `claude/phase-2-kickoff-8a5732` có 10 commit riêng (không gộp).
+- Nhánh CHƯA ghép: `claude/fix-pm-abort-flaky-7e3a1f` (`cf97850`, chỉ ghi chú PROGRESS, chưa push); nhánh cloud `claude/gracious-ritchie-ut3238` (`ba05f5b`, router vào `workflows.start`) và `claude/fervent-thompson-u83u2i` (`d6456b0`, `packages/resource-monitor`). Hai nhánh cloud merge sạch riêng lẻ nhưng XUNG ĐỘT với nhau; chưa chạy CI/test của chúng trên Windows. Nhánh resource-monitor không cập nhật PROGRESS/TODO/ASSUMPTIONS như brief và chưa có `603d6fb`.
 - Thứ tự phase đã chốt lại 2026-11-04 (ADR-005, ROADMAP mục "Thứ tự thực hiện"): Phase 7 (phần không cần policy) song song Phase 3 → Phase 4 (+ 7C-2, đóng Phase 7) → Phase 5 → Phase 6 (`mcp-gateway` đầu) → Phase 8 → Phase 9; Phase 10 xuyên suốt.
 - Ứng dụng: **Agent Workspace** (Tauri 2 + React/Vite, sidecar Node orchestrator, SQLite/Drizzle, pnpm monorepo).
 - Giữ nguyên `identifier` `dev.agentstudio.desktop`, gói `@agent-studio/*`, service Credential Manager `agent-studio` (đổi sẽ mất dữ liệu và secret đã lưu).
@@ -36,25 +37,28 @@ Cập nhật: 2026-11-05 (nhánh làm việc ở `c85d130`, chưa push; nhánh g
 - `1540a4f`: xanh cả 10 check run (2026-11-04). Security chạy 7,1 phút (push) và 5,9 phút (pull_request) với bản quét mới, so với khoảng 41 phút trước đó.
 - `f75a72b`: chưa có kết luận (lần đọc gần nhất: TypeScript ubuntu xanh, các job khác còn chạy/xếp hàng).
 - `7275822`: xanh đủ 5/5 job (TypeScript ubuntu 1 phút 26 giây, windows 2 phút 25 giây, Tauri 5 phút 13 giây, Security 9 phút 20 giây, spike 5 phút 27 giây; phiên con `ci-read-48ff83e` đọc bằng GraphQL, tôi chưa tự đọc lại). `48ff83e` có TypeScript ubuntu đỏ ở `pnpm test`: `services/orchestrator/src/scheduler.test.ts` "never runs more than `concurrency` tasks at once" hết 5000ms (phiên con `ci-log-48ff83e` đọc log); không có thay đổi nào ở scheduler giữa `48ff83e` và `7275822`. Chạy cục bộ 40 lần song song (8 luồng × 5) đều qua, chưa tái hiện; nghi ngờ phụ thuộc thời điểm (`setImmediate` rồi `tick`), chưa chứng minh. PR #2: chưa đọc kết quả CI của `cdd2c06`/`a3f9d20`.
+- `3db3aa9` và `2826397`: TypeScript ubuntu xanh, TypeScript windows ĐỎ do 8 test `policy-engine` so tên 8.3 `RUNNER~1` với tên dài (test helper `makeTree` dùng `fs.realpathSync`). `603d6fb` (`realpathSync.native`): TypeScript ubuntu, TypeScript windows, Tauri shell, spike ADR-001 xanh; Security còn IN_PROGRESS lúc đọc (GraphQL, 2026-11-05). Chưa có kết luận Security.
 - Đọc CI bằng GraphQL (`checkSuites`/`checkRuns`), không dùng `gh run view`/`gh run watch` (REST từng chạm trần 5000/giờ, trả 403).
 - `3a9a85b` có chuỗi secret giả trong test. Nếu bộ quét báo, chỉ thêm đúng tuple đã rà soát vào danh sách chấp nhận của `scripts/secret-scan.py`, không nới lỏng bộ quét.
 
 ## Việc tiếp theo (theo thứ tự)
 
-1. Đọc CI của `7275822` (và các commit trước); nếu Security đỏ do script, sửa `scripts/secret-scan.py`. Sau đó fast-forward nhánh gốc nếu xanh.
-2. Phase 3 còn lại: UI capability thiếu (render `describeCapabilityGap` ở `apps/desktop`), nối router vào `workflows.start`, resource monitor; chạy `agy` thật qua adapter (xin phép lượt probe). Ollama hoãn (máy chưa cài).
+1. Đọc kết luận Security của `603d6fb`; áp `603d6fb` vào `repo-current-status` nếu còn dùng nhánh đó.
+2. Phase 3 còn lại: kiểm và ghép hai nhánh cloud (router vào `workflows.start`, resource monitor; giải xung đột giữa chúng, bắt buộc chạy lint/test/build trên Windows); chạy `agy` thật qua adapter (xin phép lượt probe). Ollama hoãn (máy chưa cài).
 3. Phase 7 còn lại: Tailwind/shadcn (cần duyệt dependency: pin ≥ 2 tuần, audit, license, `docs/REFERENCES.md`), kiểm preset/phím tắt trong app thật, E2E người dùng mới. (`CLAUDE.md` đã sửa trong `c85d130`.) 7C-2 và đóng Phase 7 chờ Phase 4.
 
 ## Chờ người dùng quyết
 
-- Push nhánh `claude/repo-current-status-acfd51` (đứng trước `origin` 6 commit) lên PR #2.
-
+- Duyệt dependency Tailwind/shadcn và Playwright; cho phép lượt probe `agy` thứ 3; duyệt phạm vi grant 7C-2; xác nhận có bỏ `claude/phase-2-kickoff-8a5732` không.
+- Quyết định ghép nhánh cloud/flaky nào vào nhánh chính.
 - Dọn A5 không làm mất dữ liệu người dùng: mục `index/claude.agent-studio` đã xoá là danh sách TÊN secret của provider claude do chính app tạo (`secrets.rs`), nhiều khả năng là tàn dư kiểm 7B; người dùng xác nhận chưa từng nhập secret nào. Không có mục thì Settings hiện danh sách rỗng (NoEntry → rỗng), không lỗi.
 - Nhánh `claude/phase-2-kickoff-8a5732` là bản Phase 2 cũ, xung đột add/add; khuyến nghị không gộp.
 
 ## Chưa xác minh / nợ nhỏ
 
-- 2026-11-05 trên Windows (sau sửa `..` theo Win32): lint, prettier, typecheck, build qua; `pnpm test` 485 qua, 2 bỏ qua (test POSIX), 0 đỏ. `process-manager` \"cancels via AbortSignal\" hết 30 giây 1 lần ở lần chạy trước (qua 2/2 khi chạy riêng và qua ở lần chạy sau): nghi flaky, chưa điều tra. `cargo clippy`/`cargo test` chưa chạy lại. CI chưa có (chưa push).
+- `canonicalize` dùng `fs.realpath` (không `.native`): chưa xét việc đường dẫn người dùng nhập dạng 8.3 ngắn có lệch với dạng dài khi so `isWithin`. Chỉ test helper đã sửa.
+- `cargo clippy --all-targets -D warnings` qua và `cargo test` 12 qua, 0 lỗi, 1 ignored (2026-11-05, Windows, `--locked`; phiên con đọc, `src-tauri` không đổi).
+- 2026-11-05 trên Windows (sau sửa `..` theo Win32): lint, prettier, typecheck, build qua; `pnpm test` 485 qua, 2 bỏ qua (test POSIX), 0 đỏ. `process-manager` "cancels via AbortSignal" hết 30 giây 1 lần ở lần chạy trước (qua 2/2 khi chạy riêng và qua ở lần chạy sau): nghi flaky, chưa điều tra. `cargo clippy`/`cargo test` chưa chạy lại. CI chưa có (chưa push).
 
 - 2026-11-04 (sau 7C-1): `pnpm lint`, `typecheck`, `test` (44 file, 389 test), `build` qua. Rust không đổi nên `cargo clippy`/`cargo test` chưa chạy lại (lần trước: clippy sạch, 12 test qua, 1 bỏ qua). `cargo audit` 0.22.2: không lỗ hổng; hai cảnh báo transitive (`proc-macro-error` không bảo trì, `glib 0.18.5` unsound).
 - Đã kiểm trong app thật (2026-11-04): thẻ phê duyệt, Decision log, History (Older, giờ), sidebar hẹp, theme tối. B1 (resume Peer Review với CLI thật) đạt cả hai chiều claude↔codex.

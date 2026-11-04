@@ -143,8 +143,8 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [x] Probe Antigravity (`agy`, quan sát `--print`, `--output-format stream-json`; đã có fixture `--help` 1.4.8 + capability từ help, đã quan sát output thật 2026-11-04: 2 lượt `--print`, xem ASSUMPTIONS; adapter dựng 2026-11-04, chỉ kiểm bằng CLI giả) rồi `adapter-antigravity` + fixtures + contract tests
 - [ ] `adapter-ollama`: HTTP client, discover models, stream
 - [ ] Tool loop riêng cho Ollama (whitelist tool, read-only mặc định, giới hạn vòng lặp)
-- [x] Capability-based router (`services/orchestrator/src/capability-router.ts`; chưa nối vào `workflows.start`)
-- [ ] Resource monitor (RAM/VRAM) + Resource-Aware Scheduler
+- [x] Capability-based router (`services/orchestrator/src/capability-router.ts`; chưa nối vào `workflows.start` trên nhánh chính; nhánh cloud `claude/gracious-ritchie-ut3238` đã nối, chưa kiểm/ghép)
+- [ ] Resource monitor (RAM/VRAM) + Resource-Aware Scheduler (mã thuần CPU/RAM có ở nhánh cloud `claude/fervent-thompson-u83u2i`, chưa kiểm/ghép; VRAM chưa làm)
 - [x] UI hiển thị capability thiếu (helper `describeCapabilityGap`) — `apps/desktop/src/capabilityGap.ts` (+ test, nối vào AgentView/PeerReviewView, chặn Run kèm lý do); đã xem trong app Tauri thật 2026-11-04 (Peer Review với `agy` thật trên máy: nhãn `(thiếu capability)`, Start review bị khoá kèm lý do; xem PROGRESS.md). Riêng nhánh AgentView (cần `streaming`) chưa chạm được vì không adapter nào thiếu `streaming`; chỉ có unit test
 - [x] Test thêm adapter giả không sửa core (cho routing; xem PHASE3_REPORT về giới hạn của sidecar)
 - [~] PHASE3_REPORT.md (có bản nháp trung thực; Phase 3 chưa đóng: còn Ollama, resource monitor, UI capability thiếu, adapter `agy` chưa chạy CLI thật)

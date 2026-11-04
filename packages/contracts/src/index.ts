@@ -136,6 +136,8 @@ export const SidecarRequest = z.discriminatedUnion("method", [
     method: z.literal("agents.capabilities"),
     params: z.object({ provider: z.enum(["claude", "codex"]) }),
   }),
+  // ---- Phase 3: look for installed CLI agents (read-only: --version / --help). No params. ----
+  z.object({ id: z.number().int(), method: z.literal("agents.scan") }),
   // ---- Phase 7B: how each CLI agent is launched. Settings take effect only after a good probe. ----
   z.object({
     id: z.number().int(),

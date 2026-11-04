@@ -137,8 +137,8 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 
 ## Phase 3 — Quét CLI & Local AI
 
-- [ ] Quét CLI agent theo danh sách ứng viên khai báo bằng dữ liệu (PATH + vị trí cài Windows), hiển thị "đã phát hiện, chưa hỗ trợ"
-- [ ] Probe Antigravity (`agy`, quan sát `--print`, `--output-format stream-json`) rồi `adapter-antigravity` + fixtures + contract tests
+- [x] Quét CLI agent theo danh sách ứng viên khai báo bằng dữ liệu (PATH + vị trí cài Windows), hiển thị "đã phát hiện, chưa hỗ trợ" (`agents.scan`, `packages/cli-probe/src/candidates.ts`, Settings → Agents)
+- [ ] Probe Antigravity (`agy`, quan sát `--print`, `--output-format stream-json`; đã có fixture `--help` 1.4.8 + capability từ help, CHƯA quan sát output thật) rồi `adapter-antigravity` + fixtures + contract tests
 - [ ] `adapter-ollama`: HTTP client, discover models, stream
 - [ ] Tool loop riêng cho Ollama (whitelist tool, read-only mặc định, giới hạn vòng lặp)
 - [ ] Capability-based router

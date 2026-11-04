@@ -72,6 +72,19 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
       };
     case "agents.detect":
       return { results: [{ provider: "claude", status: "not_installed" }] };
+    case "agents.scan":
+      return {
+        clis: [
+          {
+            id: "claude",
+            displayName: "Claude Code",
+            supported: true,
+            usable: false,
+            status: "not_installed",
+            capabilities: {},
+          },
+        ],
+      };
     case "agents.getSettings":
       return { settings: null };
     case "agents.probe":

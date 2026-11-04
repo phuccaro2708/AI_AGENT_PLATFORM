@@ -101,3 +101,20 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Commit `babca05` (thêm `docs/HANDOFF.md`) được push lên cả hai nhánh, không force; checkout chính `D:/Idea/AI_AGENT_PLATFORM` pull fast-forward về `babca05`.
 - PR #1 đã tự chuyển sang MERGED lúc 02:49:21Z sau khi hai nhánh trùng nhau, nên không đóng thủ công được.
 - Chưa đọc CI của `babca05` và các commit sau `1009755`.
+
+## 2026-11-04 (tối) — Tăng tốc quét secret, làm mới tài liệu, review chéo
+
+- `868daef` (đã format lại Prettier) xanh 5/5 job; `babca05` đỏ chỉ vì Prettier lệch ở `docs/HANDOFF.md`.
+- `da9717f`: `scripts/secret-scan.py` quét lịch sử theo cặp (blob, path) thay vì từng snapshot commit; thêm `timeout-minutes: 30` cho job Security. Chứng minh tương đương: tập finding lịch sử bản cũ và bản mới đều 173 mục, giống hệt sau khi chuẩn hoá dấu phân cách đường dẫn; chạy trên Windows 7 phút xuống 38 giây.
+- `326b09a`: làm mới `README.md`, `docs/ARCHITECTURE.md`, `docs/HANDOFF.md`, `docs/TODO.md` (bỏ "Phase 0", ghi trạng thái hiện tại, Ollama hoãn vì máy chưa cài).
+- `bfbe920`: sửa theo review (nhận khoá đường dẫn tuyệt đối lẫn tương đối, dừng rõ ràng khi thiếu blob do clone nông, chỉnh docstring). Quét lại không mất mục nào của bản cũ; số mục tăng 173 lên 177 chỉ do hai commit mới.
+- Review chéo: `/code-review medium` (7 finding nhỏ, không lỗi chặn) và `/security-review` (không finding đạt ngưỡng). Cả hai chỉ đọc mã.
+- Kiểm: `pnpm lint`, `format`, `typecheck`, `test`, `build` qua; `cargo clippy -D warnings` sạch; `cargo test` 12 qua, 1 bỏ qua.
+- Đã push `868daef..bfbe920` lên `claude/repo-current-status-acfd51`. Nhánh gốc vẫn ở `868daef`.
+- Dọn A5: `D:\as7a-tmp` và credential `index/claude.agent-studio` đã được người dùng xoá. Không còn mục `agent-studio` nào trong `cmdkey /list`; cần kiểm secret trong Settings của app.
+
+**Việc mở**
+
+- Đọc CI của `bfbe920` (GraphQL). Rủi ro: định dạng khoá đường dẫn của detect-secrets trên Linux chưa được chạy thử; thời gian job Security mới và dung lượng thư mục tạm chưa có số đo trên CI.
+- A7 (`cargo audit` cục bộ), A8 (màu hộp Check trong app thật), B6 (nợ UI: Open log, Newer/Older nhiều trang, bố cục hẹp, theme).
+- Sau đó: fast-forward nhánh gốc, rồi Đợt 2 (B1 kiểm CLI thật, B2 phần 7C-1 và `ApprovalScope`).

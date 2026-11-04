@@ -144,3 +144,8 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Đọc github/spec-kit v1.3.0 (MIT) chỉ để so sánh thiết kế, không sao chép, không clone, không chạy. Ý có thể dùng: "một thao tác, nhiều adapter", catalog chỉ để khám phá và phải xác nhận tin cậy tường minh trước khi chạy mã (liên quan Phase 8), workflow lưu cây thực thi và resume từ PAUSED/FAILED.
 - Tạo skill cá nhân `/save` (`~/.claude/skills/save`, ngoài repo) để ghi tiến trình vào HANDOFF/PROGRESS/TODO/ROADMAP/DECISIONS và tạo file thiếu từ mẫu; đã ghi vào `~/.claude/skills-registry.md`. Chưa thử gọi thật (cần phiên mới để nhận skill).
 - Chưa làm: cập nhật `CLAUDE.md` (Tailwind/shadcn ghi "đã chốt" nhưng chưa có; trỏ tới ADR-005).
+
+## 2026-11-04 (khuya, B1) — Kiểm resume Peer Review với CLI thật
+
+- Chạy `node scripts/e2e-peer-review.mjs resume claude codex` và `resume codex claude` (CLI thật, có tốn usage, DB/repo tạm): cả hai lần kill → task `needs_reconciliation` → quyết định `requeue` → hai task `completed`, workflow `completed`, exit 0. Lần claude→codex in thêm "cleanup skipped: EPERM" (dọn thư mục tạm, không ảnh hưởng kết quả).
+- Chưa chạy: qua UI app Tauri thật; CI `1540a4f` còn chưa đọc kết luận; `3dab1ef` chưa push.

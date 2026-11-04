@@ -1,6 +1,6 @@
 # CLAUDE.md — Agent Workspace
 
-Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy đủ: `docs/ARCHITECTURE.md` (sẽ tạo ở Phase 0). Kế hoạch: `docs/ROADMAP.md`, việc cần làm: `docs/TODO.md`.
+Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy đủ: `docs/ARCHITECTURE.md`. Kế hoạch: `docs/ROADMAP.md`, việc cần làm: `docs/TODO.md`.
 
 ## Stack (đã chốt)
 
@@ -25,7 +25,7 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 ## Quy trình làm việc
 
 - Nhánh phát triển do phiên làm việc chỉ định; commit nhỏ, message rõ ràng. Không tạo PR nếu chưa được yêu cầu.
-- Trước khi coi là xong: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` (khi đã có).
+- Trước khi coi là xong: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.
 - Báo cáo trung thực: test fail thì nói fail, bước bỏ qua thì nói bỏ qua.
 
 ## Chính sách tham khảo repo công khai

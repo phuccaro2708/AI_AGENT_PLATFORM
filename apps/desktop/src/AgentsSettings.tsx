@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type Provider, type SettingsOutcome } from "./api";
+import { api, type Provider, type ScannedCli, type SettingsOutcome } from "./api";
 import { argsText, envText, looksLikeSecretName, toSettings } from "./agentSettings";
 import { canBrowse } from "./dialog";
 import { deleteSecret, secretNames, setSecret } from "./secrets";
 
-const PROVIDERS: { id: Provider; label: string }[] = [
-  { id: "claude", label: "Claude Code" },
-  { id: "codex", label: "Codex" },
-];
+/** Launch settings exist only for CLIs Agent Studio can run tasks with. */
+const isConfigurable = (c: ScannedCli): c is ScannedCli & { id: Provider } =>
+  c.supported && (c.id === "claude" || c.id === "codex");
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -240,11 +239,85 @@ function ProviderCard({ provider, label }: { provider: Provider; label: string }
   );
 }
 
+function statusText(c: ScannedCli): string {
+  if (c.usable) return c.supported ? "Ready" : "Detected, not supported yet";
+  if (c.status === "not_installed") return "Not installed";
+  return `Ignored: ${c.error?.message ?? c.status}`;
+}
+
+function Scan({
+  clis,
+  busy,
+  error,
+  onScan,
+}: {
+  clis: ScannedCli[] | null;
+  busy: boolean;
+  error: string | null;
+  onScan: () => void;
+}) {
+  const shown = (clis ?? []).filter((c) => c.status !== "not_installed");
+  return (
+    <div className="card agent-scan">
+      <h2>Installed CLI agents</h2>
+      <p className="muted small">
+        Looks on PATH and in the usual install folders; only `--version` and `--help` are run. A CLI
+        that is only detected cannot be chosen to run tasks.
+      </p>
+      <div className="actions">
+        <button disabled={busy} onClick={onScan}>
+          {busy ? "Scanning…" : "Scan again"}
+        </button>
+      </div>
+      {error && (
+        <p className="error small" role="alert">
+          {error}
+        </p>
+      )}
+      {clis !== null && shown.length === 0 && <p className="muted small">Nothing found.</p>}
+      <ul className="list small">
+        {shown.map((c) => (
+          <li key={c.id}>
+            <strong>{c.displayName}</strong>
+            {c.version ? ` · ${c.version}` : ""} · {statusText(c)}
+            {c.path && (
+              <div className="muted">
+                <code>{c.path}</code>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function AgentsSettings() {
+  const [clis, setClis] = useState<ScannedCli[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const scan = useCallback(() => {
+    setBusy(true);
+    setError(null);
+    api.scan().then(
+      (r) => {
+        setClis(r.clis);
+        setBusy(false);
+      },
+      (e) => {
+        setError(message(e));
+        setBusy(false);
+      },
+    );
+  }, []);
+  useEffect(scan, [scan]);
+
   return (
     <>
-      {PROVIDERS.map((p) => (
-        <ProviderCard key={p.id} provider={p.id} label={p.label} />
+      <Scan clis={clis} busy={busy} error={error} onScan={scan} />
+      {(clis ?? []).filter(isConfigurable).map((c) => (
+        <ProviderCard key={c.id} provider={c.id} label={c.displayName} />
       ))}
     </>
   );

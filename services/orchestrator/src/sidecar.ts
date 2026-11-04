@@ -17,6 +17,8 @@ import { CodexAdapter } from "@agent-studio/adapter-codex";
 import {
   probeClaude,
   probeCodex,
+  scanClis,
+  CLI_CANDIDATES,
   type ProbeOptions,
   type ProbeResult,
 } from "@agent-studio/cli-probe";
@@ -42,6 +44,8 @@ export interface SidecarOptions {
   onEvent?: (event: SidecarEvent) => void;
   /** Test seam: replaces the real CLI probes. */
   probes?: Partial<Record<"claude" | "codex", (o?: ProbeOptions) => Promise<ProbeResult>>>;
+  /** Test seam: replaces the scan of CLIs that have no adapter. */
+  scan?: typeof scanClis;
   /** Where agent worktrees are created. Default: `worktrees` next to the database (keep it short on Windows). */
   worktreesDir?: string;
   /** Per-provider secrets handed in by the native side. Never stored, logged or returned. */
@@ -126,6 +130,61 @@ export class SidecarService {
           }
         : {};
     return provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o);
+  }
+
+  /**
+   * `agents.scan`: every known candidate. CLIs with an adapter (`this.probes`) go through the same
+   * settings-aware probe as `agents.detect` (which owns their stored row); the others are scanned
+   * and their probe stored. Only `supported` CLIs may be picked to run tasks.
+   */
+  private async scanAll() {
+    const supported = (id: string) => id in this.probes;
+    const scanned = new Map(
+      (
+        await (this.opts.scan ?? scanClis)({
+          candidates: CLI_CANDIDATES.filter((c) => !supported(c.id)),
+        })
+      ).map((s) => [s.provider, s]),
+    );
+    const out = [];
+    for (const c of CLI_CANDIDATES) {
+      let r: ProbeResult & { usable?: boolean };
+      if (supported(c.id)) {
+        r = await this.probeStored(c.id as "claude" | "codex");
+        this.saveProbe(r);
+        r.usable = r.status === "ok";
+      } else {
+        const s = scanned.get(c.id);
+        if (!s) continue;
+        r = s;
+        if (r.path !== undefined) this.saveProbe(r);
+      }
+      out.push({
+        id: c.id,
+        displayName: c.displayName,
+        supported: supported(c.id),
+        usable: r.usable === true,
+        status: r.status,
+        ...(r.path !== undefined ? { path: r.path } : {}),
+        ...(r.version !== undefined ? { version: r.version } : {}),
+        capabilities: r.capabilities,
+        ...(r.error !== undefined ? { error: r.error } : {}),
+        probedAt: r.probedAt,
+      });
+    }
+    return out;
+  }
+
+  private saveProbe(r: ProbeResult) {
+    this.repo.saveAgentProbe({
+      provider: r.provider,
+      status: r.status,
+      ...(r.path !== undefined ? { path: r.path } : {}),
+      ...(r.version !== undefined ? { version: r.version } : {}),
+      capabilities: r.capabilities,
+      ...(r.error !== undefined ? { error: r.error } : {}),
+      probedAt: r.probedAt,
+    });
   }
 
   /** `agents.detect`: probes the CLI the way it will actually be launched. */
@@ -328,6 +387,8 @@ export class SidecarService {
           }
           return ok(req.id, { results });
         }
+        case "agents.scan":
+          return ok(req.id, { clis: await this.scanAll() });
         case "agents.capabilities":
           return ok(req.id, { probe: this.repo.getAgentProbe(req.params.provider) ?? null });
         case "system.activeTasks": {

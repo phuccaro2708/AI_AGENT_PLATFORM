@@ -21,7 +21,8 @@ export interface ProbeError {
 }
 
 export interface ProbeResult {
-  provider: Provider;
+  /** `claude` / `codex` for the adapters Agent Studio runs; any candidate id for scanned CLIs. */
+  provider: string;
   status: ProbeStatus;
   path?: string;
   /** `exe` can be spawned with shell:false; `shim` (.cmd/.bat) cannot. */
@@ -60,6 +61,8 @@ export interface ProbeOptions {
   executable?: string;
   env?: Record<string, string | undefined>;
   timeoutMs?: number;
+  /** Arguments that print the version (default `--version`). */
+  versionArgs?: readonly string[];
   run?: RunFn;
   now?: () => Date;
 }

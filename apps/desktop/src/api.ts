@@ -19,6 +19,17 @@ export interface CliProbe {
   capabilities?: Record<string, boolean>;
 }
 
+/** One CLI looked for by `agents.scan`. `supported`: Agent Studio has an adapter that can run tasks with it. */
+export interface ScannedCli extends CliProbe {
+  id: string;
+  displayName: string;
+  supported: boolean;
+  /** Found, answered `--version` and looks like the real CLI. */
+  usable: boolean;
+  probedAt?: string;
+  error?: { message: string };
+}
+
 export type Provider = "claude" | "codex";
 export interface AgentLaunchSettings {
   command: string;
@@ -99,6 +110,7 @@ export const api = {
   createProject: (name: string, rootPath: string) =>
     call<{ projectId: string }>("projects.create", { name, rootPath }),
   agents: () => call<{ adapters: AdapterInfo[]; cli: CliProbe[] }>("agents.list"),
+  scan: () => call<{ clis: ScannedCli[] }>("agents.scan"),
   detect: () => call<{ results: CliProbe[] }>("agents.detect", {}),
   agentSettings: (provider: Provider) =>
     call<{ settings: SavedAgentSettings | null }>("agents.getSettings", { provider }).then(

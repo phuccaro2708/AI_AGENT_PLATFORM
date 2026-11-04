@@ -283,4 +283,76 @@ describe("D1 IPC", () => {
       (await call(svc, "agents.capabilities", { provider: "claude" })).result?.probe.version,
     ).toContain("2.1.314");
   });
+
+  it("agents.scan lists detected CLIs; only those with an adapter are supported", async () => {
+    svc.close();
+    const probedAt = "2026-01-01T00:00:00.000Z";
+    svc = new SidecarService(
+      {
+        dbPath: join(dir, "scan.db"),
+        probes: {
+          claude: async () => ({
+            provider: "claude",
+            status: "ok",
+            version: "2.1.316 (Claude Code)",
+            capabilities: { print: true },
+            evidence: [],
+            probedAt,
+          }),
+          codex: async () => ({
+            provider: "codex",
+            status: "not_installed",
+            capabilities: {},
+            evidence: [],
+            probedAt,
+          }),
+        },
+        scan: async ({ candidates } = {}) => {
+          // the sidecar must not re-scan the CLIs it already probes through their adapters
+          expect(candidates?.some((c) => c.id === "claude" || c.id === "codex")).toBe(false);
+          return [
+            {
+              provider: "agy",
+              displayName: "Antigravity",
+              status: "ok" as const,
+              path: "/x/agy",
+              version: "1.4.8",
+              capabilities: { print: true },
+              evidence: [],
+              probedAt,
+              usable: true,
+            },
+            {
+              provider: "copilot",
+              displayName: "GitHub Copilot CLI",
+              status: "version_unparsable" as const,
+              path: "/x/copilot",
+              capabilities: {},
+              evidence: [],
+              probedAt,
+              usable: false,
+            },
+          ];
+        },
+      },
+      createLogger({ name: "t", destination: sink }),
+    );
+    const r = await call(svc, "agents.scan");
+    const byId = new Map(r.result?.clis.map((c: { id: string }) => [c.id, c]));
+    expect(byId.get("claude")).toMatchObject({ supported: true, usable: true });
+    expect(byId.get("codex")).toMatchObject({ supported: true, usable: false });
+    expect(byId.get("agy")).toMatchObject({ supported: false, usable: true, version: "1.4.8" });
+    expect(byId.get("copilot")).toMatchObject({ supported: false, usable: false });
+    expect(byId.has("ollama")).toBe(false); // the scan seam returned nothing for it
+    // an unsupported CLI cannot be started as an agent
+    const start = await call(svc, "agents.capabilities", { provider: "claude" });
+    expect(start.result?.probe).toMatchObject({ status: "ok" });
+    expect(
+      (await call(svc, "agents.list")).result?.adapters.map((a: { id: string }) => a.id),
+    ).not.toContain("agy");
+    // stored like any other probe
+    expect(
+      (await call(svc, "agents.list")).result?.cli.map((c: { provider: string }) => c.provider),
+    ).toEqual(expect.arrayContaining(["agy", "claude", "codex"]));
+  });
 });

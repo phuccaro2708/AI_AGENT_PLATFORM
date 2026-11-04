@@ -57,6 +57,7 @@ const ALLOWED_METHODS: &[&str] = &[
     "queryTask",
     "agents.list",
     "agents.detect",
+    "agents.scan",
     "agents.capabilities",
     "agents.getSettings",
     "agents.setSettings",
@@ -353,6 +354,7 @@ mod tests {
             "agents.getSettings",
             "agents.setSettings",
             "agents.probe",
+            "agents.scan",
         ] {
             assert!(is_allowed(m), "{m:?}");
         }

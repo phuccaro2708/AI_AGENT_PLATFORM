@@ -11,7 +11,7 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 
 ## Nguyên tắc bắt buộc
 
-1. Native CLI first: dùng CLI/SDK/app-server chính thức của Claude Code, Codex, Gemini CLI; không viết lại khả năng của chúng.
+1. Native CLI first: dùng CLI/SDK/app-server chính thức của Claude Code, Codex (và các CLI khác như Antigravity `agy` sau khi probe thật); không viết lại khả năng của chúng.
 2. Không bịa capability của CLI. Mọi giả định chưa kiểm chứng phải ghi vào `docs/ASSUMPTIONS.md` và có compatibility probe.
 3. Spawn process bằng argument array, `shell: false`. Không nối prompt vào chuỗi shell.
 4. Frontend không gọi CLI trực tiếp; mọi thứ đi qua backend có policy/approval.

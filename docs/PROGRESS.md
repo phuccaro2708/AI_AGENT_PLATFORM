@@ -1,17 +1,17 @@
 # Nhật ký tiến trình
 
-Ghi theo thứ tự thời gian; số liệu lấy từ lịch sử git và các báo cáo phase. Đây là nhật ký, không thay `PHASEn_REPORT.md` (báo cáo đóng phase). Cập nhật lần cuối: 2026-11-03.
+Ghi theo thứ tự thời gian; số liệu lấy từ lịch sử git và các báo cáo phase. Đây là nhật ký, không thay `PHASEn_REPORT.md` (báo cáo đóng phase). Cập nhật lần cuối: 2026-11-04.
 
 ## Tổng quan
 
-| Phase             | Trạng thái                                                                                                                                                                            | Bằng chứng                 |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| 0                 | Đóng                                                                                                                                                                                  | `docs/PHASE0_REPORT.md`    |
-| 1                 | Đóng 2026-11-02 (CI xanh run 41551598060)                                                                                                                                             | `docs/PHASE1_REPORT.md`    |
-| 2 Peer Review MVP | Đóng 2026-11-03, có ngoại lệ, tag `mvp-phase2`                                                                                                                                        | `docs/PHASE2_REPORT.md`    |
-| 7A                | Code và test xong, đã push (`eb80d83`), CI xanh 5 job; còn kiểm UI trong app Tauri thật                                                                                               | commit `428b422`…`eb80d83` |
-| 7B                | Code và test xong, đã push (`7b8cb23`); CI đỏ ở `7b8cb23` (Security, 3 test Windows), kiểm app Tauri thật đạt có một lỗi probe; cả ba đã sửa ở `52660f3`, CI của commit này đang chạy | commit `ea4c183`…`7b8cb23` |
-| 7C, 7D            | Chưa bắt đầu (7C cần nguồn approval từ Phase 4)                                                                                                                                       | `docs/TODO.md`             |
+| Phase             | Trạng thái                                                                               | Bằng chứng                            |
+| ----------------- | ---------------------------------------------------------------------------------------- | ------------------------------------- |
+| 0                 | Đóng                                                                                     | `docs/PHASE0_REPORT.md`               |
+| 1                 | Đóng 2026-11-02 (CI xanh run 41551598060)                                                | `docs/PHASE1_REPORT.md`               |
+| 2 Peer Review MVP | Đóng 2026-11-03, có ngoại lệ, tag `mvp-phase2`                                           | `docs/PHASE2_REPORT.md`               |
+| 7A                | Code và test xong, đã push; kiểm trong app Tauri thật đạt cả 4 mục (2026-11-04), CI xanh | commit `428b422`…`eb80d83`, `593e153` |
+| 7B                | Xong; CI của `52660f3` xanh đủ 5 job (Security 41 phút); kiểm app Tauri thật đạt         | commit `ea4c183`…`52660f3`            |
+| 7C, 7D            | Chưa bắt đầu (7C cần nguồn approval từ Phase 4)                                          | `docs/TODO.md`                        |
 
 ## 2026-11-02 — Phase 0–1
 
@@ -51,6 +51,44 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Kiểm: lint, typecheck, 358 test qua. CI của `52660f3` (run `41736953160`): 4 job xanh; job Security (bước secret scan, bắt đầu 23:10:16Z) chạy hơn 45 phút, chưa đọc được kết quả vì GitHub API trả 403 (nhiều bộ theo dõi dùng chung hạn mức). `da9614c` và `803ccac` chưa push.
 - App không quét "model" LLM. Nó chỉ dò **CLI agent** có thật trên máy qua `agents.detect`/`agents.probe`: `claude` và `codex` (Gemini CLI và Ollama thuộc Phase 3, chưa có code). Mỗi CLI được ghi: đường dẫn, version, bảng capability suy từ `--help` (kể cả cờ `--model` của Claude, chỉ là cờ có mặt, không có danh sách model).
 - Trên máy này: `claude` 2.1.316 (`~\.local\bin\claude.exe`), `codex-cli` 0.165.0 (npm shim `codex.cmd`); không có `gemini`, `ollama`. Khớp với ASSUMPTIONS #13/#14 (Claude 2.1.316 và 2.1.314, Codex 0.165.0).
+
+## 2026-11-04 — CI, quét CLI, redaction, phương hướng
+
+**Đã xong**
+
+- CI `52660f3` (run `41736953160`) xanh đủ 5 job; job Security (secret scan + pnpm audit + cargo audit) xong lúc 23:51:05Z, mất khoảng 41 phút (lần trước cả run chỉ ~16 phút).
+- Đã push đến `1009755`: gỡ adapter giả `stub` khỏi `agents.list` (vẫn đăng ký cho `runStub`, selftest, CI spike); đối chiếu roadmap; làm mới "Việc mở".
+- Roadmap: **bỏ Gemini**. Phase 3 thành "Quét CLI & Local AI": quét CLI theo danh sách khai báo bằng dữ liệu, `AntigravityAdapter` (lệnh `agy`) chỉ sau khi probe thật, Ollama giữ nguyên (`0e5d80c`).
+- Kiểm 7A trong app Tauri thật: lịch sử/lọc, tìm log, thẻ "Needs your decision" + `resolveReconciliation`, restart không mất dữ liệu đều đạt (`593e153`, phiên chạy ngầm, không dùng chuột/bàn phím người dùng).
+- Redaction: che giá trị secret đã nạp trong message/log/phản hồi IPC, test `sidecar-redaction.test.ts` (`3a9a85b`). Giới hạn: chỉ che theo giá trị chính xác; secret bị biến đổi hoặc cắt giữa hai chunk thì không đảm bảo.
+- Quét CLI: `packages/cli-probe` (candidates, scan), IPC `agents.scan`, danh sách CLI trong Settings → Agents, fixture `agy` 1.4.8 (`3921c86`, `db4e715`), gộp vào nhánh hiện tại bằng `2380045`.
+- Kiểm sau gộp: lint, typecheck, prettier, 44 file / 383 test, `cargo test` 12 qua + 1 bỏ qua.
+
+**Trên máy này**
+
+- `claude` 2.1.316, `codex-cli` 0.165.0, `agy` (Antigravity CLI) 1.4.8; `copilot` chỉ là shim của VS Code; không có `gemini`, `ollama`.
+- App chỉ chạy task với `claude` và `codex`; CLI khác chỉ được phát hiện ("đã phát hiện, chưa hỗ trợ").
+
+**Nguyên nhân 403 của GitHub API**
+
+- Hạn mức `core` của endpoint run cạn thật (Used 5000, reset 00:10:19Z) trong khi `gh api rate_limit` và `gh api user` trả bucket khác (used ~18, reset 00:55:11Z), nên `rate_limit` không đáng tin để biết endpoint run còn chỗ hay không. Nghi do nhiều bộ `gh run watch`/`gh run view` chạy song song (mặc định thăm dò 3 giây), chưa chứng minh được tiến trình nào dùng bao nhiêu.
+- Cách tránh: đọc CI bằng GraphQL (`checkSuites`/`checkRuns` của commit, bucket riêng), một bộ theo dõi duy nhất, thăm dò thưa (`--interval 60` hoặc lịch hẹn), không vòng lặp.
+
+**Phương hướng tiếp theo (theo thứ tự)**
+
+1. Chờ job Security của `1009755` xanh (bắt đầu 00:08:53Z, dự kiến xong ~00:50Z), đọc bằng GraphQL, rồi push gộp một lần (HEAD `2380045`, không force). Cảnh giác: `3a9a85b` có chuỗi secret giả trong test; nếu bộ quét báo thì thêm đúng tuple đã rà soát vào `ACCEPTED_HISTORY`/`ACCEPTED_ANYWHERE`, không nới lỏng bộ quét.
+2. CI Security: thêm `timeout-minutes` (gợi ý 30) cho job và tăng tốc `scripts/secret-scan.py` mà không giảm phạm vi (quét file thay đổi theo commit, cache theo blob hash hoặc chạy song song); chứng minh tương đương. Chưa làm, chờ đồng ý.
+3. Phase 7 còn lại: 7C (thẻ phê duyệt cho approval do orchestrator tạo; "Luôn cho phép trong phạm vi" cần Phase 4), 7D (Tailwind/shadcn, phím tắt; thêm dependency phải pin ≥ 2 tuần, qua audit và license), preset (agent + quyền + hướng dẫn, export file), E2E người dùng mới. Chỉ khi cả ba tiêu chí đóng đạt mới viết `PHASE7_REPORT.md`.
+4. Phase 3: probe thật `agy` (`--print` + `--output-format stream-json`) rồi `adapter-antigravity` + fixture + contract test; Ollama khi máy có; không bịa capability.
+5. Dọn: `D:s7a-tmp` (thư mục tạm của phiên kiểm 7A) và credential thừa `index/claude.agent-studio` trong Credential Manager.
+
+**Việc mở / chưa xác minh**
+
+- CI của các commit sau `1009755` (gồm `2380045`) chưa chạy.
+- `cargo audit` cục bộ chưa cài (CI đã chạy và qua ở `52660f3`).
+- Màu hộp Check mới chưa xem lại trong app; `pnpm build` và `clippy` chưa chạy lại sau khi gộp quét CLI.
+- `README.md` và `CLAUDE.md` còn nhắc Gemini (chỉ roadmap đã bỏ).
+- Nhánh `claude/phase-2-kickoff-8a5732` là bản Phase 2 cũ, xung đột add/add với nhánh hiện tại; khuyến nghị không gộp.
 
 ## Đổi tên hiển thị
 

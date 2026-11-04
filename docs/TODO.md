@@ -151,8 +151,8 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 
 ## Phase 4 — Security & Reliability
 
-- [ ] Policy engine: 4 mức quyền, path scope, command policy, network policy
-- [ ] Canonical path validation + test traversal/symlink/junction (Windows)
+- [~] Policy engine: 4 mức quyền, path scope, command policy, network policy — phần mã thuần xong 2026-11-05 (`packages/policy-engine`, 41 test trên Linux); CHƯA nối vào orchestrator/IPC/UI, chưa quan sát yêu cầu quyền thật của CLI (ASSUMPTIONS, mục Phase 4)
+- [~] Canonical path validation + test traversal/symlink — đã chạy trên Linux; junction/UNC/8.3/ADS và mọi thứ trên Windows CHƯA chạy
 - [ ] Env var allowlist, executable allowlist theo adapter
 - [ ] Windows Job Object giới hạn process tree/RAM
 - [ ] Spike AppContainer / Windows Sandbox (chỉ đánh giá, không cam kết 1.0) — ghi kết quả, kể cả hạn chế vào SECURITY.md
@@ -210,7 +210,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 
 ### Còn lại của Phase 7
 
-- [~] Approval UI đầy đủ (một lần / trong phạm vi / từ chối) + nhật ký quyết định: 7C-1 xong 2026-11-04 (thẻ chi tiết, ghi chú, nhật ký, timer hết hạn, `ApprovalScope` + `approval_grants`, nút phạm vi bị khoá); 7C-2 (cấp quyền thường trực, nguồn approval thật) chờ Policy Engine Phase 4
+- [~] Approval UI đầy đủ (một lần / trong phạm vi / từ chối) + nhật ký quyết định: 7C-1 xong 2026-11-04 (thẻ chi tiết, ghi chú, nhật ký, timer hết hạn, `ApprovalScope` + `approval_grants`, nút phạm vi bị khoá); 7C-2 (cấp quyền thường trực, nguồn approval thật) chờ Policy Engine Phase 4; hợp đồng cho 7C-2 đã có (`evaluate` với `ctx.grants`, `grantTargetFor`), còn phải nối `approvals.resolve` + `approval_grants` + UI (cần sửa IPC 4 chỗ) và người dùng duyệt phạm vi grant
 - [ ] Tailwind/shadcn (chưa làm: cần người dùng duyệt dependency — pin ≥ 2 tuần, audit, license, `docs/REFERENCES.md`); dark/light đã có
 - [x] Phím tắt cơ bản (`shortcuts.ts`: Ctrl+1/2/H/,/Shift+N; Ctrl+Enter gửi composer) — chỉ có test Vitest, chưa kiểm trong app Tauri thật
 - [x] Preset "assistant" cục bộ + export/import JSON (`presets.ts`, Settings → Presets; chỉ ghép chữ trước prompt, không cấp quyền) — chỉ có test Vitest, chưa kiểm trong app Tauri thật

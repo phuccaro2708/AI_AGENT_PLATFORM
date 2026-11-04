@@ -281,7 +281,9 @@ body {
   .sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--line);
-    max-height: 50vh;
+    /* Narrow layout stacks everything and scrolls the page, so the sidebar must not be
+       clipped to a fraction of a short viewport. */
+    max-height: none;
   }
 }
 

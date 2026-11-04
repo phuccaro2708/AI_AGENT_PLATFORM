@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HistoryRow } from "./api";
-import { agentsIn, searchable, toFilter, whenText } from "./history";
+import { agentsIn, hasOlder, pageRows, searchable, toFilter, whenText } from "./history";
 
 const row = (agentId: string | null): HistoryRow => ({
   taskId: "t",
@@ -17,14 +17,14 @@ const row = (agentId: string | null): HistoryRow => ({
 describe("history helpers", () => {
   it("drops empty filters and keeps paging", () => {
     expect(toFilter({ projectId: "", agentId: "", state: "", offset: 0 })).toEqual({
-      limit: 30,
+      limit: 31,
       offset: 0,
     });
     expect(toFilter({ projectId: "p", agentId: "claude", state: "failed", offset: 30 })).toEqual({
       projectId: "p",
       agentId: "claude",
       state: "failed",
-      limit: 30,
+      limit: 31,
       offset: 30,
     });
   });
@@ -42,6 +42,18 @@ describe("history helpers", () => {
     expect(whenText("2026-06-10T08:05:00", now)).toMatch(/\d/);
     expect(whenText("2025-01-02T08:05:00", now)).toMatch(/2025/);
     expect(whenText("garbage", now)).toBe("garbage");
+  });
+
+  it("shows Older only when a row exists beyond the page", () => {
+    const n = (k: number) => Array.from({ length: k }, (_, i) => i);
+    expect(hasOlder(n(30))).toBe(false);
+    expect(hasOlder(n(31))).toBe(true);
+    expect(pageRows(n(31))).toHaveLength(30);
+  });
+
+  it("includes the time for other days", () => {
+    const now = new Date("2026-06-10T12:00:00");
+    expect(whenText("2025-01-02T08:05:00", now)).toMatch(/2025.*\d:\d\d/);
   });
 
   it("searches from two characters", () => {

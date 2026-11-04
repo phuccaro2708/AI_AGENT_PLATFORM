@@ -34,7 +34,7 @@ Cập nhật: 2026-11-04 (đêm; nhánh làm việc ở `a4d8c86`, nhánh gốc 
 - `3d5925f`: TypeScript (ubuntu, windows), Tauri và một lượt Security (bản quét mới, lần đầu trên Linux) xanh; chưa đọc đủ kết luận các lượt còn lại.
 - `1540a4f`: xanh cả 10 check run (2026-11-04). Security chạy 7,1 phút (push) và 5,9 phút (pull_request) với bản quét mới, so với khoảng 41 phút trước đó.
 - `f75a72b`: chưa có kết luận (lần đọc gần nhất: TypeScript ubuntu xanh, các job khác còn chạy/xếp hàng).
-- `7275822`: TypeScript ubuntu và windows xanh; Tauri, Security, spike còn IN_PROGRESS lúc đọc cuối (phiên con `ci-read-48ff83e`). PR #2 (commit `a4d8c86`): 10 check đang chờ lúc mở, chưa có kết luận. Việc đầu tiên: đọc lại bằng GraphQL.
+- `7275822`: TypeScript ubuntu và windows, Tauri shell, spike sidecar xanh; Security còn IN_PROGRESS lúc đọc cuối (do phiên con `ci-read-48ff83e` đọc bằng GraphQL, tôi chưa tự đọc lại). PR #2 (commit `a4d8c86`): 10 check đang chờ lúc mở, chưa có kết luận. Việc đầu tiên: đọc lại bằng GraphQL.
 - Đọc CI bằng GraphQL (`checkSuites`/`checkRuns`), không dùng `gh run view`/`gh run watch` (REST từng chạm trần 5000/giờ, trả 403).
 - `3a9a85b` có chuỗi secret giả trong test. Nếu bộ quét báo, chỉ thêm đúng tuple đã rà soát vào danh sách chấp nhận của `scripts/secret-scan.py`, không nới lỏng bộ quét.
 

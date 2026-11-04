@@ -185,3 +185,8 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 
 - Push `7275822..a4d8c86` (commit `a4d8c86` docs: record night progress) lên `claude/repo-current-status-acfd51`; mở PR #2 vào `claude/loving-lovelace-32lh71` (12 commit, 32 file). `mergeable`: MERGEABLE; chưa merge.
 - CI: `7275822` TypeScript ubuntu và windows xanh, Tauri/Security/spike còn chạy lúc đọc cuối; PR #2 có 10 check đang chờ, chưa có kết luận.
+
+## 2026-11-04 (đêm, cập nhật CI)
+
+- CI `7275822` (phiên con đọc bằng GraphQL): TypeScript ubuntu (1 phút 26 giây), TypeScript windows (2 phút 25 giây), Tauri shell (5 phút 13 giây), spike sidecar (5 phút 27 giây) đều xanh; Security còn IN_PROGRESS, chưa có kết luận.
+- Commit docs `cdd2c06` chưa push.

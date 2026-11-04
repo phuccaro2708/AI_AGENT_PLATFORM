@@ -238,3 +238,15 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Quyết định của người dùng: theo Win32. `packages/policy-engine/src/paths.ts`: trên Windows `canonicalize` gộp `..` trước (`path.normalize`) rồi `realpath`; từ chối đường dẫn bắt đầu bằng `\?\` hoặc `\.\` (cả dạng `//?/`). POSIX giữ nguyên.
 - Test: hai test đỏ tách theo nền tảng (POSIX giữ nguyên kỳ vọng, Windows kỳ vọng gộp từ vựng) và thêm 2 test Windows (đường dẫn verbatim/device bị từ chối ở `canonicalize` và `evaluate`). Trên Windows 2 test POSIX bị bỏ qua đúng thiết kế.
 - Kiểm trên Windows: `pnpm lint`, `prettier --check .`, `typecheck`, `build` qua; `pnpm test`: 51 file, 485 qua, 2 bỏ qua, 0 đỏ (`process-manager` không timeout lần này). Chưa chạy lại trên Linux (đợi CI). `cargo clippy`/`cargo test`: chưa chạy. Chưa push.
+
+## 2026-11-05 (Windows): điều tra flaky `process-manager` "cancels via AbortSignal"
+
+- Kết luận: **KHÔNG tái hiện được**, nên **không sửa mã** (không đổi `packages/process-manager`, không nới timeout). Không có nguyên nhân gốc được chứng minh.
+- Đã đọc `process.ts`/`kill-tree.ts`: abort gọi `killTree` → `taskkill /PID /T /F` (bỏ qua mã thoát), `done` resolve khi `close`. Giả thuyết chưa kiểm chứng được: `taskkill` thất bại âm thầm khi máy tải khiến con sống 60s (> timeout 30000ms). Không có bằng chứng ủng hộ.
+- Thí nghiệm (Windows 11, 16 luồng, Node 24.18.0, vitest 5.0.5):
+  - A. Chạy riêng `vitest run packages/process-manager -t "cancels via AbortSignal"` × 40: 40 qua, 0 đỏ.
+  - B. Cùng lệnh × 40 với 20 tiến trình node chiếm CPU + `vitest run` toàn repo chạy song song: 40 qua, 0 đỏ. Các lần toàn suite song song bị đỏ nhiều test khác (timeout 5s mặc định/hook 30s của `sidecar-redaction`) do quá tải tôi tạo ra; test mục tiêu không đỏ.
+  - C. Script kích thích `startProcess` + abort ở 0/2/10/30/100/200ms, 12 đồng thời × 10 lượt (120 lượt): 0 treo, 0 tiến trình sống sót, `done` p50 292ms, max 423ms.
+  - D. Như C nhưng 40 đồng thời × 15 lượt (600 lượt) + 20 burner: 0 treo (ngưỡng 20s), 0 sống sót, p50 4.9s, p99 8.5s, max 9.7s. Dưới quá tải `taskkill` chậm đáng kể nhưng vẫn hoàn tất; chưa thấy mức 30s.
+- Giới hạn: tỷ lệ gốc ngoài tự nhiên là 1/(vài lần); các thí nghiệm trên (tổng ~680 lượt, 0 lỗi) chỉ cho thấy tỷ lệ thấp hơn nhiều so với 1/3 trong điều kiện giả lập, không loại trừ lỗi hiếm. Nếu gặp lại: chạy với log ghi mã thoát `taskkill` và thời điểm `abort`/`exit`/`close` để phân biệt "taskkill lỗi" với "chỉ chậm".
+- Hành vi cancel (0 orphan) giữ nguyên vì mã không đổi. `pnpm install --frozen-lockfile` và `pnpm build` ở gói chỉ để chạy thí nghiệm (`dist/` bị ignore).

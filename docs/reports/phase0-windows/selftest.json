@@ -5,7 +5,7 @@
   },
   "ok": true,
   "sidecarHealth": {
-    "dbPath": "C:\\Users\\phucn\\AppData\\Local\\Temp\\selftest.db",
+    "dbPath": "%TEMP%\\selftest.db",
     "journalMode": "wal",
     "node": "v24.18.0",
     "pid": 27296,

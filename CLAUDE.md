@@ -4,8 +4,8 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 
 ## Stack (đã chốt)
 
-- Desktop: Tauri 2 + Rust + React + TypeScript + Vite + Tailwind/shadcn + Zustand + TanStack Query
-- Orchestrator: Node.js LTS + TypeScript, Zod, SQLite (WAL) + Drizzle ORM, Pino, Vitest, Playwright
+- Desktop: Tauri 2 + Rust + React + TypeScript + Vite; Tailwind/shadcn + Zustand + TanStack Query (kế hoạch Phase 7D, chưa có)
+- Orchestrator: Node.js LTS + TypeScript, Zod, SQLite (WAL) + Drizzle ORM, Pino, Vitest; Playwright (kế hoạch, chưa có)
 - Monorepo: pnpm workspace (`apps/`, `services/`, `packages/`, `tests/`, `docs/`)
 - KHÔNG dùng PostgreSQL, Redis, Kafka, Docker, Kubernetes làm thành phần bắt buộc.
 
@@ -25,8 +25,11 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 ## Quy trình làm việc
 
 - Nhánh phát triển do phiên làm việc chỉ định; commit nhỏ, message rõ ràng. Không tạo PR nếu chưa được yêu cầu.
-- Trước khi coi là xong: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.
+- Trước khi coi là xong: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build`.
 - Báo cáo trung thực: test fail thì nói fail, bước bỏ qua thì nói bỏ qua.
+- Yêu cầu có nhiều cách hiểu khác nhau: nêu giả định và các lựa chọn, không chọn ngầm. Nếu chỉ có một cách hợp lý thì cứ làm.
+- Mỗi dòng thay đổi phải truy được về yêu cầu. Dead code có sẵn thì báo, không xóa; chỉ dọn phần do chính thay đổi của mình làm thừa.
+- Việc nhiều bước: nêu tiêu chí kiểm chứng cho từng bước (test nào, lệnh nào) trước khi làm.
 
 ## Chính sách tham khảo repo công khai
 

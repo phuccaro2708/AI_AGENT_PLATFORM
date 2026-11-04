@@ -132,6 +132,8 @@ importers:
 
   packages/process-manager: {}
 
+  packages/resource-monitor: {}
+
   packages/shared-utils:
     dependencies:
       pino:

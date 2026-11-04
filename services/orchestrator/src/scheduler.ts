@@ -1,12 +1,22 @@
 import type { Repo } from "@agent-studio/storage";
 import type { Orchestrator, RunResult } from "./orchestrator.js";
 
+/**
+ * Optional brake on how many tasks may run at once (e.g. a resource monitor). Must be cheap and synchronous:
+ * it is called on every tick. It can only lower the limit: the scheduler never exceeds `concurrency`, and a
+ * result <= 0 starts nothing. It never touches tasks already running.
+ */
+export interface SchedulerAdmission {
+  maxConcurrency(base: number): number;
+}
+
 export interface SchedulerOptions {
   repo: Repo;
   orchestrator: Orchestrator;
   clock?: () => Date;
   /** Tasks running at once. Default 2. */
   concurrency?: number;
+  admission?: SchedulerAdmission;
   /** A claimed task must be heartbeated within this window or its owner is presumed dead. Default 60s. */
   leaseMs?: number;
   /**
@@ -37,6 +47,7 @@ export class Scheduler {
   private readonly clock: () => Date;
   private readonly concurrency: number;
   private readonly leaseMs: number;
+  private readonly admission: SchedulerAdmission | undefined;
   private readonly onSettled: SchedulerOptions["onSettled"];
   private readonly running = new Map<string, { done: Promise<void>; abort: AbortController }>();
   private timers: NodeJS.Timeout[] = [];
@@ -47,6 +58,7 @@ export class Scheduler {
     this.clock = opts.clock ?? (() => new Date());
     this.concurrency = opts.concurrency ?? 2;
     this.leaseMs = opts.leaseMs ?? 60_000;
+    this.admission = opts.admission;
     this.onSettled = opts.onSettled;
   }
 
@@ -71,7 +83,10 @@ export class Scheduler {
       result.cancelled.push(id);
     }
 
-    const free = this.concurrency - this.running.size;
+    const limit = this.admission
+      ? Math.min(this.concurrency, this.admission.maxConcurrency(this.concurrency))
+      : this.concurrency;
+    const free = limit - this.running.size;
     if (free <= 0) return result;
     for (const id of this.repo.listReadyTasks(free)) {
       if (!this.repo.claimTask(id, this.leaseUntil())) continue; // another scheduler won it

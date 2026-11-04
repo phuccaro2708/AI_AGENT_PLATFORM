@@ -8,7 +8,7 @@ import { AdapterRegistry, type AgentAdapter, type AgentTask } from "@agent-studi
 import { createLogger } from "@agent-studio/shared-utils";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
 import { Orchestrator } from "./orchestrator.js";
-import { Scheduler } from "./scheduler.js";
+import { Scheduler, type SchedulerOptions } from "./scheduler.js";
 
 /** Records the order tasks start in and how many run at once; each run waits for `release(prompt)`. */
 class Gated implements AgentAdapter {
@@ -85,8 +85,9 @@ afterEach(() => {
 
 const enqueue = (prompt: string, extra: Partial<Parameters<Orchestrator["enqueue"]>[0]> = {}) =>
   o.enqueue({ workflowId: wf, agentId: "gated", prompt, ...extra });
-const scheduler = (over: { concurrency?: number; leaseMs?: number } = {}) =>
-  new Scheduler({ repo, orchestrator: o, clock, ...over });
+const scheduler = (
+  over: Partial<Pick<SchedulerOptions, "concurrency" | "leaseMs" | "admission">> = {},
+) => new Scheduler({ repo, orchestrator: o, clock, ...over });
 /** Polls `cond` until true; a bounded, explicit wait instead of relying on event-loop tick order. */
 const waitFor = async (cond: () => boolean, what: string, timeoutMs = 2000) => {
   const deadline = Date.now() + timeoutMs;
@@ -262,5 +263,60 @@ describe("Scheduler", () => {
     await Promise.all([a.tick(), b.tick()]);
     await Promise.all([a.idle(), b.idle()]);
     expect(adapter.executions).toBe(3);
+  });
+});
+
+describe("Scheduler admission", () => {
+  it("stays at `concurrency` without an admission, and when it allows everything", async () => {
+    for (const p of ["1", "2", "3"]) enqueue(p);
+    const s = scheduler({ concurrency: 2, admission: { maxConcurrency: (base) => base } });
+    expect((await tick(s)).started).toHaveLength(2);
+    for (const p of adapter.started) adapter.release(p);
+    await s.idle();
+  });
+
+  it("starts nothing while paused (0), and resumes when the limit rises", async () => {
+    enqueue("a");
+    let limit = 0;
+    const s = scheduler({ concurrency: 2, admission: { maxConcurrency: () => limit } });
+    expect((await tick(s)).started).toHaveLength(0);
+    expect(repo.getTaskState(repo.listReadyTasks(1)[0]!)).toBe("queued");
+    limit = 2;
+    expect((await tick(s)).started).toHaveLength(1);
+    adapter.release("a");
+    await s.idle();
+  });
+
+  it("lowers the limit but never raises it above `concurrency`", async () => {
+    for (const p of ["1", "2", "3", "4"]) enqueue(p);
+    let limit = 1;
+    const s = scheduler({ concurrency: 2, admission: { maxConcurrency: () => limit } });
+    expect((await tick(s)).started).toHaveLength(1);
+    limit = 99;
+    expect((await tick(s)).started).toHaveLength(1); // 2 total = concurrency, not 99
+    expect(adapter.maxActive).toBe(2);
+    for (const p of adapter.started) adapter.release(p);
+    await s.idle();
+  });
+
+  it("does not touch running tasks when the limit drops below the running count", async () => {
+    for (const p of ["1", "2", "3"]) enqueue(p);
+    let limit = 2;
+    const s = scheduler({ concurrency: 2, admission: { maxConcurrency: () => limit } });
+    expect((await tick(s)).started).toHaveLength(2);
+    limit = 0;
+    expect((await tick(s)).started).toHaveLength(0);
+    expect(adapter.active).toBe(2); // still running, not aborted
+    for (const p of adapter.started) adapter.release(p);
+    await s.idle();
+    expect(repo.listReadyTasks(5)).toHaveLength(1); // the third is still queued
+  });
+
+  it("still expires leases and cancels blocked tasks while paused", async () => {
+    const a = enqueue("a");
+    const b = enqueue("b", { dependsOn: [a] });
+    const s = scheduler({ concurrency: 2, admission: { maxConcurrency: () => 0 } });
+    repo.setTaskState(a, "cancelled", { reason: "test" });
+    expect((await tick(s)).cancelled).toEqual([b]);
   });
 });

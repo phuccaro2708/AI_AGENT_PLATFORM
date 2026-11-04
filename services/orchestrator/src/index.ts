@@ -7,7 +7,7 @@ export type { FinalState, Outcome } from "./outcome.js";
 export { MessageRouter, BackpressureError } from "./router.js";
 export type { Handler, RouterFailpoint, RouterOptions, TickResult } from "./router.js";
 export { Scheduler } from "./scheduler.js";
-export type { SchedulerOptions, SchedulerTick } from "./scheduler.js";
+export type { SchedulerAdmission, SchedulerOptions, SchedulerTick } from "./scheduler.js";
 export { ContextBoard, ContextLimitError } from "./context-board.js";
 export type { ContextBoardLimits, RenderedBoard } from "./context-board.js";
 export { PeerReviewEngine } from "./workflow-engine.js";

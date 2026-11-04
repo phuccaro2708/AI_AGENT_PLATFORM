@@ -4,7 +4,8 @@
 History is scanned per unique (blob, path) pair instead of per commit snapshot. detect-secrets looks
 at one file at a time, so a file's findings depend only on its content and path; a file that is
 unchanged across N commits is therefore scanned once and its findings are attributed to all N
-commits. The reported (commit, file, type, line) set is identical to a full snapshot scan.
+commits. On this repo the reported (commit, file, type, line) set matched a per-commit snapshot scan
+(173 = 173 historical findings). Every blob is scanned as stored, so coverage is at least as broad.
 
 Fails (exit 1) on any finding. Lockfile integrity hashes are excluded (known false positives).
 Intentional test fixtures carry an inline `pragma: allowlist secret`.
@@ -100,7 +101,11 @@ def scan_history(repo, shas):
         for i, (blob, path) in enumerate(keys):
             cat.stdin.write(blob.encode() + b"\n")
             cat.stdin.flush()
-            _sha, _kind, size = cat.stdout.readline().split()
+            head = cat.stdout.readline().split()
+            if len(head) != 3:  # "<blob> missing": shallow/partial clone; fail closed, never skip
+                cat.kill()
+                raise SystemExit(f"cannot read blob {blob} ({path}): need a full clone (fetch-depth: 0)")
+            size = head[2]
             data = cat.stdout.read(int(size))
             cat.stdout.read(1)  # newline after the object body
             dest = os.path.join(tmp, str(i), *path.split("/"))
@@ -110,9 +115,9 @@ def scan_history(repo, shas):
         cat.stdin.close()
         cat.wait()
         for key, items in scan(tmp).items():
-            rel = key.replace(os.sep, "/")
-            if rel.startswith("./"):
-                rel = rel[2:]
+            # detect-secrets reports keys relative to cwd ("./<i>/..." or "<i>/..."); tolerate absolute too.
+            rel = os.path.relpath(key, tmp) if os.path.isabs(key) else os.path.normpath(key)
+            rel = rel.replace(os.sep, "/")
             idx = int(rel.split("/", 1)[0])
             blob, real_path = keys[idx]
             for sha in pairs[(blob, real_path)]:

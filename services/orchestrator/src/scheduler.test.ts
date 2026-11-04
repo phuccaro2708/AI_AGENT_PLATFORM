@@ -170,23 +170,27 @@ describe("Scheduler", () => {
   });
 
   it("never runs more than `concurrency` tasks at once", async () => {
+    // Tasks enqueued in the same millisecond tie on priority and createdAt, and the ULID tiebreak is
+    // random within a millisecond, so which two start first is not fixed. Never assume "1" before "2":
+    // always act on what actually started (`adapter.started`).
     for (const p of ["1", "2", "3", "4"]) enqueue(p);
     const s = scheduler({ concurrency: 2 });
     expect((await tick(s)).started).toHaveLength(2);
     expect((await tick(s)).started).toHaveLength(0); // slots are full
     expect(adapter.active).toBe(2);
-    adapter.release("1");
+    adapter.release(adapter.started[0]!);
     // The freed slot reaches the scheduler once the task settles; ticking again is harmless while full.
-    const next = await tickUntilStarted(s);
-    expect(next).toHaveLength(1);
+    expect(await tickUntilStarted(s)).toHaveLength(1);
+    expect(adapter.active).toBe(2);
     expect(adapter.maxActive).toBe(2);
-    for (const p of ["2", "3"]) adapter.release(p);
+    for (const p of adapter.started.slice(1)) adapter.release(p);
     await s.idle();
     expect(adapter.active).toBe(0);
-    expect((await tick(s)).started).toHaveLength(1); // "4"
-    adapter.release("4");
+    expect((await tick(s)).started).toHaveLength(1); // the last task
+    adapter.release(adapter.started[3]!);
     await s.idle();
     expect(adapter.executions).toBe(4);
+    expect(new Set(adapter.started).size).toBe(4);
     expect(adapter.maxActive).toBe(2);
   });
 

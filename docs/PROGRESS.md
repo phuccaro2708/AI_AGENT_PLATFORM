@@ -279,3 +279,9 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - `91317e4` (đã push): `workflows.start` nhận `excludeAgents` (chỉ khi bỏ trống `agentId`); sidecar ghép với `stub`. UI: lựa chọn "Auto (router picks)" trong ô Agent (trước đó UI luôn gửi tên agent nên router không bao giờ chạy từ UI) và ô tick trong Settings > Agents, lưu ở `localStorage`. Không thêm method IPC nên `lib.rs` không đổi.
 - Kiểm: `pnpm lint`, `prettier --check .`, `typecheck`, `build` thoát 0; `pnpm test` 54 file, 520 qua, 2 bỏ qua. Chưa chạy: app Tauri thật, `cargo` (không đổi Rust).
 - CI đọc qua GraphQL: `341190d` TypeScript ubuntu/windows, Tauri shell, spike ADR-001 xanh, Security đang chạy; `91317e4` mới có TypeScript ubuntu xanh, còn lại đang chạy.
+
+## 2026-11-05 (Windows): đối chiếu docs với git
+
+- Chạy `/know`, thấy docs cũ so với git: đầu nhánh là `0183a85` (đã push), router đã nối vào `workflows.start`, `policy-engine` đã tồn tại, số test hiện tại 520 qua. Đã sửa HANDOFF (vị trí, dòng Phase 3, CI, "Việc tiếp theo", mục kiểm) và ROADMAP (hàng Phase 3, Phase 4–6, ngày tiêu đề). Không đổi thứ tự phase, không đóng phase.
+- CI đọc qua GraphQL: `603d6fb` xanh đủ 5/5 (Security xanh); `341190d` còn Security chạy; `91317e4` và `0183a85` còn chạy. Chưa có kết luận.
+- Không chạy lại lint/test/build ở lượt này (chỉ đổi docs).

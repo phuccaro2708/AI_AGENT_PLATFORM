@@ -35,12 +35,12 @@ Router bền vững, DAG + scheduler với lease, `git-worktrees`, workflow engi
 5. `6461cf2` UI Settings → Agents (Check/Save/Use defaults, mục Secrets).
 6. `7b8cb23` cập nhật ASSUMPTIONS, ROADMAP, TODO. Đã push.
 
-Kiểm: lint, typecheck, 357 test, build, prettier; `cargo test` 12 qua + 1 bỏ qua (Credential Manager thật, chạy tay với `--ignored` đã qua), clippy sạch.
+Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, prettier; `cargo test` 12 qua + 1 bỏ qua (Credential Manager thật, chạy tay với `--ignored` đã qua), clippy sạch.
 
 ## Việc mở
 
-- Kiểm 7A và 7B trong app Tauri thật (session `tauri-7b-check` đang làm 7B).
-- CI của `7b8cb23` (session `ci-watch-7b`).
+- Kiểm 7A trong app Tauri thật (7B đã kiểm, xem TODO.md).
+- CI của `52660f3` (run `41736953160`): bốn job xanh, job Security chưa đọc được kết quả vì GitHub API trả 403; chưa push `da9614c`, `803ccac`, `bf25c42`.
 - `cargo audit` chưa cài; `keyring-core` 1.0.1 mới 21 ngày tuổi.
 - Secret có thể lọt vào log task nếu CLI tự in môi trường của nó.
 - Test `git-worktrees` từng flaky một lần; `logs.search` (LIKE) chưa benchmark.

@@ -5,14 +5,7 @@ import {
   unwrapNpmShim,
   type ResolvedExecutable,
 } from "@agent-studio/process-manager";
-import type {
-  CommandResult,
-  ProbeError,
-  ProbeOptions,
-  ProbeResult,
-  Provider,
-  RunFn,
-} from "./types.js";
+import type { CommandResult, ProbeError, ProbeOptions, ProbeResult, RunFn } from "./types.js";
 
 export const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -88,7 +81,7 @@ export interface Detected {
 
 /** Resolve the executable and run `--version`. Returns either a Detected or a finished failure result. */
 export async function detect(
-  provider: Provider,
+  provider: string,
   binary: string,
   opts: ProbeOptions,
 ): Promise<{ ok: true; d: Detected; run: RunFn } | { ok: false; result: ProbeResult }> {
@@ -135,7 +128,7 @@ export async function detect(
 
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const base = { command: exe.path, timeoutMs, ...(opts.env ? { env: opts.env } : {}) };
-  const vr = await run({ ...base, args: ["--version"] });
+  const vr = await run({ ...base, args: opts.versionArgs ?? ["--version"] });
   const verr = commandError("--version", vr);
   if (verr) return fail(verr, { path: exe.path, kind: exe.kind });
   const version = parseVersion(vr.stdout);

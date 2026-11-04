@@ -372,17 +372,19 @@ function ReconcileCard({
       <fieldset className="choices">
         <legend className="muted small">What happened?</legend>
         {CHOICES.map(([value, label, hint]) => (
-          <label key={value} className="choice">
-            <input
-              type="radio"
-              name={`decision-${row.task.id}`}
-              checked={decision === value}
-              onChange={() => {
-                setDecision(value);
-                setConfirmed(false);
-              }}
-            />
-            <span>{label}</span>
+          <label key={value} className={decision === value ? "chip active" : "chip"}>
+            <span className="chip-title">
+              <input
+                type="radio"
+                name={`decision-${row.task.id}`}
+                checked={decision === value}
+                onChange={() => {
+                  setDecision(value);
+                  setConfirmed(false);
+                }}
+              />
+              {label}
+            </span>
             <span className="muted small">{hint}</span>
           </label>
         ))}

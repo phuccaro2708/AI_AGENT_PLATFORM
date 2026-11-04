@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TaskState } from "@agent-studio/contracts";
 import { AgentView } from "./AgentView";
 import { ErrorCard } from "./ErrorCard";
@@ -16,6 +16,8 @@ import { NewProjectDialog } from "./NewProjectDialog";
 import { Sidebar, type Mode, type Session } from "./Sidebar";
 import { SettingsView } from "./SettingsView";
 import { useNickname } from "./profile";
+import { composePrompt, usePresets } from "./presets";
+import { matchShortcut } from "./shortcuts";
 import { useTheme } from "./theme";
 import { useRuns } from "./useRuns";
 
@@ -40,6 +42,8 @@ export function App() {
   const [newProject, setNewProject] = useState(false);
   const [inspector, setInspector] = useState(false);
   const [states, setStates] = useState<Record<string, TaskState>>({});
+  const presetStore = usePresets();
+  const [presetId, setPresetId] = useState("");
 
   const fail = useCallback((m: string) => setError(m), []);
   const { snaps, approvals, refresh: refreshRuns } = useRuns(runs, fail);
@@ -99,7 +103,8 @@ export function App() {
   };
 
   const startAgentTask = (text: string) => {
-    api.startTask(projectId, agentId, text).then(
+    const preset = presetStore.all.find((p) => p.id === presetId);
+    api.startTask(projectId, agentId, composePrompt(preset, text)).then(
       (id) => {
         setTasks((t) => [{ id, title: text.slice(0, 60), prompt: text, agentId, projectId }, ...t]);
         setSelectedTask(id);
@@ -184,6 +189,29 @@ export function App() {
     else setSelectedRun(null);
   };
 
+  const shortcutRef = useRef({ switchMode, newSession });
+  shortcutRef.current = { switchMode, newSession };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const a = matchShortcut(e);
+      if (!a) return;
+      e.preventDefault();
+      const { switchMode: sm, newSession: ns } = shortcutRef.current;
+      if (a === "agent") sm("agent");
+      else if (a === "multi") sm("multi");
+      else if (a === "new") ns();
+      else if (a === "history") {
+        setSettings(false);
+        setHistory((v) => !v);
+      } else {
+        setHistory(false);
+        setSettings((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div className={inspector && !settings ? "shell with-inspector" : "shell"}>
       <Header
@@ -228,6 +256,8 @@ export function App() {
             <SettingsView
               nickname={nickname}
               onNickname={setNickname}
+              presetStore={presetStore}
+              adapterIds={adapters.map((a) => a.id)}
               theme={theme}
               onTheme={setTheme}
               version={health ? `${health.source} · v${health.version}` : "starting…"}
@@ -247,6 +277,9 @@ export function App() {
               onDetect={detect}
               task={task}
               onStart={startAgentTask}
+              presets={presetStore.all}
+              presetId={presetId}
+              onPreset={setPresetId}
               onError={fail}
             />
           ) : (

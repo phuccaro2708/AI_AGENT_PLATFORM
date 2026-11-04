@@ -41,7 +41,7 @@ Chỉ `claude` và `codex` chạy được task. `agy` (Antigravity 1.4.8) mới
 
 ## Chờ người dùng quyết
 
-- Tự kiểm secret `agent-studio` trong Settings của app: sau khi dọn A5, `cmdkey /list` không còn mục `agent-studio` nào (chưa rõ app lưu ở đâu hay đã mất).
+- Dọn A5 không làm mất dữ liệu người dùng: mục `index/claude.agent-studio` đã xoá là danh sách TÊN secret của provider claude do chính app tạo (`secrets.rs`), nhiều khả năng là tàn dư kiểm 7B; người dùng xác nhận chưa từng nhập secret nào. Không có mục thì Settings hiện danh sách rỗng (NoEntry → rỗng), không lỗi.
 - Các lỗi UI nhỏ chưa sửa (xem PROGRESS 2026-11-04 đêm): nút Older vẫn bật khi tổng là bội số của 30; sidebar < 800 px bị cắt ở chiều cao 720; lịch sử chỉ hiện ngày, không giờ.
 - Nhánh `claude/phase-2-kickoff-8a5732` là bản Phase 2 cũ, xung đột add/add; khuyến nghị không gộp.
 

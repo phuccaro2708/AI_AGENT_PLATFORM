@@ -80,7 +80,7 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 2. CI Security: thêm `timeout-minutes` (gợi ý 30) cho job và tăng tốc `scripts/secret-scan.py` mà không giảm phạm vi (quét file thay đổi theo commit, cache theo blob hash hoặc chạy song song); chứng minh tương đương. Chưa làm, chờ đồng ý.
 3. Phase 7 còn lại: 7C (thẻ phê duyệt cho approval do orchestrator tạo; "Luôn cho phép trong phạm vi" cần Phase 4), 7D (Tailwind/shadcn, phím tắt; thêm dependency phải pin ≥ 2 tuần, qua audit và license), preset (agent + quyền + hướng dẫn, export file), E2E người dùng mới. Chỉ khi cả ba tiêu chí đóng đạt mới viết `PHASE7_REPORT.md`.
 4. Phase 3: probe thật `agy` (`--print` + `--output-format stream-json`) rồi `adapter-antigravity` + fixture + contract test; Ollama khi máy có; không bịa capability.
-5. Dọn: `D:s7a-tmp` (thư mục tạm của phiên kiểm 7A) và credential thừa `index/claude.agent-studio` trong Credential Manager.
+5. Dọn: `D:s7a-tmp` (thư mục tạm của phiên kiểm 7A) và credential `index/claude.agent-studio` (danh sách tên secret của app, tàn dư kiểm thử) trong Credential Manager.
 
 **Việc mở / chưa xác minh**
 
@@ -111,7 +111,7 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Review chéo: `/code-review medium` (7 finding nhỏ, không lỗi chặn) và `/security-review` (không finding đạt ngưỡng). Cả hai chỉ đọc mã.
 - Kiểm: `pnpm lint`, `format`, `typecheck`, `test`, `build` qua; `cargo clippy -D warnings` sạch; `cargo test` 12 qua, 1 bỏ qua.
 - Đã push `868daef..bfbe920` lên `claude/repo-current-status-acfd51`. Nhánh gốc vẫn ở `868daef`.
-- Dọn A5: `D:\as7a-tmp` và credential `index/claude.agent-studio` đã được người dùng xoá. Không còn mục `agent-studio` nào trong `cmdkey /list`; cần kiểm secret trong Settings của app.
+- Dọn A5: `D:\as7a-tmp` và credential `index/claude.agent-studio` đã được người dùng xoá. Không còn mục `agent-studio` nào trong `cmdkey /list`. Đã đối chiếu `secrets.rs`: đó là chỉ mục tên secret do app tạo, không mất dữ liệu người dùng (người dùng chưa nhập secret nào); Settings hiện danh sách rỗng, không lỗi.
 
 **Việc mở**
 
@@ -135,3 +135,12 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Có commit `6547f6c` (ADR-005, chốt lại thứ tự phase, sửa `DECISIONS.md`, `ROADMAP.md`, `TODO.md`) do phiên khác tạo trong cùng worktree; không do phiên này viết.
 - Đã push `3d5925f..1540a4f` lên `claude/repo-current-status-acfd51`, rồi fast-forward nhánh gốc `claude/loving-lovelace-32lh71` từ `3d5925f` lên `1540a4f` (không force).
 - CI `1540a4f`: tại lần đọc cuối (16:00 UTC) cả 5 job (mỗi job hai lượt push + pull_request) còn QUEUED; chưa có kết luận. Phiên con `ci-read-1540a4f` đang đọc tiếp.
+
+## 2026-11-04 (khuya, phiên phụ) — Sắp lại phase, rà A5, tham khảo Spec Kit, skill `/save`
+
+- ADR-005 (`6547f6c`, đã push): đổi thứ tự phase để hết vòng phụ thuộc (7C cần Policy Engine của Phase 4; Phase 8 cần `mcp-gateway` của Phase 6 và Policy Engine; Phase 9 cần Policy Engine). Thứ tự mới: Phase 7 (phần không cần policy) song song Phase 3 → Phase 4 (+ 7C-2, đóng Phase 7) → Phase 5 → Phase 6 → Phase 8 → Phase 9; Phase 10 xuyên suốt.
+- Bộ quét secret theo cặp (blob, path): hai lượt chạy khớp 173 = 173 phát hiện lịch sử; cũ ~7 phút, mới ~38 giây trên Windows. Hai bản review (`/code-review medium`, `/security-review`) không có vấn đề chặn.
+- Rà dọn A5: xem mục 2026-11-04 (đêm) ở trên, đã sửa lại kết luận (không phải credential thừa).
+- Đọc github/spec-kit v1.3.0 (MIT) chỉ để so sánh thiết kế, không sao chép, không clone, không chạy. Ý có thể dùng: "một thao tác, nhiều adapter", catalog chỉ để khám phá và phải xác nhận tin cậy tường minh trước khi chạy mã (liên quan Phase 8), workflow lưu cây thực thi và resume từ PAUSED/FAILED.
+- Tạo skill cá nhân `/save` (`~/.claude/skills/save`, ngoài repo) để ghi tiến trình vào HANDOFF/PROGRESS/TODO/ROADMAP/DECISIONS và tạo file thiếu từ mẫu; đã ghi vào `~/.claude/skills-registry.md`. Chưa thử gọi thật (cần phiên mới để nhận skill).
+- Chưa làm: cập nhật `CLAUDE.md` (Tailwind/shadcn ghi "đã chốt" nhưng chưa có; trỏ tới ADR-005).

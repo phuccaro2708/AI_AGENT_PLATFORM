@@ -20,6 +20,7 @@ import { composePrompt, usePresets } from "./presets";
 import { matchShortcut } from "./shortcuts";
 import { useTheme } from "./theme";
 import { useRuns } from "./useRuns";
+import { autoExcludes, useAllowAgy } from "./autoRoute";
 
 export function App() {
   const [mode, setMode] = useState<Mode>("agent");
@@ -35,6 +36,7 @@ export function App() {
   const [detecting, setDetecting] = useState(false);
   const [projectId, setProjectId] = useState("");
   const [agentId, setAgentId] = useState("");
+  const { allowAgy } = useAllowAgy();
   const [tasks, setTasks] = useState<TaskRef[]>([]);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [runs, setRuns] = useState<PeerRun[]>(loadRuns);
@@ -104,7 +106,7 @@ export function App() {
 
   const startAgentTask = (text: string) => {
     const preset = presetStore.all.find((p) => p.id === presetId);
-    api.startTask(projectId, agentId, composePrompt(preset, text)).then(
+    api.startTask(projectId, agentId, composePrompt(preset, text), autoExcludes(allowAgy)).then(
       (id) => {
         setTasks((t) => [{ id, title: text.slice(0, 60), prompt: text, agentId, projectId }, ...t]);
         setSelectedTask(id);

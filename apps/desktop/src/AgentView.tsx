@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { AdapterInfo, Project } from "./api";
 import { AGENT_TASK_REQUIRES, capabilityBlocker } from "./capabilityGap";
+import { AUTO_AGENT } from "./autoRoute";
 import { Composer, StartSteps } from "./Composer";
 import type { Preset } from "./presets";
 import { TaskLogView, type TaskRef } from "./components";
@@ -42,12 +43,17 @@ export function AgentView({
   const agent = adapters.find((a) => a.id === agentId);
   const blocker = !project
     ? "Choose a project first"
-    : !agent
-      ? "Pick an agent"
-      : !agent.available
-        ? `${agent.id} was not found on this machine`
-        : (capabilityBlocker(agent, AGENT_TASK_REQUIRES) ??
-          (prompt.trim() === "" ? "Describe the task" : null));
+    : agentId === AUTO_AGENT
+      ? // The sidecar's router checks availability and capabilities and explains any gap.
+        prompt.trim() === ""
+        ? "Describe the task"
+        : null
+      : !agent
+        ? "Pick an agent"
+        : !agent.available
+          ? `${agent.id} was not found on this machine`
+          : (capabilityBlocker(agent, AGENT_TASK_REQUIRES) ??
+            (prompt.trim() === "" ? "Describe the task" : null));
   return (
     <div className="chat">
       <div className="chat-body">
@@ -92,6 +98,7 @@ export function AgentView({
             <label className="picker">
               <span className="muted small">Agent</span>
               <select aria-label="Agent" value={agentId} onChange={(e) => onAgent(e.target.value)}>
+                <option value={AUTO_AGENT}>Auto (router picks)</option>
                 {adapters.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.id}

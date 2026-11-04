@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type Provider, type ScannedCli, type SettingsOutcome } from "./api";
 import { argsText, envText, looksLikeSecretName, toSettings } from "./agentSettings";
+import { useAllowAgy } from "./autoRoute";
 import { canBrowse } from "./dialog";
 import { deleteSecret, secretNames, setSecret } from "./secrets";
 
@@ -313,9 +314,15 @@ export function AgentsSettings() {
   }, []);
   useEffect(scan, [scan]);
 
+  const { allowAgy, setAllowAgy } = useAllowAgy();
+
   return (
     <>
       <Scan clis={clis} busy={busy} error={error} onScan={scan} />
+      <label className="picker">
+        <input type="checkbox" checked={allowAgy} onChange={(e) => setAllowAgy(e.target.checked)} />
+        <span>Let “Auto” pick agy (Antigravity)</span>
+      </label>
       {(clis ?? []).filter(isConfigurable).map((c) => (
         <ProviderCard key={c.id} provider={c.id} label={c.displayName} />
       ))}

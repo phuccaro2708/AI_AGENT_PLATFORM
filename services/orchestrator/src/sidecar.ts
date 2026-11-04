@@ -491,7 +491,7 @@ export class SidecarService {
             // No agent named: pick by declared capability, never by name. The stub is an internal
             // fixture and is not a candidate. A named agent is honoured as before (the UI gates it).
             const route = selectAgent(await snapshotAdapters(this.registry), AUTO_AGENT_REQUIRES, {
-              exclude: ["stub"],
+              exclude: ["stub", ...(req.params.excludeAgents ?? [])],
             });
             if (!route.ok) return fail(req.id, describeRouteFailure(route, AUTO_AGENT_REQUIRES));
             agentId = route.agentId;

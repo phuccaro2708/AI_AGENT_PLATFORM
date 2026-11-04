@@ -140,6 +140,20 @@ describe("workflows.start without agentId (capability router)", () => {
     expect(r.error?.message).not.toContain("stub");
   });
 
+  it("skips agents listed in excludeAgents and reports the gap when nothing else qualifies", async () => {
+    open([new Fake("first", ["streaming"]), new Fake("second", ["streaming"])]);
+    const workflowId = await workflow();
+    const r = await call("workflows.start", { workflowId, prompt: "hi", excludeAgents: ["first"] });
+    await svc!.idle();
+    expect(await agentOf(r.result?.["taskId"])).toBe("second");
+    const none = await call("workflows.start", {
+      workflowId,
+      prompt: "hi",
+      excludeAgents: ["first", "second"],
+    });
+    expect(none.error?.message).toContain("Không có agent phù hợp");
+  });
+
   it("still honours an explicit agentId, even one that declares no capabilities", async () => {
     open([new Fake("mute", [])]);
     const workflowId = await workflow();

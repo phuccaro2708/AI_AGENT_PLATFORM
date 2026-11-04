@@ -1,29 +1,29 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-04 (đêm; nhánh làm việc ở `a3f9d20`, nhánh gốc còn ở `f75a72b`). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-04 (khuya; nhánh làm việc ở `8143aea`, nhánh gốc còn ở `f75a72b`). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Vị trí
 
-- Nhánh làm việc `claude/repo-current-status-acfd51` đã push tới `a3f9d20` (gồm merge Phase 7 UI và Phase 3); PR #2 vào nhánh gốc đang mở (chưa merge, auto-fix bật, auto-merge tắt). Nhánh gốc `claude/loving-lovelace-32lh71` (cũng là `origin/HEAD`) còn ở `f75a72b`, chưa fast-forward. PR #1 đã MERGED.
+- Nhánh làm việc `claude/repo-current-status-acfd51` có `8143aea` (gồm Phase 7 UI, Phase 3, sửa scheduler flaky, UI capability thiếu, sửa bố cục hẹp; đã kiểm trong app Tauri thật); PR #2 vào nhánh gốc đang mở (chưa merge, auto-fix bật, auto-merge tắt). Nhánh gốc `claude/loving-lovelace-32lh71` (cũng là `origin/HEAD`) còn ở `f75a72b`, chưa fast-forward. PR #1 đã MERGED.
 - Thứ tự phase đã chốt lại 2026-11-04 (ADR-005, ROADMAP mục "Thứ tự thực hiện"): Phase 7 (phần không cần policy) song song Phase 3 → Phase 4 (+ 7C-2, đóng Phase 7) → Phase 5 → Phase 6 (`mcp-gateway` đầu) → Phase 8 → Phase 9; Phase 10 xuyên suốt.
 - Ứng dụng: **Agent Workspace** (Tauri 2 + React/Vite, sidecar Node orchestrator, SQLite/Drizzle, pnpm monorepo).
 - Giữ nguyên `identifier` `dev.agentstudio.desktop`, gói `@agent-studio/*`, service Credential Manager `agent-studio` (đổi sẽ mất dữ liệu và secret đã lưu).
 
 ## Trạng thái các phase
 
-| Phase                                              | Trạng thái                                                                                        |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| 0, 1                                               | Đóng (`PHASE0_REPORT.md`, `PHASE1_REPORT.md`)                                                     |
-| 2 Peer Review MVP                                  | Đóng 2026-11-03, có ngoại lệ, tag `mvp-phase2`                                                    |
-| 7A (lịch sử task, reconciliation)                  | Xong, kiểm trong app Tauri thật                                                                   |
-| 7B (project policy, cấu hình agent, secrets)       | Xong, kiểm trong app Tauri thật                                                                   |
-| Quét CLI (`agents.scan`)                           | Đã gộp (`2380045`); chỉ phát hiện, chưa chạy task                                                 |
-| Redaction secret                                   | Xong (`3a9a85b`), chỉ che theo giá trị chính xác                                                  |
-| 7C-1 (thẻ phê duyệt, nhật ký, timer, phạm vi khoá) | Xong 2026-11-04, kiểm trong app Tauri thật; chưa có đường production tạo approval (Phase 4)       |
-| Preset, phím tắt cơ bản, radio thẻ ngang           | Xong 2026-11-04, chỉ có test Vitest, chưa kiểm app Tauri thật                                     |
-| 3 (quét CLI, `agy`, router)                        | Đang làm: adapter `agy` (CLI giả), router xong; còn Ollama, resource monitor, UI capability thiếu |
-| 7C-2, 7D Tailwind/shadcn, E2E người dùng mới       | Chưa bắt đầu (7C-2 chờ Phase 4; Tailwind/shadcn chờ duyệt dependency)                             |
-| `PHASE7_REPORT.md`                                 | Chỉ viết khi cả Phase 7 đạt tiêu chí đóng                                                         |
+| Phase                                              | Trạng thái                                                                                                                                                                                        |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0, 1                                               | Đóng (`PHASE0_REPORT.md`, `PHASE1_REPORT.md`)                                                                                                                                                     |
+| 2 Peer Review MVP                                  | Đóng 2026-11-03, có ngoại lệ, tag `mvp-phase2`                                                                                                                                                    |
+| 7A (lịch sử task, reconciliation)                  | Xong, kiểm trong app Tauri thật                                                                                                                                                                   |
+| 7B (project policy, cấu hình agent, secrets)       | Xong, kiểm trong app Tauri thật                                                                                                                                                                   |
+| Quét CLI (`agents.scan`)                           | Đã gộp (`2380045`); chỉ phát hiện, chưa chạy task                                                                                                                                                 |
+| Redaction secret                                   | Xong (`3a9a85b`), chỉ che theo giá trị chính xác                                                                                                                                                  |
+| 7C-1 (thẻ phê duyệt, nhật ký, timer, phạm vi khoá) | Xong 2026-11-04, kiểm trong app Tauri thật; chưa có đường production tạo approval (Phase 4)                                                                                                       |
+| Preset, phím tắt cơ bản, radio thẻ ngang           | Xong 2026-11-04, đã kiểm trong app Tauri thật (trừ Ctrl+Enter gửi thật cần CLI)                                                                                                                   |
+| 3 (quét CLI, `agy`, router)                        | Đang làm: adapter `agy` (CLI giả), router, UI capability thiếu (Peer Review kiểm app thật; nhánh AgentView chỉ có unit test) xong; còn Ollama, resource monitor, nối router vào `workflows.start` |
+| 7C-2, 7D Tailwind/shadcn, E2E người dùng mới       | Chưa bắt đầu (7C-2 chờ Phase 4; Tailwind/shadcn chờ duyệt dependency)                                                                                                                             |
+| `PHASE7_REPORT.md`                                 | Chỉ viết khi cả Phase 7 đạt tiêu chí đóng                                                                                                                                                         |
 
 `claude`, `codex` chạy được task thật; `agy` (Antigravity 1.4.8) đã có adapter (thành công chỉ khi `num_turns` > 0 và `response` không rỗng) nhưng mới qua contract test với CLI giả, chưa chạy `agy` thật (còn 1 lượt probe cần người dùng cho phép). Gemini đã bỏ khỏi roadmap và khỏi README/CLAUDE.md.
 
@@ -65,3 +65,7 @@ Cập nhật: 2026-11-04 (đêm; nhánh làm việc ở `a3f9d20`, nhánh gốc 
 - Spawn process bằng mảng đối số, `shell: false`. Worktree không phải sandbox. Task có side effect không xác minh được → `needs_reconciliation`, không tự retry.
 - Method IPC mới cần sửa 4 chỗ: Zod variant (`contracts`), `case` trong `sidecar.ts`, `ALLOWED_METHODS` + test trong `src-tauri/src/lib.rs`, stub trong `apps/desktop/src/preview-sidecar.ts`.
 - Push gộp theo lô vì Security chậm; chỉ push khi người dùng đồng ý.
+
+## Chuyển sang Claude Cloud
+
+Xem `docs/CLOUD_HANDOFF.md`: việc nào chạy được trên cloud, việc nào phải chờ máy Windows của người dùng.

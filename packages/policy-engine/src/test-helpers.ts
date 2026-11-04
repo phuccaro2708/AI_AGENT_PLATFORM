@@ -4,7 +4,9 @@ import * as path from "node:path";
 
 /** Fresh temp tree: <base>/ws (workspace), <base>/outside (sibling folder). Paths are realpath'd. */
 export function makeTree(): { base: string; ws: string; outside: string; cleanup: () => void } {
-  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "policy-engine-")));
+  // realpathSync.native, not realpathSync: the JS version keeps 8.3 short names (RUNNER~1) that the engine's
+  // async fs.realpath expands, so the expected paths would not match what canonicalize() returns on Windows.
+  const base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "policy-engine-")));
   const ws = path.join(base, "ws");
   const outside = path.join(base, "outside");
   fs.mkdirSync(path.join(ws, "src"), { recursive: true });

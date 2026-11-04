@@ -6,14 +6,14 @@ Nguyên tắc ưu tiên: **Agent Runtime → Message Router → Durable Task Sta
 
 ## Tiến trình (cập nhật 2026-11-03)
 
-| Phase | Trạng thái                                                                                                                                                                                                                    |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | **PASS (có hạn chế)** — CI xanh (runner), đã xác minh trên Windows vật lý bằng `tauri dev`; xem PHASE0_REPORT                                                                                                                 |
-| 1     | **ĐÓNG (2026-11-02), có ngoại lệ** — cả 4 tiêu chí đạt/đạt có giới hạn, CI xanh; ngoại lệ chuyển phase sau (sai version → Phase 6, release máy thứ hai → Phase 5, tool ghi/phê duyệt → Phase 2/4). Xem PHASE1_REPORT          |
-| 2     | **ĐÓNG (2026-11-03), có ngoại lệ** — CI xanh 5/5; xem PHASE2_REPORT                                                                                                                                                           |
-| 7     | **ĐANG LÀM (từ 2026-11-03)** — 7A và 7B đã có code, test và push; kiểm trong app Tauri thật đã chạy cho 7B (còn lỗi nhỏ đã sửa); 7C (Approval UI đầy đủ), 7D (Tailwind/shadcn, phím tắt), preset, E2E người dùng mới chưa làm |
-| 3–6   | Chưa bắt đầu                                                                                                                                                                                                                  |
-| 8–10  | Kế hoạch mở rộng "ngang AionUi, hơn ở an toàn / tin cậy / multi-agent / nhẹ" — xem cuối tài liệu; chưa bắt đầu                                                                                                                |
+| Phase | Trạng thái                                                                                                                                                                                                                                                                                 |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0     | **PASS (có hạn chế)** — CI xanh (runner), đã xác minh trên Windows vật lý bằng `tauri dev`; xem PHASE0_REPORT                                                                                                                                                                              |
+| 1     | **ĐÓNG (2026-11-02), có ngoại lệ** — cả 4 tiêu chí đạt/đạt có giới hạn, CI xanh; ngoại lệ chuyển phase sau (sai version → Phase 6, release máy thứ hai → Phase 5, tool ghi/phê duyệt → Phase 2/4). Xem PHASE1_REPORT                                                                       |
+| 2     | **ĐÓNG (2026-11-03), có ngoại lệ** — CI xanh 5/5; xem PHASE2_REPORT                                                                                                                                                                                                                        |
+| 7     | **ĐANG LÀM (từ 2026-11-03)** — 7A và 7B đã có code, test và push; kiểm trong app Tauri thật đã chạy cho 7B (còn lỗi nhỏ đã sửa); 7C-1 (thẻ phê duyệt, nhật ký, timer, phạm vi khoá) xong 2026-11-04; 7C-2 chờ Phase 4; 7D (Tailwind/shadcn, phím tắt), preset, E2E người dùng mới chưa làm |
+| 3–6   | Chưa bắt đầu                                                                                                                                                                                                                                                                               |
+| 8–10  | Kế hoạch mở rộng "ngang AionUi, hơn ở an toàn / tin cậy / multi-agent / nhẹ" — xem cuối tài liệu; chưa bắt đầu                                                                                                                                                                             |
 
 ## Thứ tự thực hiện (chốt lại 2026-11-04)
 

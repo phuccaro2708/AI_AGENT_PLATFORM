@@ -167,3 +167,9 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Dọn UI: History phân trang 30/30/9 đúng, Older tắt ở trang cuối; ngày cũ hiện kèm giờ ("Sep 30, 2026 07:39 PM"); sidebar ở 700×720 không còn bị cắt (`max-height: none`). Trường hợp đúng 30 hàng chỉ kiểm bằng test đơn vị.
 - Phát hiện chưa sửa: danh sách "What happened?" trong thẻ reconciliation (7A) xếp radio và nhãn thành cột dọc, trông lỏng; không ảnh hưởng chức năng.
 - Chưa kiểm: Settings > Agents Save/Use defaults; Peer Review chạy CLI thật qua UI.
+
+## 2026-11-04 (khuya, push và CI)
+
+- Push `1540a4f..f75a72b` lên `claude/repo-current-status-acfd51`, rồi fast-forward nhánh gốc `claude/loving-lovelace-32lh71` lên `f75a72b` (không force). Gồm: `98e28c5`, `f81f20f` (B1), `bf7ba01` (dọn UI), `52d489d` (7C-1), `f75a72b` (bố cục thẻ phê duyệt, ghi kiểm UI thật).
+- CI `1540a4f` (đọc bằng GraphQL): xanh cả 10 check run; Security 7,1 phút (push) và 5,9 phút (pull_request) so với khoảng 41 phút trước.
+- CI `f75a72b`: lúc đọc cuối còn IN_PROGRESS/QUEUED, chưa có kết luận.

@@ -140,7 +140,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 ## Phase 3 — Quét CLI & Local AI
 
 - [x] Quét CLI agent theo danh sách ứng viên khai báo bằng dữ liệu (PATH + vị trí cài Windows), hiển thị "đã phát hiện, chưa hỗ trợ" (`agents.scan`, `packages/cli-probe/src/candidates.ts`, Settings → Agents)
-- [ ] Probe Antigravity (`agy`, quan sát `--print`, `--output-format stream-json`; đã có fixture `--help` 1.4.8 + capability từ help, CHƯA quan sát output thật) rồi `adapter-antigravity` + fixtures + contract tests
+- [ ] Probe Antigravity (`agy`, quan sát `--print`, `--output-format stream-json`; đã có fixture `--help` 1.4.8 + capability từ help, đã quan sát output thật 2026-11-04: 2 lượt `--print`, xem ASSUMPTIONS; chưa dựng adapter) rồi `adapter-antigravity` + fixtures + contract tests
 - [ ] `adapter-ollama`: HTTP client, discover models, stream
 - [ ] Tool loop riêng cho Ollama (whitelist tool, read-only mặc định, giới hạn vòng lặp)
 - [ ] Capability-based router
@@ -204,7 +204,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [x] Secrets trong Windows Credential Manager, chỉ ghi từ UI, tiêm vào sidecar khi spawn theo provider
 - [x] UI Settings → Agents
 - [x] Chạy 7B trong app Tauri thật (2026-11-03, WebView2 + CDP, DB tạm): Browse, policy rootPath, Agents, Secrets đạt; tìm ra `node.exe` lọt probe Claude và màu hộp Check — đã sửa (`52660f3`). Đã kiểm lại màu hộp Check trong app thật ngày 2026-11-04 (xem PROGRESS)
-- [ ] `cargo audit` khi có công cụ
+- [x] `cargo audit` khi có công cụ (2026-11-04: 0.22.2 cục bộ, không lỗ hổng, 2 cảnh báo transitive)
 - [x] CI xanh cho `52660f3` (5/5 job, 2026-11-04)
 - [ ] Đọc CI của `babca05` trên nhánh gốc; chạy lại `clippy` và `cargo test` sau khi gộp quét CLI
 

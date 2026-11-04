@@ -128,3 +128,10 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
   - A8 hộp Check: đạt cả sáng/tối (tương phản khoảng 4,6 sáng, 6,3 tối; hộp lỗi 5,2–5,4).
   - B6: phân trang 30/30/5 đúng thứ tự, Newer/Older đúng trạng thái; Open log đúng 7/7 dòng; không tràn ngang ở 1100/800/700/600 px; cả 5 màn hình đọc được ở hai theme.
   - Phát hiện: chữ trắng trên accent tối `#4493f8` chỉ 3,10:1 (logo, avatar, nút primary), dưới 4,5; sidebar < 800 px bị giới hạn 50vh nên danh sách project bị cắt ở chiều cao 720; nút Older vẫn bật khi tổng là bội số của 30 (suy ra từ mã, chưa test); lịch sử chỉ hiện ngày, không giờ. Tương phản accent tối đã sửa (`--accent-fg` tối, 6,11:1); chưa kiểm Settings > Agents Save/Use defaults và Peer Review với CLI thật.
+
+## 2026-11-04 (khuya) — Push, fast-forward lần hai, sửa tương phản
+
+- `1540a4f` (`fix(desktop)`): `--accent-fg` của theme tối đổi từ trắng sang `#0d1117`; tương phản trên accent `#4493f8` từ 3,10:1 lên 6,11:1 (tính bằng công thức WCAG). Chạy `pnpm lint`, `typecheck`, `build`, Prettier: qua. `pnpm test` không chạy lại sau thay đổi này; chưa nhìn lại trong app thật.
+- Có commit `6547f6c` (ADR-005, chốt lại thứ tự phase, sửa `DECISIONS.md`, `ROADMAP.md`, `TODO.md`) do phiên khác tạo trong cùng worktree; không do phiên này viết.
+- Đã push `3d5925f..1540a4f` lên `claude/repo-current-status-acfd51`, rồi fast-forward nhánh gốc `claude/loving-lovelace-32lh71` từ `3d5925f` lên `1540a4f` (không force).
+- CI `1540a4f`: tại lần đọc cuối (16:00 UTC) cả 5 job (mỗi job hai lượt push + pull_request) còn QUEUED; chưa có kết luận. Phiên con `ci-read-1540a4f` đang đọc tiếp.

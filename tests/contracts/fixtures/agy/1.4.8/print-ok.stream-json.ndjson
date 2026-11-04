@@ -1,0 +1,6 @@
+{"event":"init","conversation_id":"8066f77b-866b-4c84-be23-31ea5c8fd962","init":{"cwd":"<EMPTY_TEMP_DIR>","tools":["<59 tool names, see print-plan-timeout fixture>"],"permission_mode":"proceed-in-sandbox"}}
+{"event":"step_update","step_update":{"conversation_id":"8066f77b-866b-4c84-be23-31ea5c8fd962","step_index":0,"state":"DONE","step_type":"user_input"}}
+{"event":"step_update","step_update":{"conversation_id":"8066f77b-866b-4c84-be23-31ea5c8fd962","step_index":1,"state":"DONE","step_type":"unknown","duration_seconds":0.0005417}}
+{"event":"step_update","step_update":{"conversation_id":"8066f77b-866b-4c84-be23-31ea5c8fd962","step_index":2,"state":"ACTIVE","step_type":"agent_response","text_delta":"ok"}}
+{"event":"step_update","step_update":{"conversation_id":"8066f77b-866b-4c84-be23-31ea5c8fd962","step_index":2,"state":"DONE","step_type":"agent_response","text_delta":"\n","duration_seconds":5.8823852,"usage":{"input_tokens":25610,"output_tokens":1,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":25611}}}
+{"event":"result","result":{"conversation_id":"8066f77b-866b-4c84-be23-31ea5c8fd962","status":"SUCCESS","response":"ok\n","duration_seconds":18.3909695,"num_turns":1,"usage":{"input_tokens":25610,"output_tokens":1,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":25611}}}

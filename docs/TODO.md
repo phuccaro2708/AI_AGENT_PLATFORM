@@ -7,7 +7,7 @@
 - **Phase 0: PASS (có hạn chế)** — `docs/PHASE0_REPORT.md`.
 - **Phase 1: ĐÓNG (có ba ngoại lệ)** — `docs/PHASE1_REPORT.md`. CI xanh 5/5 job ở run `41551598060`; `pnpm test` 168 test pass; `cargo test` 7/7, clippy sạch. Claude 2.1.314 và Codex 0.165.0 đã chạy task thật và hủy được khi tool đang chạy (cả qua adapter lẫn nút Cancel trong app Tauri release), không để lại tiến trình mồ côi.
 - **Phase 2: đóng 2026-11-03 (có ngoại lệ, xem PHASE2_REPORT).** Tiếp theo: 7 → 8 → 9 (10 song song 5–6).
-- Chưa có PR; nhánh làm việc `claude/loving-lovelace-32lh71`.
+- Cập nhật 2026-11-04: nhánh gốc `claude/loving-lovelace-32lh71` đã ở `babca05` (gồm 7A, 7B, quét CLI, redaction, bỏ Gemini); PR #1 đã MERGED. Kiểm cục bộ: lint, typecheck, 383 test, build đều qua. Chưa đọc CI của `babca05`.
 
 ### Ngoại lệ chuyển từ Phase 1
 
@@ -202,7 +202,9 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [x] Secrets trong Windows Credential Manager, chỉ ghi từ UI, tiêm vào sidecar khi spawn theo provider
 - [x] UI Settings → Agents
 - [x] Chạy 7B trong app Tauri thật (2026-11-03, WebView2 + CDP, DB tạm): Browse, policy rootPath, Agents, Secrets đạt; tìm ra `node.exe` lọt probe Claude và màu hộp Check — đã sửa (`52660f3`). Chưa kiểm lại màu mới trong app
-- [ ] `cargo audit` khi có công cụ; CI xanh cho `52660f3`
+- [ ] `cargo audit` khi có công cụ
+- [x] CI xanh cho `52660f3` (5/5 job, 2026-11-04)
+- [ ] Đọc CI của `babca05` trên nhánh gốc; chạy lại `clippy` và `cargo test` sau khi gộp quét CLI
 
 ### Còn lại của Phase 7
 

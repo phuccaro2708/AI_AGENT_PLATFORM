@@ -93,3 +93,11 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 ## Đổi tên hiển thị
 
 - Tên hiển thị của app đổi từ "Agent Studio" sang "Team workspace" (`cb1ed4d`), rồi chốt là **"Agent Workspace"** và đồng bộ ở giao diện (productName, tiêu đề cửa sổ, `index.html`, Header, About, thông báo) lẫn tài liệu (README, CLAUDE.md, docs/). Giữ nguyên `identifier` `dev.agentstudio.desktop`, tên package `@agent-studio/*` và service Credential Manager `agent-studio`, vì đổi chúng sẽ làm mất dữ liệu và secret đã lưu của người dùng hiện có.
+
+## 2026-11-04 (chiều) — Đưa nhánh gốc lên mới nhất
+
+- `claude/loving-lovelace-32lh71` (nhánh gốc, `origin/HEAD`) đang ở `b8a102c` (Phase 1), chậm 52 commit so với `claude/repo-current-status-acfd51` và là tổ tiên trực tiếp nên chỉ cần fast-forward.
+- Kiểm trước khi push: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` đều qua (44 file, 383 test). `clippy` và `cargo test` không chạy lại lần này.
+- Commit `babca05` (thêm `docs/HANDOFF.md`) được push lên cả hai nhánh, không force; checkout chính `D:/Idea/AI_AGENT_PLATFORM` pull fast-forward về `babca05`.
+- PR #1 đã tự chuyển sang MERGED lúc 02:49:21Z sau khi hai nhánh trùng nhau, nên không đóng thủ công được.
+- Chưa đọc CI của `babca05` và các commit sau `1009755`.

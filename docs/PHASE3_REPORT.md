@@ -40,3 +40,11 @@ Không chạy `agy` thật; không dùng lượt probe còn lại.
 - `agy` chưa kiểm chứng: lỗi thật (chưa đăng nhập, hết hạn mức), sự kiện tool/phê duyệt, resume `--conversation`, `--sandbox`, stdin/`--input-format`, cwd, prompt nhiều dòng trên Windows với `agy` thật. Vì không phát `tool_call`, một task `agy` có side effect sẽ chỉ thành `failed`/`completed`, không thành `needs_reconciliation`.
 - Settings/secrets/probe nhận biết settings cho `agy` chưa nối (IPC enum vẫn `claude|codex`; `apps/desktop` hard-code hai tên).
 - Workflow đặt `permissions` (vd. Peer Review) chưa dùng được `agy`.
+
+## C3: UI hiển thị capability thiếu
+
+- Dữ liệu: dùng sẵn `agents.list` (`id`, `available`, `capabilities`) — đúng snapshot router dùng; **không thêm method IPC** (nên không đụng `lib.rs`/contracts/sidecar).
+- `apps/desktop/src/capabilityGap.ts`: `gapOf`, `describeGap`, `capabilityBlocker`. Nhãn tiếng Việt sao từ `describeCapabilityGap` (desktop không import orchestrator); test so khớp từng capability để phát hiện lệch.
+- Yêu cầu theo màn hình là quy ước của UI, không phải luật backend: agent đơn cần `streaming`; Peer Review cần `tool_execution` (cả hai vai chạy với `permissions`; adapter `agy` từ chối task có `permissions`).
+- `AgentView`/`PeerReviewView`: nút Run bị chặn kèm lý do (vd. "agy không hỗ trợ: chạy công cụ"); Peer Review ưu tiên agent đủ capability khi chọn mặc định và gắn "(thiếu capability)" vào option.
+- Đã chạy: lint, prettier --check, typecheck, test (47 file, 431 test), build — đều pass. **Chưa kiểm trong app Tauri thật** (render, bố cục câu chặn). Router vẫn chưa nối `workflows.start`.

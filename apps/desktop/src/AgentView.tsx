@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AdapterInfo, Project } from "./api";
+import { AGENT_TASK_REQUIRES, capabilityBlocker } from "./capabilityGap";
 import { Composer, StartSteps } from "./Composer";
 import { TaskLogView, type TaskRef } from "./components";
 
@@ -38,9 +39,8 @@ export function AgentView({
       ? "Pick an agent"
       : !agent.available
         ? `${agent.id} was not found on this machine`
-        : prompt.trim() === ""
-          ? "Describe the task"
-          : null;
+        : (capabilityBlocker(agent, AGENT_TASK_REQUIRES) ??
+          (prompt.trim() === "" ? "Describe the task" : null));
   return (
     <div className="chat">
       <div className="chat-body">

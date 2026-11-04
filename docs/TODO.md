@@ -145,7 +145,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [ ] Tool loop riêng cho Ollama (whitelist tool, read-only mặc định, giới hạn vòng lặp)
 - [x] Capability-based router (`services/orchestrator/src/capability-router.ts`; chưa nối vào `workflows.start`)
 - [ ] Resource monitor (RAM/VRAM) + Resource-Aware Scheduler
-- [ ] UI hiển thị capability thiếu (có helper `describeCapabilityGap`; phần render ở `apps/desktop` chưa làm)
+- [ ] UI hiển thị capability thiếu (helper `describeCapabilityGap`) — code UI đã có: `apps/desktop/src/capabilityGap.ts` (+ test, nối vào AgentView/PeerReviewView, chặn Run kèm lý do); **chưa tick**: chưa xem render trong app Tauri thật
 - [x] Test thêm adapter giả không sửa core (cho routing; xem PHASE3_REPORT về giới hạn của sidecar)
 - [ ] PHASE3_REPORT.md
 

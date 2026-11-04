@@ -157,3 +157,13 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Timer quét hết hạn 5 giây trong sidecar (`approvalSweepMs`, dừng ở `close()`): quá hạn → `expired`, task → `needs_reconciliation` (giữ hành vi Phase 2, không chuyển `denied`).
 - UI: thẻ phê duyệt có thời điểm hỏi/hết hạn, ô ghi chú, "Allow once" / "Deny", nút "Always allow in scope" bị khoá kèm lý do; mục Decision log (20 mục gần nhất).
 - Kiểm: `pnpm lint`, `typecheck`, `test` (44 file, 389 test), `build` qua. Chưa kiểm trong app Tauri thật. Vẫn chưa có đường production tạo approval từ CLI thật (Phase 4), nên thẻ chỉ xuất hiện khi mã gọi `ApprovalService.request`.
+
+## 2026-11-04 (khuya, kiểm UI app thật sau 7C-1 và dọn UI)
+
+- Build lại sidecar và app debug, chạy WebView2 + CDP, DB tạm (69 task seed + 4 approval seed qua kết nối SQLite thứ hai), không chạy CLI thật.
+- Thẻ phê duyệt (7C-1): hiện mô tả, giờ hỏi/hết hạn, ô ghi chú; "Allow once", "Deny" bật, "Always allow in scope" bị khoá (opacity 0,5, tooltip nêu Phase 4). Deny kèm ghi chú ghi đúng vào DB (`decided_by=user`, `decision_scope=once`, `decision_note`), task chuyển `failed`. Decision log hiện đủ approved/denied/expired, đạt ở theme sáng và tối.
+- Hết hạn: approval quá hạn thành `expired`, task thành `needs_reconciliation`. Lưu ý: UI poll `approvals.list` mỗi 1,5 giây và `list` cũng gọi `expireDue`, nên lần chạy này chưa tách riêng được timer 5 giây; timer chỉ được chứng minh bằng test đơn vị.
+- Phát hiện và đã sửa: thẻ phê duyệt bị ép trong một hàng flex (nút khoá rớt thành 4 dòng); thêm `.approval-card` dạng cột, nút một dòng (kiểm lại ở hai theme).
+- Dọn UI: History phân trang 30/30/9 đúng, Older tắt ở trang cuối; ngày cũ hiện kèm giờ ("Sep 30, 2026 07:39 PM"); sidebar ở 700×720 không còn bị cắt (`max-height: none`). Trường hợp đúng 30 hàng chỉ kiểm bằng test đơn vị.
+- Phát hiện chưa sửa: danh sách "What happened?" trong thẻ reconciliation (7A) xếp radio và nhãn thành cột dọc, trông lỏng; không ảnh hưởng chức năng.
+- Chưa kiểm: Settings > Agents Save/Use defaults; Peer Review chạy CLI thật qua UI.

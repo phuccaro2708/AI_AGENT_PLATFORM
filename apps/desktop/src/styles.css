@@ -1147,8 +1147,29 @@ button.primary:hover:not(:disabled) {
   border: 0;
   padding: 0;
   margin: 8px 0;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  flex: 1 1 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.chip.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.chip-title {
+  display: flex;
+  align-items: center;
   gap: 6px;
+  font-weight: 600;
 }
 .choice {
   display: flex;

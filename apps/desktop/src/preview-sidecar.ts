@@ -66,7 +66,6 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
     case "agents.list":
       return {
         adapters: [
-          { id: "stub", available: true, capabilities: ["streaming"] },
           { id: "claude", available: false, capabilities: ["streaming", "structured_output"] },
         ],
         cli: [],

@@ -287,11 +287,16 @@ export class SidecarService {
         }
         case "agents.list": {
           const adapters = await Promise.all(
-            this.registry.list().map(async (a) => ({
-              id: a.id,
-              available: await a.detect().catch(() => false),
-              capabilities: await a.capabilities().catch(() => []),
-            })),
+            // The stub is an internal Phase 0 fixture (runStub, selftest); it is not an agent a
+            // person can pick, so it is never listed.
+            this.registry
+              .list()
+              .filter((a) => a.id !== "stub")
+              .map(async (a) => ({
+                id: a.id,
+                available: await a.detect().catch(() => false),
+                capabilities: await a.capabilities().catch(() => []),
+              })),
           );
           return ok(req.id, { adapters, cli: this.repo.listAgentProbes() });
         }

@@ -14,6 +14,7 @@ import {
 import { checkAgentSettings, type AgentLaunchSettings } from "./agent-settings.js";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAdapter } from "@agent-studio/adapter-codex";
+import { AntigravityAdapter } from "@agent-studio/adapter-antigravity";
 import {
   probeClaude,
   probeCodex,
@@ -80,6 +81,12 @@ const REQUIRED_CAPABILITIES = {
   codex: ["execSubcommand", "execJson"],
 } as const;
 
+/**
+ * CLIs that have an adapter but no settings-aware probe yet: scanned like any other candidate
+ * (generic help-based probe), yet allowed to run tasks. Their launch settings are not configurable.
+ */
+const SCAN_ONLY_ADAPTERS: ReadonlySet<string> = new Set(["agy"]);
+
 export class SidecarService {
   readonly db: StudioDb;
   private readonly repo: Repo;
@@ -140,18 +147,18 @@ export class SidecarService {
    * and their probe stored. Only `supported` CLIs may be picked to run tasks.
    */
   private async scanAll() {
-    const supported = (id: string) => id in this.probes;
+    const supported = (id: string) => id in this.probes || SCAN_ONLY_ADAPTERS.has(id);
     const scanned = new Map(
       (
         await (this.opts.scan ?? scanClis)({
-          candidates: CLI_CANDIDATES.filter((c) => !supported(c.id)),
+          candidates: CLI_CANDIDATES.filter((c) => !(c.id in this.probes)),
         })
       ).map((s) => [s.provider, s]),
     );
     const out = [];
     for (const c of CLI_CANDIDATES) {
       let r: ProbeResult & { usable?: boolean };
-      if (supported(c.id)) {
+      if (c.id in this.probes) {
         r = await this.probeStored(c.id as "claude" | "codex");
         this.saveProbe(r);
         r.usable = r.status === "ok";
@@ -247,6 +254,7 @@ export class SidecarService {
     this.registry.register(new StubAdapter());
     this.registry.register(this.buildCliAdapter("claude", this.repo.getAgentSettings("claude")));
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
+    this.registry.register(new AntigravityAdapter());
     for (const a of opts.extraAdapters ?? []) this.registry.register(a);
     this.orchestrator = new Orchestrator(this.registry, this.repo, log, {
       redactor: this.redactor,

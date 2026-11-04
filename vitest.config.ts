@@ -15,6 +15,7 @@ export default defineConfig({
       "@agent-studio/cli-probe": src("packages/cli-probe"),
       "@agent-studio/adapter-claude": src("packages/adapter-claude"),
       "@agent-studio/adapter-codex": src("packages/adapter-codex"),
+      "@agent-studio/adapter-antigravity": src("packages/adapter-antigravity"),
       "@agent-studio/orchestrator": src("services/orchestrator"),
     },
   },

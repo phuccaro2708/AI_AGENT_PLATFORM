@@ -140,13 +140,13 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 ## Phase 3 — Quét CLI & Local AI
 
 - [x] Quét CLI agent theo danh sách ứng viên khai báo bằng dữ liệu (PATH + vị trí cài Windows), hiển thị "đã phát hiện, chưa hỗ trợ" (`agents.scan`, `packages/cli-probe/src/candidates.ts`, Settings → Agents)
-- [ ] Probe Antigravity (`agy`, quan sát `--print`, `--output-format stream-json`; đã có fixture `--help` 1.4.8 + capability từ help, đã quan sát output thật 2026-11-04: 2 lượt `--print`, xem ASSUMPTIONS; chưa dựng adapter) rồi `adapter-antigravity` + fixtures + contract tests
+- [x] Probe Antigravity (`agy`, quan sát `--print`, `--output-format stream-json`; đã có fixture `--help` 1.4.8 + capability từ help, đã quan sát output thật 2026-11-04: 2 lượt `--print`, xem ASSUMPTIONS; adapter dựng 2026-11-04, chỉ kiểm bằng CLI giả) rồi `adapter-antigravity` + fixtures + contract tests
 - [ ] `adapter-ollama`: HTTP client, discover models, stream
 - [ ] Tool loop riêng cho Ollama (whitelist tool, read-only mặc định, giới hạn vòng lặp)
-- [ ] Capability-based router
+- [x] Capability-based router (`services/orchestrator/src/capability-router.ts`; chưa nối vào `workflows.start`)
 - [ ] Resource monitor (RAM/VRAM) + Resource-Aware Scheduler
-- [ ] UI hiển thị capability thiếu
-- [ ] Test thêm adapter giả không sửa core
+- [ ] UI hiển thị capability thiếu (có helper `describeCapabilityGap`; phần render ở `apps/desktop` chưa làm)
+- [x] Test thêm adapter giả không sửa core (cho routing; xem PHASE3_REPORT về giới hạn của sidecar)
 - [ ] PHASE3_REPORT.md
 
 ## Phase 4 — Security & Reliability

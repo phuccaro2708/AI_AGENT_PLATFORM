@@ -1,6 +1,7 @@
 import {
   canTransitionWorkflow,
   SidecarRequest,
+  type AgentCapability,
   type SidecarEvent,
   type SidecarResponse,
 } from "@agent-studio/contracts";
@@ -29,6 +30,7 @@ import { dirname, join } from "node:path";
 import { ApprovalService } from "./approvals.js";
 import { ArtifactRegistry } from "./artifacts.js";
 import { ContextBoard } from "./context-board.js";
+import { describeRouteFailure, selectAgent, snapshotAdapters } from "./capability-router.js";
 import { Orchestrator } from "./orchestrator.js";
 import { Scheduler } from "./scheduler.js";
 import { checkProjectRoot, duplicateOf } from "./project-policy.js";
@@ -86,6 +88,9 @@ const REQUIRED_CAPABILITIES = {
  * (generic help-based probe), yet allowed to run tasks. Their launch settings are not configurable.
  */
 const SCAN_ONLY_ADAPTERS: ReadonlySet<string> = new Set(["agy"]);
+
+/** Same requirement the UI applies to a single-agent task (`AGENT_TASK_REQUIRES`): a live log. */
+const AUTO_AGENT_REQUIRES: readonly AgentCapability[] = ["streaming"];
 
 export class SidecarService {
   readonly db: StudioDb;
@@ -481,8 +486,17 @@ export class SidecarService {
         case "workflows.start": {
           const root = this.repo.getWorkflowRoot(req.params.workflowId);
           if (!root) return fail(req.id, `Unknown workflow: ${req.params.workflowId}`);
-          if (!this.registry.get(req.params.agentId)) {
-            return fail(req.id, `Unknown agent: ${req.params.agentId}`);
+          let agentId = req.params.agentId;
+          if (agentId === undefined) {
+            // No agent named: pick by declared capability, never by name. The stub is an internal
+            // fixture and is not a candidate. A named agent is honoured as before (the UI gates it).
+            const route = selectAgent(await snapshotAdapters(this.registry), AUTO_AGENT_REQUIRES, {
+              exclude: ["stub"],
+            });
+            if (!route.ok) return fail(req.id, describeRouteFailure(route, AUTO_AGENT_REQUIRES));
+            agentId = route.agentId;
+          } else if (!this.registry.get(agentId)) {
+            return fail(req.id, `Unknown agent: ${agentId}`);
           }
           const bad = this.rootProblem(root.rootPath);
           if (bad) return fail(req.id, bad);
@@ -492,7 +506,7 @@ export class SidecarService {
           const run = this.orchestrator
             .runTask({
               workflowId: req.params.workflowId,
-              agentId: req.params.agentId,
+              agentId: agentId,
               prompt: req.params.prompt,
               cwd: root.rootPath,
               signal: ac.signal,

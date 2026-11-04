@@ -91,3 +91,13 @@ export function describeCapabilityGap(gap: CapabilityGap): string {
   }
   return parts.length === 0 ? "" : `${gap.agentId} ${parts.join("; ")}`;
 }
+
+/** User-facing (Vietnamese) reason a route found no agent; one clause per agent that falls short. */
+export function describeRouteFailure(
+  result: Extract<RouteResult, { ok: false }>,
+  required: readonly AgentCapability[],
+): string {
+  if (result.reason === "no_agents") return "Không có agent nào được đăng ký.";
+  const why = result.gaps.map(describeCapabilityGap).filter((t) => t !== "");
+  return `Không có agent phù hợp (cần: ${required.map((c) => LABELS[c]).join(", ")}). ${why.join(". ")}.`;
+}

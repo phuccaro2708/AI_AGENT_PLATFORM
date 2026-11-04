@@ -3,6 +3,7 @@ import { AdapterRegistry, StubAdapter, type AgentAdapter } from "@agent-studio/a
 import type { AgentCapability } from "@agent-studio/contracts";
 import {
   describeCapabilityGap,
+  describeRouteFailure,
   selectAgent,
   snapshotAdapters,
   type AgentSnapshot,
@@ -86,5 +87,25 @@ describe("a new adapter joins routing without touching core code", () => {
     registry.register(fresh);
     const r = selectAgent(await snapshotAdapters(registry), ["approval"], { exclude: ["stub"] });
     expect(r).toEqual({ ok: true, agentId: "brand-new" });
+  });
+});
+
+describe("describeRouteFailure", () => {
+  it("lists what is required and what each agent lacks, skipping agents with nothing to say", () => {
+    const r = selectAgent(
+      [snap("claude", [], false), snap("agy", ["streaming"])],
+      ["streaming", "approval"],
+    );
+    if (r.ok) throw new Error("expected failure");
+    expect(describeRouteFailure(r, ["streaming", "approval"])).toBe(
+      "Không có agent phù hợp (cần: phát kết quả theo luồng, luồng phê duyệt). " +
+        "claude chưa cài hoặc không tìm thấy CLI; không hỗ trợ: phát kết quả theo luồng, luồng phê duyệt. " +
+        "agy không hỗ trợ: luồng phê duyệt.",
+    );
+  });
+  it("says so when no agent is registered", () => {
+    const r = selectAgent([], ["streaming"]);
+    if (r.ok) throw new Error("expected failure");
+    expect(describeRouteFailure(r, ["streaming"])).toBe("Không có agent nào được đăng ký.");
   });
 });

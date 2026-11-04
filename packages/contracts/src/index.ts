@@ -186,7 +186,8 @@ export const SidecarRequest = z.discriminatedUnion("method", [
     method: z.literal("workflows.start"),
     params: z.object({
       workflowId: z.string().min(1),
-      agentId: z.string().min(1),
+      /** Omitted: the capability router picks an available agent that can stream (see sidecar.ts). */
+      agentId: z.string().min(1).optional(),
       prompt: z.string().min(1).max(100_000),
     }),
   }),

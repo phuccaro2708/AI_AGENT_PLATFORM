@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline";
 import { createLogger } from "@agent-studio/shared-utils";
 import { createEventWriter } from "./event-writer.js";
-import { takeSecretsFromEnv } from "./secrets.js";
+import { createSecretRedactor, redactingDestination, takeSecretsFromEnv } from "./secrets.js";
 import { SidecarService } from "./sidecar.js";
 
 /** stdout is reserved for the protocol; all logs go to stderr. */
@@ -17,7 +17,6 @@ if (!dbPath) {
   );
   process.exit(2);
 }
-const log = createLogger({ name: "sidecar", destination: process.stderr });
 const nativeBinding = arg("sqlite-binding");
 const migrationsFolder = arg("migrations");
 const events = createEventWriter({
@@ -25,6 +24,11 @@ const events = createEventWriter({
   pending: () => process.stdout.writableLength,
 });
 const secrets = takeSecretsFromEnv(process.env);
+// Last line of defence for the log file: whatever any code path logs, loaded secret values are masked.
+const log = createLogger({
+  name: "sidecar",
+  destination: redactingDestination(createSecretRedactor(secrets), process.stderr),
+});
 const service = new SidecarService(
   {
     dbPath,

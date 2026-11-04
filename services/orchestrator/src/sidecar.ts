@@ -5,7 +5,12 @@ import {
   type SidecarResponse,
 } from "@agent-studio/contracts";
 import { AdapterRegistry, StubAdapter, type AgentAdapter } from "@agent-studio/agent-core";
-import { noSecrets, type ProviderSecrets } from "./secrets.js";
+import {
+  createSecretRedactor,
+  noSecrets,
+  type ProviderSecrets,
+  type SecretRedactor,
+} from "./secrets.js";
 import { checkAgentSettings, type AgentLaunchSettings } from "./agent-settings.js";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAdapter } from "@agent-studio/adapter-codex";
@@ -82,6 +87,7 @@ export class SidecarService {
   private spikeWorkflowId: string | undefined;
   private readonly recoveredTasks: number;
   private readonly secrets: ProviderSecrets;
+  private readonly redactor: SecretRedactor;
   private readonly probes: Record<"claude" | "codex", (o?: ProbeOptions) => Promise<ProbeResult>>;
   /** Tasks currently executing in this process. */
   private readonly active = new Map<string, { abort: AbortController; done: Promise<void> }>();
@@ -156,6 +162,7 @@ export class SidecarService {
     private readonly log: Logger,
   ) {
     this.secrets = opts.secrets ?? noSecrets();
+    this.redactor = createSecretRedactor(this.secrets);
     this.probes = {
       claude: (o) => probeClaude(o),
       codex: (o) => probeCodex(o),
@@ -181,6 +188,7 @@ export class SidecarService {
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
     for (const a of opts.extraAdapters ?? []) this.registry.register(a);
     this.orchestrator = new Orchestrator(this.registry, this.repo, log, {
+      redactor: this.redactor,
       onMessage: (message) =>
         opts.onEvent?.({
           event: "task.message",
@@ -211,7 +219,9 @@ export class SidecarService {
     if (this.repo.listWorkflowIdsByState("running").length > 0) {
       this.scheduler.start(opts.schedulerIntervalMs);
     }
-    void this.engine.resumeAll().catch((err) => log.error({ err: String(err) }, "resume failed"));
+    void this.engine
+      .resumeAll()
+      .catch((err) => log.error({ err: this.redactor.text(String(err)) }, "resume failed"));
     this.approvals = new ApprovalService({ repo: this.repo });
     this.artifacts = new ArtifactRegistry(this.repo, workspaces);
   }
@@ -417,7 +427,9 @@ export class SidecarService {
                 this.active.set(id, { abort: ac, done: Promise.resolve() });
               },
             })
-            .catch((err: unknown) => this.log.error({ err: String(err) }, "background task failed"))
+            .catch((err: unknown) =>
+              this.log.error({ err: this.redactor.text(String(err)) }, "background task failed"),
+            )
             .finally(() => this.active.delete(taskId));
           const entry = this.active.get(taskId);
           if (entry) entry.done = run.then(() => undefined);
@@ -551,7 +563,10 @@ export class SidecarService {
           return { response: { id: req.id, result: { ok: true } }, shutdown: true };
       }
     } catch (err) {
-      return { response: { id: req.id, error: { message: String(err) } }, shutdown: false };
+      return {
+        response: { id: req.id, error: { message: this.redactor.text(String(err)) } },
+        shutdown: false,
+      };
     }
   }
 

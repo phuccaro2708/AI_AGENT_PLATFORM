@@ -9,6 +9,7 @@ import type { Logger } from "@agent-studio/shared-utils";
 import { newId } from "@agent-studio/shared-utils";
 import type { Repo } from "@agent-studio/storage";
 import { classifyOutcome, type FinalState } from "./outcome.js";
+import type { SecretRedactor } from "./secrets.js";
 
 export interface RunResult {
   taskId: string;
@@ -28,6 +29,11 @@ export interface OrchestratorHooks {
   /** After a task state change is persisted. */
   onState?: (taskId: string, state: TaskState, reason?: string) => void;
   /**
+   * Masks loaded secret values in everything the orchestrator persists, pushes or logs coming from an
+   * agent (payloads, reasons, errors). Default: identity.
+   */
+  redactor?: SecretRedactor;
+  /**
    * Picks the working directory of a scheduled task that was enqueued without one (e.g. creates its
    * worktree). Unlike the other hooks it is awaited and its failure fails the task; `undefined` means
    * the project root.
@@ -46,6 +52,10 @@ export class Orchestrator {
     private readonly log: Logger,
     private readonly hooks: OrchestratorHooks = {},
   ) {}
+
+  private mask(text: string): string {
+    return this.hooks.redactor?.text(text) ?? text;
+  }
 
   /** A broken listener (UI side) must never fail or alter a task. */
   private notify(fn: () => void): void {
@@ -150,7 +160,7 @@ export class Orchestrator {
             ? "workflow has no project root"
             : undefined;
     if (problem !== undefined || !request || !task.agentId || !root) {
-      const reason = problem ?? "task cannot be prepared";
+      const reason = this.mask(problem ?? "task cannot be prepared");
       this.repo.setTaskState(taskId, "failed", { reason });
       this.notify(() => this.hooks.onState?.(taskId, "failed", reason));
       return { taskId, finalState: "failed", reason, events: [] };
@@ -165,7 +175,7 @@ export class Orchestrator {
         });
       } catch (err) {
         // Nothing has run yet, so failing here is safe (no side effects to reconcile).
-        const reason = `could not prepare a workspace: ${String(err)}`;
+        const reason = this.mask(`could not prepare a workspace: ${String(err)}`);
         this.repo.setTaskState(taskId, "failed", { reason });
         this.notify(() => this.hooks.onState?.(taskId, "failed", reason));
         return { taskId, finalState: "failed", reason, events: [] };
@@ -207,7 +217,8 @@ export class Orchestrator {
         fromAgent: ctx.agentId,
         toAgent: "orchestrator",
         type,
-        payload,
+        // The single point where agent output becomes a stored message: mask before it is written.
+        payload: this.hooks.redactor ? this.hooks.redactor.deep(payload) : payload,
         createdAt: new Date().toISOString(),
       };
       // Sequence comes from the DB so a requeued task continues its log instead of colliding.
@@ -231,7 +242,9 @@ export class Orchestrator {
           abnormalEnd = "adapter produced an invalid event";
           break;
         }
-        const ev = parsed.data;
+        // Masked once, at ingestion: persisted messages, the returned `events` (which the workflow
+        // engine turns into summaries / context items) and pushed events all derive from this copy.
+        const ev = this.hooks.redactor ? this.hooks.redactor.deep(parsed.data) : parsed.data;
         events.push(ev);
         if (ev.type === "completed") {
           record("task.completed", ev);
@@ -244,13 +257,18 @@ export class Orchestrator {
         }
       }
     } catch (err) {
-      this.log.error({ taskId, err: String(err) }, "adapter threw");
-      abnormalEnd = `adapter threw: ${String(err)}`;
+      abnormalEnd = this.mask(`adapter threw: ${String(err)}`);
+      this.log.error({ taskId, err: abnormalEnd }, "adapter threw");
     }
-    const outcome = classifyOutcome({
+    const raw = classifyOutcome({
       events,
       ...(abnormalEnd !== undefined ? { abnormalEnd } : {}),
     });
+    // The reason can quote the adapter's error message, so it is masked like any other agent output.
+    const outcome = {
+      ...raw,
+      ...(raw.reason !== undefined ? { reason: this.mask(raw.reason) } : {}),
+    };
     if (abnormalEnd !== undefined || outcome.state === "needs_reconciliation") {
       record("task.failed", {
         type: "error",

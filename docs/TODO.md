@@ -154,7 +154,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [ ] Env var allowlist, executable allowlist theo adapter
 - [ ] Windows Job Object giới hạn process tree/RAM
 - [ ] Spike AppContainer / Windows Sandbox (chỉ đánh giá, không cam kết 1.0) — ghi kết quả, kể cả hạn chế vào SECURITY.md
-- [ ] Credential Manager cho secrets; redaction test toàn hệ thống
+- [~] Credential Manager cho secrets (7B); redaction test: DB + log + IPC + sự kiện đã có test với agent giả (`sidecar-redaction.test.ts`, che theo giá trị chính xác ≥ 6 ký tự); còn thiếu diagnostics export (chưa tồn tại) và giới hạn đã ghi ở SECURITY.md
 - [ ] Siết Tauri capabilities; nếu có localhost WS: token + Origin check + test
 - [ ] Recovery 5 bước + UI resume/retry/abandon
 - [ ] Log rotation, retention, diagnostics export (redacted)

@@ -189,7 +189,7 @@ Lấp khoảng trống UX so với AionUi, nhưng theo cách task-centric.
 
 - [ ] Người dùng mới đi từ cài đặt → thêm project → chạy task thật mà không đụng terminal (đo bằng kịch bản E2E).
 - [ ] Mọi yêu cầu phê duyệt hiển thị đủ lệnh/đường dẫn; từ chối không làm treo task.
-- [ ] Không có mật khẩu/token nào xuất hiện trong DB, log hoặc diagnostics (test redaction).
+- [ ] Không có mật khẩu/token nào xuất hiện trong DB, log hoặc diagnostics (test redaction). Đã có test cho DB, log, IPC và sự kiện đẩy ra; chưa tick vì diagnostics export chưa tồn tại và che chỉ theo giá trị chính xác (xem SECURITY.md).
 
 ### Phase 8 — Mở rộng agent: ACP, MCP, Skills (2–3 tuần)
 

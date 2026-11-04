@@ -1,6 +1,6 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-04 (khuya; nhánh làm việc ở `8143aea`, nhánh gốc còn ở `f75a72b`). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-05 (nhánh làm việc ở `c85d130`, chưa push; nhánh gốc còn ở `f75a72b`). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Vị trí
 
@@ -22,6 +22,7 @@ Cập nhật: 2026-11-04 (khuya; nhánh làm việc ở `8143aea`, nhánh gốc 
 | 7C-1 (thẻ phê duyệt, nhật ký, timer, phạm vi khoá) | Xong 2026-11-04, kiểm trong app Tauri thật; chưa có đường production tạo approval (Phase 4)                                                                                                       |
 | Preset, phím tắt cơ bản, radio thẻ ngang           | Xong 2026-11-04, đã kiểm trong app Tauri thật (trừ Ctrl+Enter gửi thật cần CLI)                                                                                                                   |
 | 3 (quét CLI, `agy`, router)                        | Đang làm: adapter `agy` (CLI giả), router, UI capability thiếu (Peer Review kiểm app thật; nhánh AgentView chỉ có unit test) xong; còn Ollama, resource monitor, nối router vào `workflows.start` |
+| 4 Policy Engine (mã thuần)                         | Có `packages/policy-engine` (merge `c85d130`, từ phiên cloud); 2 test symlink ĐỎ trên Windows (xem Nợ); chưa nối vào orchestrator/IPC/UI                                                          |
 | 7C-2, 7D Tailwind/shadcn, E2E người dùng mới       | Chưa bắt đầu (7C-2 chờ Phase 4; Tailwind/shadcn chờ duyệt dependency)                                                                                                                             |
 | `PHASE7_REPORT.md`                                 | Chỉ viết khi cả Phase 7 đạt tiêu chí đóng                                                                                                                                                         |
 
@@ -42,14 +43,19 @@ Cập nhật: 2026-11-04 (khuya; nhánh làm việc ở `8143aea`, nhánh gốc 
 
 1. Đọc CI của `7275822` (và các commit trước); nếu Security đỏ do script, sửa `scripts/secret-scan.py`. Sau đó fast-forward nhánh gốc nếu xanh.
 2. Phase 3 còn lại: UI capability thiếu (render `describeCapabilityGap` ở `apps/desktop`), nối router vào `workflows.start`, resource monitor; chạy `agy` thật qua adapter (xin phép lượt probe). Ollama hoãn (máy chưa cài).
-3. Phase 7 còn lại: Tailwind/shadcn (cần duyệt dependency: pin ≥ 2 tuần, audit, license, `docs/REFERENCES.md`), kiểm preset/phím tắt trong app thật, E2E người dùng mới. Cập nhật `CLAUDE.md` (Tailwind/shadcn ghi "đã chốt" nhưng chưa có; trỏ ADR-005). 7C-2 và đóng Phase 7 chờ Phase 4.
+3. Phase 7 còn lại: Tailwind/shadcn (cần duyệt dependency: pin ≥ 2 tuần, audit, license, `docs/REFERENCES.md`), kiểm preset/phím tắt trong app thật, E2E người dùng mới. (`CLAUDE.md` đã sửa trong `c85d130`.) 7C-2 và đóng Phase 7 chờ Phase 4.
 
 ## Chờ người dùng quyết
+
+- Hành vi `..` sau symlink trên Windows của `canonicalize` (`packages/policy-engine/src/paths.ts`): giữ ngữ nghĩa POSIX (test hiện tại, đang đỏ trên Windows), hay theo Win32 (gộp từ vựng) và từ chối đường dẫn `\?\`/`\.\`? Cần quyết định trước khi sửa test hoặc mã.
+- Push nhánh `claude/repo-current-status-acfd51` (đứng trước `origin` 4 commit) lên PR #2 sau khi xử lý 2 test đỏ.
 
 - Dọn A5 không làm mất dữ liệu người dùng: mục `index/claude.agent-studio` đã xoá là danh sách TÊN secret của provider claude do chính app tạo (`secrets.rs`), nhiều khả năng là tàn dư kiểm 7B; người dùng xác nhận chưa từng nhập secret nào. Không có mục thì Settings hiện danh sách rỗng (NoEntry → rỗng), không lỗi.
 - Nhánh `claude/phase-2-kickoff-8a5732` là bản Phase 2 cũ, xung đột add/add; khuyến nghị không gộp.
 
 ## Chưa xác minh / nợ nhỏ
+
+- 2026-11-05 trên Windows, `c85d130`: lint, prettier, typecheck, build qua; `pnpm test` 482 qua, 2 đỏ (policy-engine, symlink + `..`). `process-manager` "cancels via AbortSignal" hết 30 giây 1 lần khi chạy toàn bộ, qua 2/2 khi chạy riêng (nghi flaky, chưa điều tra). `cargo clippy`/`cargo test` chưa chạy lại. CI của `c85d130` chưa có (chưa push).
 
 - 2026-11-04 (sau 7C-1): `pnpm lint`, `typecheck`, `test` (44 file, 389 test), `build` qua. Rust không đổi nên `cargo clippy`/`cargo test` chưa chạy lại (lần trước: clippy sạch, 12 test qua, 1 bỏ qua). `cargo audit` 0.22.2: không lỗ hổng; hai cảnh báo transitive (`proc-macro-error` không bảo trì, `glib 0.18.5` unsound).
 - Đã kiểm trong app thật (2026-11-04): thẻ phê duyệt, Decision log, History (Older, giờ), sidebar hẹp, theme tối. B1 (resume Peer Review với CLI thật) đạt cả hai chiều claude↔codex.

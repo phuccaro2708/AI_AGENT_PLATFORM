@@ -152,7 +152,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 ## Phase 4 — Security & Reliability
 
 - [~] Policy engine: 4 mức quyền, path scope, command policy, network policy — phần mã thuần xong 2026-11-05 (`packages/policy-engine`, 41 test trên Linux); CHƯA nối vào orchestrator/IPC/UI, chưa quan sát yêu cầu quyền thật của CLI (ASSUMPTIONS, mục Phase 4)
-- [~] Canonical path validation + test traversal/symlink — đã chạy trên Linux; junction/UNC/8.3/ADS và mọi thứ trên Windows CHƯA chạy
+- [~] Canonical path validation + test traversal/symlink — đã chạy trên Linux; trên Windows 2026-11-05: 2 test symlink + `..` ĐỎ (cần quyết định hành vi, xem HANDOFF); junction/UNC/8.3/ADS và mọi thứ trên Windows CHƯA chạy
 - [ ] Env var allowlist, executable allowlist theo adapter
 - [ ] Windows Job Object giới hạn process tree/RAM
 - [ ] Spike AppContainer / Windows Sandbox (chỉ đánh giá, không cam kết 1.0) — ghi kết quả, kể cả hạn chế vào SECURITY.md

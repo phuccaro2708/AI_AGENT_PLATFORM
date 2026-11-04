@@ -268,7 +268,9 @@ body {
 @media (max-width: 800px) {
   .shell,
   .shell.with-inspector {
-    grid-template-columns: 1fr;
+    /* minmax(0, ...) lets the single column shrink below its content's min-content width;
+       a bare 1fr would keep it at least that wide and overflow the page horizontally. */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;
     grid-template-areas:
       "head"
@@ -1147,12 +1149,13 @@ button.primary:hover:not(:disabled) {
   border: 0;
   padding: 0;
   margin: 8px 0;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 8px;
+  min-width: 0;
 }
 .chip {
-  flex: 1 1 170px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1213,6 +1216,41 @@ button.primary:hover:not(:disabled) {
   text-decoration: underline;
   cursor: pointer;
   color: inherit;
+}
+
+.presets-settings ul.plain {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.presets-settings .field-row {
+  align-items: center;
+}
+.presets-settings .field-row > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.presets-settings textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 6px 0;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.presets-settings .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.presets-settings h3 {
+  margin: 14px 0 6px;
+  font-size: 13px;
 }
 
 .agent-settings .field {

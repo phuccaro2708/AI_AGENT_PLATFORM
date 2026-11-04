@@ -190,3 +190,9 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 
 - CI `7275822` (phiên con đọc bằng GraphQL): TypeScript ubuntu (1 phút 26 giây), TypeScript windows (2 phút 25 giây), Tauri shell (5 phút 13 giây), spike sidecar (5 phút 27 giây) đều xanh; Security còn IN_PROGRESS, chưa có kết luận.
 - Commit docs `cdd2c06` chưa push.
+
+## 2026-11-04 (đêm, CI cuối và điều tra flaky)
+
+- Push `a4d8c86..a3f9d20` (hai commit docs) lên PR #2. CI `7275822` xanh 5/5 (phiên con đọc). `48ff83e`: TypeScript ubuntu đỏ do `scheduler.test.ts` timeout 5000ms (phiên con đọc log), không liên quan Phase 7 UI.
+- Tái hiện cục bộ: `vitest run scheduler.test.ts` 40 lần (8 luồng song song × 5), 40/40 qua. Vitest 5.0.5 không có cờ `--repeat`. Chưa sửa mã, chưa nới timeout.
+- CI của PR #2 sau hai commit docs: chưa đọc.

@@ -1,10 +1,10 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-04 (đêm; nhánh làm việc ở `a4d8c86`, nhánh gốc còn ở `f75a72b`). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-04 (đêm; nhánh làm việc ở `a3f9d20`, nhánh gốc còn ở `f75a72b`). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Vị trí
 
-- Nhánh làm việc `claude/repo-current-status-acfd51` đã push tới `a4d8c86` (gồm merge Phase 7 UI và Phase 3); PR #2 vào nhánh gốc đang mở (chưa merge, auto-fix bật, auto-merge tắt). Nhánh gốc `claude/loving-lovelace-32lh71` (cũng là `origin/HEAD`) còn ở `f75a72b`, chưa fast-forward. PR #1 đã MERGED.
+- Nhánh làm việc `claude/repo-current-status-acfd51` đã push tới `a3f9d20` (gồm merge Phase 7 UI và Phase 3); PR #2 vào nhánh gốc đang mở (chưa merge, auto-fix bật, auto-merge tắt). Nhánh gốc `claude/loving-lovelace-32lh71` (cũng là `origin/HEAD`) còn ở `f75a72b`, chưa fast-forward. PR #1 đã MERGED.
 - Thứ tự phase đã chốt lại 2026-11-04 (ADR-005, ROADMAP mục "Thứ tự thực hiện"): Phase 7 (phần không cần policy) song song Phase 3 → Phase 4 (+ 7C-2, đóng Phase 7) → Phase 5 → Phase 6 (`mcp-gateway` đầu) → Phase 8 → Phase 9; Phase 10 xuyên suốt.
 - Ứng dụng: **Agent Workspace** (Tauri 2 + React/Vite, sidecar Node orchestrator, SQLite/Drizzle, pnpm monorepo).
 - Giữ nguyên `identifier` `dev.agentstudio.desktop`, gói `@agent-studio/*`, service Credential Manager `agent-studio` (đổi sẽ mất dữ liệu và secret đã lưu).
@@ -34,7 +34,7 @@ Cập nhật: 2026-11-04 (đêm; nhánh làm việc ở `a4d8c86`, nhánh gốc 
 - `3d5925f`: TypeScript (ubuntu, windows), Tauri và một lượt Security (bản quét mới, lần đầu trên Linux) xanh; chưa đọc đủ kết luận các lượt còn lại.
 - `1540a4f`: xanh cả 10 check run (2026-11-04). Security chạy 7,1 phút (push) và 5,9 phút (pull_request) với bản quét mới, so với khoảng 41 phút trước đó.
 - `f75a72b`: chưa có kết luận (lần đọc gần nhất: TypeScript ubuntu xanh, các job khác còn chạy/xếp hàng).
-- `7275822`: TypeScript ubuntu và windows, Tauri shell, spike sidecar xanh; Security còn IN_PROGRESS lúc đọc cuối (do phiên con `ci-read-48ff83e` đọc bằng GraphQL, tôi chưa tự đọc lại). PR #2 (commit `a4d8c86`): 10 check đang chờ lúc mở, chưa có kết luận. Việc đầu tiên: đọc lại bằng GraphQL.
+- `7275822`: xanh đủ 5/5 job (TypeScript ubuntu 1 phút 26 giây, windows 2 phút 25 giây, Tauri 5 phút 13 giây, Security 9 phút 20 giây, spike 5 phút 27 giây; phiên con `ci-read-48ff83e` đọc bằng GraphQL, tôi chưa tự đọc lại). `48ff83e` có TypeScript ubuntu đỏ ở `pnpm test`: `services/orchestrator/src/scheduler.test.ts` "never runs more than `concurrency` tasks at once" hết 5000ms (phiên con `ci-log-48ff83e` đọc log); không có thay đổi nào ở scheduler giữa `48ff83e` và `7275822`. Chạy cục bộ 40 lần song song (8 luồng × 5) đều qua, chưa tái hiện; nghi ngờ phụ thuộc thời điểm (`setImmediate` rồi `tick`), chưa chứng minh. PR #2: chưa đọc kết quả CI của `cdd2c06`/`a3f9d20`.
 - Đọc CI bằng GraphQL (`checkSuites`/`checkRuns`), không dùng `gh run view`/`gh run watch` (REST từng chạm trần 5000/giờ, trả 403).
 - `3a9a85b` có chuỗi secret giả trong test. Nếu bộ quét báo, chỉ thêm đúng tuple đã rà soát vào danh sách chấp nhận của `scripts/secret-scan.py`, không nới lỏng bộ quét.
 
@@ -56,6 +56,7 @@ Cập nhật: 2026-11-04 (đêm; nhánh làm việc ở `a4d8c86`, nhánh gốc 
 - Timer hết hạn 5 giây chỉ được chứng minh bằng test đơn vị; trong app thật UI poll `approvals.list` (cũng gọi `expireDue`) nên chưa tách riêng được.
 - Chưa kiểm trong app thật: Settings > Agents Save/Use defaults, Peer Review chạy CLI thật qua UI. Danh sách radio "What happened?" trong thẻ reconciliation xếp dọc, trông lỏng (chưa sửa).
 - Secret có thể lọt vào log nếu CLI tự in môi trường của nó (redaction không bao phủ giá trị bị biến đổi).
+- Test flaky đã biết: `scheduler.test.ts` (timeout 5 giây trên CI ubuntu, 1 lần ở `48ff83e`), `sidecar-resume.test.ts` (1 lần cục bộ khi máy tải), `git-worktrees` (1 lần). Chưa nới timeout; hướng sửa đề xuất: chờ điều kiện rõ ràng thay vì `setImmediate`.
 - Test `git-worktrees` từng flaky một lần; `logs.search` (LIKE) chưa benchmark.
 
 ## Quy ước làm việc

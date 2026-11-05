@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"id-16"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll run the command and check its output."}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"The command was blocked by the execution policy, so it did not run."}}
+{"type":"turn.completed","usage":{"input_tokens":48135,"cached_input_tokens":36352,"cache_write_input_tokens":0,"output_tokens":65,"reasoning_output_tokens":0}}

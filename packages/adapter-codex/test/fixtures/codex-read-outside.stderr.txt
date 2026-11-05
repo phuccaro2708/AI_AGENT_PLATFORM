@@ -1,0 +1,1 @@
+<TS> ERROR codex_core::tools::router: error=exec_command failed: CreateProcess { message: "Rejected(\"`\\\"C:\\\\\\\\Program Files\\\\\\\\PowerShell\\\\\\\\7\\\\\\\\pwsh.exe\\\" -Command \\\"Get-Content -LiteralPath '<SCRATCH>/probe/outside\\\\\\\\note.txt' -Raw\\\"` rejected: blocked by policy\")" }

@@ -31,6 +31,15 @@ export interface ScannedCli extends CliProbe {
   error?: { message: string };
 }
 
+export interface DiagnosticsExport {
+  dir: string;
+  manifestPath: string;
+  files: { path: string; bytes: number }[];
+  verified: boolean;
+  problems: string[];
+  limits: string;
+}
+
 export type Provider = "claude" | "codex";
 export interface AgentLaunchSettings {
   command: string;
@@ -179,6 +188,8 @@ export const api = {
   /** A person's decision about a task whose side effects are unknown; the note is kept in the audit trail. */
   resolveReconciliation: (taskId: string, decision: ResolveDecision, note: string) =>
     call<{ state: TaskState }>("tasks.resolveReconciliation", { taskId, decision, note }),
+  /** A redacted support bundle written next to the database; the UI cannot choose where. */
+  exportDiagnostics: () => call<DiagnosticsExport>("diagnostics.export"),
   cancel: (taskId: string) =>
     call<{ requested: boolean; state: TaskState }>("tasks.cancel", { taskId }),
   task: (taskId: string) => call<{ state: TaskState | null }>("queryTask", { taskId }),

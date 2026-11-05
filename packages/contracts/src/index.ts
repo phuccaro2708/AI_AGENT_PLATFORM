@@ -320,6 +320,8 @@ export const SidecarRequest = z.discriminatedUnion("method", [
       limit: z.number().int().min(1).max(200).default(50),
     }),
   }),
+  // ---- Phase 4 (P4-6): a redacted support bundle. No params: the UI never chooses where it is written. ----
+  z.object({ id: z.number().int(), method: z.literal("diagnostics.export") }),
   z.object({ id: z.number().int(), method: z.literal("shutdown") }),
 ]);
 export type SidecarRequest = z.infer<typeof SidecarRequest>;

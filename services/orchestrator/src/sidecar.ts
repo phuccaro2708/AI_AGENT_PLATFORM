@@ -30,6 +30,7 @@ import {
   ResourceMonitor,
   type ResourceSource,
 } from "@agent-studio/resource-monitor";
+import { exportDiagnostics, verifyDiagnostics } from "@agent-studio/diagnostics";
 import { createLogger, type Logger } from "@agent-studio/shared-utils";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
 import { dirname, join } from "node:path";
@@ -84,6 +85,11 @@ export interface SidecarOptions {
   policyCheckExtraLaunch?: boolean;
   /** How often a gate waiting for an approval looks at the task. Default 200 ms. */
   policyPollMs?: number;
+  /** Parent folder of diagnostics bundles. Default: `diagnostics` next to the database. */
+  diagnosticsDir?: string;
+  /** Folder and file stem of the sidecar's log file (the native side redirects stderr there). Default: next to the database, `sidecar`. */
+  logDir?: string;
+  logBaseName?: string;
 }
 
 /** The program each built-in agent is launched as unless the user stored another (probed) command. */
@@ -378,6 +384,56 @@ export class SidecarService {
       log.error({ err: this.redactor.text(String(err)) }, "approval expiry sweep failed"),
     );
     this.artifacts = new ArtifactRegistry(this.repo, workspaces);
+  }
+
+  /**
+   * P4-6: a folder with versions, configuration, recent log and a task summary, masked a second time with
+   * every secret this process knows (provider secrets and the env values stored in agent settings) and
+   * read back before it is reported. The UI cannot choose the folder; a leak aborts the export.
+   */
+  private exportDiagnosticsBundle() {
+    const stored = (["claude", "codex"] as const).map(
+      (p) => [p, this.repo.getAgentSettings(p)] as const,
+    );
+    const secrets = [
+      ...Object.values(this.secrets).flatMap((p) => Object.values(p)),
+      ...stored.flatMap(([, s]) => Object.values(s?.env ?? {})),
+    ];
+    const counts = this.db.$client
+      .prepare("select state, count(*) as n from tasks group by state")
+      .all() as { state: string; n: number }[];
+    const result = exportDiagnostics({
+      outDir: this.opts.diagnosticsDir ?? join(dirname(this.opts.dbPath), "diagnostics"),
+      logDir: this.opts.logDir ?? dirname(this.opts.dbPath),
+      logBaseName: this.opts.logBaseName ?? "sidecar",
+      versions: { sidecar: "0.0.0", node: process.version, platform: process.platform },
+      config: {
+        projects: this.repo.listProjects().length,
+        tasksByState: Object.fromEntries(counts.map((c) => [c.state, c.n])),
+        agentSettings: Object.fromEntries(
+          stored.map(([p, s]) => [
+            p,
+            s ? { command: s.command, args: s.args, env: s.env, verifiedAt: s.verifiedAt } : null,
+          ]),
+        ),
+      },
+      attachments: [
+        {
+          name: "tasks.json",
+          content: JSON.stringify(this.repo.listTaskHistory({ limit: 200, offset: 0 }), null, 2),
+        },
+      ],
+      secrets,
+    });
+    const check = verifyDiagnostics(result.dir);
+    return {
+      dir: result.dir,
+      manifestPath: result.manifestPath,
+      files: result.manifest.files.map((f) => ({ path: f.path, bytes: f.bytes })),
+      verified: check.ok,
+      problems: check.problems,
+      limits: result.manifest.redaction.limits,
+    };
   }
 
   private spikeWorkflow(): string {
@@ -730,6 +786,8 @@ export class SidecarService {
           return ok(req.id, await this.artifacts.diff(req.params.taskId));
         case "worktrees.list":
           return ok(req.id, { worktrees: this.repo.listWorktrees(req.params.workflowId) });
+        case "diagnostics.export":
+          return ok(req.id, this.exportDiagnosticsBundle());
         case "shutdown":
           return { response: { id: req.id, result: { ok: true } }, shutdown: true };
       }

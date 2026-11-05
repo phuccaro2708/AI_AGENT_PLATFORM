@@ -191,6 +191,9 @@ importers:
       '@agent-studio/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@agent-studio/diagnostics':
+        specifier: workspace:*
+        version: link:../../packages/diagnostics
       '@agent-studio/git-worktrees':
         specifier: workspace:*
         version: link:../../packages/git-worktrees

@@ -126,6 +126,18 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
       return { tasks: [] };
     case "tasks.resolveReconciliation":
       return { state: String(p.decision) === "requeue" ? "queued" : String(p.decision) };
+    case "diagnostics.export":
+      return {
+        dir: "(preview) diagnostics-20260101T000000Z",
+        manifestPath: "(preview) manifest.json",
+        files: [
+          { path: "versions.json", bytes: 120 },
+          { path: "config.json", bytes: 340 },
+        ],
+        verified: true,
+        problems: [],
+        limits: "preview stub: nothing was written",
+      };
     case "logs.search":
       return { hits: [] };
     case "roles.list":

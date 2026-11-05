@@ -30,6 +30,7 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 - Yêu cầu có nhiều cách hiểu khác nhau: nêu giả định và các lựa chọn, không chọn ngầm. Nếu chỉ có một cách hợp lý thì cứ làm.
 - Mỗi dòng thay đổi phải truy được về yêu cầu. Dead code có sẵn thì báo, không xóa; chỉ dọn phần do chính thay đổi của mình làm thừa.
 - Việc nhiều bước: nêu tiêu chí kiểm chứng cho từng bước (test nào, lệnh nào) trước khi làm.
+- Được phép chạy nhiều tác vụ song song bằng `/subtask` (phiên con) khi cần thiết. Chỉ giao những phần độc lập, không chung file; mỗi phiên con làm trong worktree riêng, ghi rõ tiêu chí xong trong brief. Phiên con không push, không tạo PR, không ghép nhánh; phiên chính kiểm lại diff và kết quả rồi mới ghép khi người dùng yêu cầu.
 
 ## Chính sách tham khảo repo công khai
 

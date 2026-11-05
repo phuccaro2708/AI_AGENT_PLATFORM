@@ -26,6 +26,17 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 
 - Nhánh phát triển do phiên làm việc chỉ định; commit nhỏ, message rõ ràng. Không tạo PR nếu chưa được yêu cầu.
 - Trước khi coi là xong: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build`.
+
+### Tự động hoá commit / merge / đối chiếu nhánh
+
+Được làm không cần hỏi lại, theo đúng các giới hạn dưới đây:
+
+- **Tự commit**: khi một đơn vị công việc xong và gate liên quan đã chạy (ít nhất `eslint`, `prettier --check`, `pnpm typecheck` và test của phần đã đổi), commit nhỏ với message conventional. Chỉ `git add` đúng file thuộc thay đổi, không `git add -A`; không commit secrets, đường dẫn máy cá nhân, file tạm. Không `--no-verify`, không amend commit đã push.
+- **Tự đối chiếu trước khi merge**: với mỗi nhánh ứng viên, chạy `git rev-list --count <chính>..<nhánh>` (ahead/behind), `git cherry <chính> <nhánh>` (commit chưa có theo nội dung) và `git diff --stat $(git merge-base …)`. Nhánh 0 commit riêng thì coi là đã ghép. Nhánh cũ tụt xa (hàng trăm commit) hoặc viết lại phần mà nhánh chính đã tiến hoá thì KHÔNG merge, báo người dùng và để họ quyết.
+- **Tự merge (cục bộ)**: chỉ merge nhánh đã đối chiếu và có commit riêng hợp lệ, bằng `git merge --no-ff`. Xung đột chỉ ở file nối-thêm như `docs/PROGRESS.md`/`docs/ASSUMPTIONS.md` thì giữ cả hai phía; xung đột ở mã thì dừng và báo. Sau mỗi lần merge có đổi mã phải chạy lại gate (lint, format, typecheck, test, build; thêm `cargo clippy --all-targets -- -D warnings` và `cargo test --locked` nếu đụng `src-tauri`). Gate đỏ thì không coi là xong, báo đúng kết quả.
+- **Dọn nhánh**: chỉ xoá nhánh đã nằm trọn trong nhánh chính (`git branch --merged`) và worktree sạch (`git status --porcelain` rỗng). Nhánh chưa ghép, nhánh có commit riêng, nhánh mặc định của GitHub thì không xoá. Xoá nhánh trên origin chỉ khi commit của nó đã có trên origin của nhánh chính.
+- **KHÔNG tự làm**: `git push` (nhất là `--force`), tạo PR, đổi thứ tự phase, đóng phase, xoá nhánh chưa ghép, `git reset --hard`/`checkout --` trên việc chưa commit. Những việc này vẫn cần người dùng yêu cầu.
+- Mỗi lần tự động xong ghi lại trong `docs/PROGRESS.md` (lệnh đã chạy, kết quả thật); không ghi kết quả CI chưa đọc.
 - Báo cáo trung thực: test fail thì nói fail, bước bỏ qua thì nói bỏ qua.
 - Yêu cầu có nhiều cách hiểu khác nhau: nêu giả định và các lựa chọn, không chọn ngầm. Nếu chỉ có một cách hợp lý thì cứ làm.
 - Mỗi dòng thay đổi phải truy được về yêu cầu. Dead code có sẵn thì báo, không xóa; chỉ dọn phần do chính thay đổi của mình làm thừa.

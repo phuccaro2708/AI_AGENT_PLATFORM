@@ -346,3 +346,16 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - `b370082`: timeout 60 giây riêng cho test 8.3 (không bỏ qua test). CI xanh đủ 5/5 job. TypeScript windows: test 8.3 qua (6126 ms), 70 file, 676 qua, 6 expected fail, 2 bỏ qua. Security: 0 phát hiện (235 commit), `pnpm audit` 2 moderate, `cargo audit` 2 cảnh báo allowed (`proc-macro-error`, `glib`) khớp `docs/DEPS_AUDIT.md`.
 - Chưa làm/chưa kiểm: P4-1 c/d nối mã (chờ người dùng duyệt hướng theo kết quả probe); `agent-job-wrap` chưa được orchestrator gọi và chưa vào gói cài đặt; kill đột ngột app, `tauri dev`, panel recovery và nút diagnostics trong app Tauri thật; engine resume Peer Review (P4-8 b); giới hạn RAM theo cả cây; threat model đầy đủ; tuổi crate/gói transitive.
 - `PHASE4_REPORT.md`: KHÔNG viết, Phase 4 chưa đạt gate (cổng quyền trong vòng lặp chưa nối).
+
+## 2026-11-05 (Windows): kiểm Phase 4 trong app Tauri thật (bản debug dựng từ `191e7b9`)
+
+- CI `191e7b9` (GraphQL): xanh đủ 5/5 job, gồm Security.
+- Cách chạy: `node scripts/build-sidecar.mjs`, `pnpm tauri build --debug --no-bundle`; chạy `agent-studio.exe` với `AGENT_STUDIO_DB` và `AGENT_STUDIO_SIDECAR_DIR` trỏ ra thư mục tạm, WebView2 remote-debugging (CDP) và lệnh `invoke` thật; gieo 3 task bằng kết nối SQLite thứ hai; KHÔNG chạy CLI thật, không dùng chuột/bàn phím của người dùng. Script nằm ngoài repo.
+- Kết quả thật (22 kiểm qua trên 23 ở lượt IPC; 1 "đỏ" là lỗi script, xem dưới):
+  - Capabilities/ACL: `plugin:event|emit`, `plugin:window|close`, `plugin:fs|read_text_file` bị từ chối; `plugin:event|listen` được phép; `shutdown` và `runStub` bị `ALLOWED_METHODS` chặn.
+  - Recovery qua IPC thật: `recovery.inspect` phân loại đúng (`side_effects_unverified` với 1 tool_call không có kết quả, `no_evidence_of_side_effects` khi không có sự kiện); `retry` không xác nhận bị từ chối; task không tự chạy lại; `abandon` -> `cancelled`.
+  - Job Object: `taskkill /F` app (kill đột ngột) -> `node.exe` sidecar chết theo (kiểm bằng PID).
+  - Khởi động lại trên cùng DB: task `running` bị đánh `needs_reconciliation` (log sidecar "tasks interrupted by a previous exit"), phân loại `side_effects_unverified`, không tự chạy lại sau nhiều nhịp scheduler.
+  - Diagnostics qua IPC thật: `diagnostics.export` trả `verified: true`, `problems: []`, 5 file; nội dung bundle không chứa đường dẫn thư mục tạm hay tên người dùng. Lần chạy đầu báo "rò đường dẫn" là lỗi script (gộp cả tên file vào văn bản quét), đã sửa và xác minh lại bằng grep trên bundle.
+  - UI thật (DOM qua CDP): Settings có thẻ Diagnostics, bấm "Export diagnostics" hiện "Exported and verified" + danh sách file + ghi chú giới hạn; History -> "Open log" của task `needs_reconciliation` hiện `RecoveryPanel` với tóm tắt bằng chứng và ba lựa chọn Keep / Run it again / Abandon.
+- Chưa kiểm: quyết định `resume`/`retry` bấm qua UI (sẽ chạy CLI thật, cố ý bỏ); đặt giới hạn RAM sidecar bằng `AGENT_STUDIO_SIDECAR_MEM_LIMIT_MB` trong app thật; `agent-job-wrap` (orchestrator chưa gọi); redaction secret thật trong bundle (chỉ có test đơn vị); bố cục hẹp.

@@ -118,6 +118,12 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
 
+  packages/diagnostics:
+    dependencies:
+      '@agent-studio/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+
   packages/git-worktrees:
     dependencies:
       '@agent-studio/process-manager':

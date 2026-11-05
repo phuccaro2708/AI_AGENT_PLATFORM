@@ -306,3 +306,12 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Kết quả: Claude phát `system/permission_denied` + `permission_denials[]` trong `result` (công cụ không chạy, thoát 0); `echo` được tự chấp nhận nên không có sự kiện. Codex `exec --json` không phát sự kiện quyền nào trên stdout; việc từ chối chỉ có trên stderr và trong lời model. Không CLI nào treo hay chờ tương tác. Chi tiết và phần chưa kiểm: `docs/ASSUMPTIONS.md` mục "probe yêu cầu quyền thật".
 - Fixture đã lọc (đường dẫn, id): `packages/adapter-claude/test/fixtures/`, `packages/adapter-codex/test/fixtures/`. Không thêm test mới, không sửa mã nguồn, không nối `evaluate()`.
 - Chưa làm: `--permission-prompt-tool` của claude, app-server của codex, `workspace-write`, các chế độ khác.
+
+## 2026-11-05 (Windows): ghép bốn nhánh phiên con và sửa bundle sidecar
+
+- Ghép vào `claude/loving-lovelace-32lh71` theo thứ tự: `policy-win-hardening-057ef1`, `wire-resource-monitor-df9e6e`, `flaky-root-cause-361311`, `probe-permissions-ed36ea` (merge cuối `f11a353`). Hai lần xung đột `docs/PROGRESS.md` (ghép thứ 3 và 4): giữ cả hai phía, chạy prettier. Đã push `4ade477..f11a353`.
+- Kiểm sau ghép: `pnpm lint` ban đầu báo 337 lỗi giả do các worktree lồng trong `.claude/worktrees`; chạy `eslint . --ignore-pattern ".claude/**"` thoát 0. `prettier --check`, `typecheck`, `build` thoát 0 (typecheck/build thoát 2 lần đầu vì `@agent-studio/resource-monitor` chưa được liên kết; `pnpm install --frozen-lockfile` xử lý). `pnpm test`: 55 file, 531 qua, 3 bỏ qua (gồm test 8.3 của policy-engine). `cargo` chưa chạy lại (`src-tauri` không đổi).
+- CI (GraphQL): `91317e4`, `4ade477` xanh 5/5. `f11a353`: spike ADR-001 đỏ, nguyên nhân đọc từ log job: esbuild "Could not resolve @agent-studio/resource-monitor" ở bước "Build self-contained sidecar bundle". Lúc đọc, bốn job còn lại của `f11a353` còn chạy (chưa có kết luận).
+- `2137663` (chưa push): thêm alias `@agent-studio/resource-monitor` vào `scripts/build-sidecar.mjs`. Kiểm: ẩn `dist` rồi chạy bundle OK, spike 11/11 qua. Đây là lỗi sót của tôi khi ghép (phiên con không chạy bước bundle).
+- Sai sót đã đính chính trước đó: tôi từng nói nhánh resource-monitor không cập nhật tài liệu do cắt `--stat`; thực tế có (`341190d`).
+- Không rõ/chưa làm: bước rà soát bảo mật tự động của commit `wire-resource-monitor` không hoàn tất (không đọc được phản hồi mô hình) nên chưa có kết luận bảo mật; app Tauri thật chưa xem nút Auto/`agy`; sửa 8.3 chưa được chứng minh (test bị bỏ qua); `process-manager` abort flaky chưa tái hiện.

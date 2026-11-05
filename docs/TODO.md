@@ -147,12 +147,12 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [~] Resource monitor (RAM/VRAM) + Resource-Aware Scheduler — phần mã thuần xong 2026-11-05 (`packages/resource-monitor`: CPU/RAM hệ thống + RSS/CPU tiến trình con, ngưỡng cấu hình, giảm/tạm hoãn; điểm móc `SchedulerOptions.admission`). đã nối vào sidecar 2026-11-05 (`SidecarService` tạo monitor khi có `resourceSource`, `sidecar-main` truyền `NodeResourceSource`, ngưỡng mặc định; chưa truyền `trackedPids`), chưa có cấu hình trong settings, chưa hiển thị trong UI, chưa đo VRAM (không có API Node), chưa đo trên Windows, chưa ép bằng Job Object
 - [x] UI hiển thị capability thiếu (helper `describeCapabilityGap`) — `apps/desktop/src/capabilityGap.ts` (+ test, nối vào AgentView/PeerReviewView, chặn Run kèm lý do); đã xem trong app Tauri thật 2026-11-04 (Peer Review với `agy` thật trên máy: nhãn `(thiếu capability)`, Start review bị khoá kèm lý do; xem PROGRESS.md). Riêng nhánh AgentView (cần `streaming`) chưa chạm được vì không adapter nào thiếu `streaming`; chỉ có unit test
 - [x] Test thêm adapter giả không sửa core (cho routing; xem PHASE3_REPORT về giới hạn của sidecar)
-- [~] PHASE3_REPORT.md (có bản nháp trung thực; Phase 3 chưa đóng: còn Ollama, resource monitor, UI capability thiếu, adapter `agy` chưa chạy CLI thật)
+- [~] PHASE3_REPORT.md (có bản nháp trung thực; Phase 3 chưa đóng: còn Ollama, phần còn lại của resource monitor (VRAM, `trackedPids`, UI, cấu hình), adapter `agy` chưa chạy CLI thật)
 
 ## Phase 4 — Security & Reliability
 
 - [~] Policy engine: 4 mức quyền, path scope, command policy, network policy — phần mã thuần xong 2026-11-05 (`packages/policy-engine`, 41 test trên Linux); CHƯA nối vào orchestrator/IPC/UI, chưa quan sát yêu cầu quyền thật của CLI (ASSUMPTIONS, mục Phase 4)
-- [~] Canonical path validation + test traversal/symlink — đã chạy trên Linux; trên Windows 2026-11-05: `..` theo Win32 + từ chối `\?\`/`\.\`, test xanh; junction/UNC/8.3/ADS và mọi thứ trên Windows CHƯA chạy
+- [~] Canonical path validation + test traversal/symlink — Linux đã chạy; Windows 2026-11-05: `..` theo Win32, từ chối `\?\`/`\.\`, `realpath.native`, UNC/ADS fail-closed, test xanh; test 8.3 bị bỏ qua trên máy này (chưa chạy thật)
 - [ ] Env var allowlist, executable allowlist theo adapter
 - [ ] Windows Job Object giới hạn process tree/RAM
 - [ ] Spike AppContainer / Windows Sandbox (chỉ đánh giá, không cam kết 1.0) — ghi kết quả, kể cả hạn chế vào SECURITY.md

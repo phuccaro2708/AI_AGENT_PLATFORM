@@ -17,6 +17,7 @@ const make = (mode = "ok", extra: Record<string, unknown> = {}) =>
     command: process.execPath,
     baseArgs: [fake],
     env: { ...process.env, FAKE_MODE: mode },
+    envAllow: ["FAKE_MODE"],
     ...extra,
   });
 const task = (prompt = "hi", signal = new AbortController().signal, id = "t1"): AgentTask => ({

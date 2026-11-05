@@ -15,4 +15,10 @@ export interface AgentAdapter {
   capabilities(): Promise<AgentCapability[]>;
   execute(task: AgentTask): AsyncIterable<AgentEvent>;
   cancel(taskId: string): Promise<void>;
+  /**
+   * The exact program and argument list `execute` would start for this task, without starting anything.
+   * The orchestrator asks the Policy Engine about it BEFORE `execute` (Phase 4, P4-1a). Adapters that do not
+   * spawn a program (fakes, in-process agents) leave it out and are only checked on the working directory.
+   */
+  describeLaunch?(task: AgentTask): { command: string; args: readonly string[] };
 }

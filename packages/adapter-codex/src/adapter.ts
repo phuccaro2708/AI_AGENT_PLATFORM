@@ -4,6 +4,9 @@ import {
   createLineSplitter,
   resolveExecutable,
   startProcess,
+  BASE_ENV_ALLOWLIST,
+  extendManifest,
+  type SpawnManifest,
   type RunningProcess,
 } from "@agent-studio/process-manager";
 import { createCodexParser } from "./parse.js";
@@ -42,7 +45,19 @@ export interface CodexAdapterOptions {
   /** Extra flags after the built-in ones. */
   extraArgs?: readonly string[];
   env?: Record<string, string | undefined>;
+  /** Variable names (besides the manifest's) that the host declares on purpose: stored settings, secrets. */
+  envAllow?: readonly string[];
 }
+
+/**
+ * What a `codex` child may be started with (P4-3): the executable `codex` and the base environment plus
+ * `OPENAI_*` / `CODEX_*`. ASSUMED sufficient for a real run, NOT probed (docs/ASSUMPTIONS.md).
+ */
+export const CODEX_MANIFEST: SpawnManifest = {
+  executables: ["codex"],
+  env: BASE_ENV_ALLOWLIST,
+  envPrefixes: ["OPENAI_", "CODEX_"],
+};
 
 /**
  * Runs `codex exec --json -s <sandbox> -` and maps its JSONL to AgentEvent. The prompt goes to
@@ -53,8 +68,30 @@ export class CodexAdapter implements AgentAdapter {
   readonly id: string;
   private readonly running = new Map<string, RunningProcess>();
 
+  private readonly manifest: SpawnManifest;
+
   constructor(private readonly opts: CodexAdapterOptions = {}) {
     this.id = opts.id ?? "codex";
+    this.manifest = extendManifest(CODEX_MANIFEST, {
+      ...(opts.command ? { executables: [opts.command] } : {}),
+      ...(opts.envAllow ? { env: opts.envAllow } : {}),
+    });
+  }
+
+  describeLaunch(task: AgentTask): { command: string; args: readonly string[] } {
+    return { command: this.opts.command ?? "codex", args: this.buildArgs(task) };
+  }
+
+  private buildArgs(task: AgentTask): string[] {
+    return [
+      ...(this.opts.baseArgs ?? []),
+      "exec",
+      "--json",
+      "-s",
+      codexSandboxFor(task.permissions, this.opts.sandbox),
+      ...(this.opts.extraArgs ?? []),
+      "-",
+    ];
   }
 
   async detect(): Promise<boolean> {
@@ -100,18 +137,10 @@ export class CodexAdapter implements AgentAdapter {
       if (parsed.final) final = parsed.final;
     });
 
-    const args = [
-      ...(this.opts.baseArgs ?? []),
-      "exec",
-      "--json",
-      "-s",
-      codexSandboxFor(task.permissions, this.opts.sandbox),
-      ...(this.opts.extraArgs ?? []),
-      "-",
-    ];
     const proc = startProcess({
       command: this.opts.command ?? "codex",
-      args,
+      args: this.buildArgs(task),
+      manifest: this.manifest,
       cwd: task.cwd,
       ...(this.opts.env ? { env: this.opts.env } : {}),
       stdin: task.prompt,

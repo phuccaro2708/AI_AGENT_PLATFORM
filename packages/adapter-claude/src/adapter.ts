@@ -1,10 +1,13 @@
 import type { AgentCapability, AgentEvent, TaskPermissions } from "@agent-studio/contracts";
 import type { AgentAdapter, AgentTask } from "@agent-studio/agent-core";
 import {
+  BASE_ENV_ALLOWLIST,
   createLineSplitter,
+  extendManifest,
   resolveExecutable,
   startProcess,
   type RunningProcess,
+  type SpawnManifest,
 } from "@agent-studio/process-manager";
 import { parseClaudeLine } from "./parse.js";
 
@@ -20,6 +23,17 @@ export function claudePermissionArgs(permissions: TaskPermissions | undefined): 
   }
   return [];
 }
+
+/**
+ * What a `claude` child may be started with (P4-3): the executable `claude` and the base environment plus
+ * `ANTHROPIC_*` / `CLAUDE_*`. ASSUMED sufficient for a real login and API-key run, NOT probed (docs/ASSUMPTIONS.md);
+ * anything else the user needs goes through the stored agent settings (`envAllow`).
+ */
+export const CLAUDE_MANIFEST: SpawnManifest = {
+  executables: ["claude"],
+  env: BASE_ENV_ALLOWLIST,
+  envPrefixes: ["ANTHROPIC_", "CLAUDE_"],
+};
 
 const isJson = (line: string): boolean => {
   try {
@@ -48,6 +62,8 @@ export interface ClaudeAdapterOptions {
   /** Extra flags, e.g. a tool allowlist (`--tools Read --allowed-tools Read`). */
   extraArgs?: readonly string[];
   env?: Record<string, string | undefined>;
+  /** Variable names (besides the manifest's) that the host declares on purpose: stored settings, secrets. */
+  envAllow?: readonly string[];
 }
 
 /**
@@ -58,9 +74,33 @@ export interface ClaudeAdapterOptions {
 export class ClaudeAdapter implements AgentAdapter {
   readonly id: string;
   private readonly running = new Map<string, RunningProcess>();
+  private readonly manifest: SpawnManifest;
 
   constructor(private readonly opts: ClaudeAdapterOptions = {}) {
     this.id = opts.id ?? "claude";
+    // A command the host configured explicitly (a stored, probed path, or a test double) is declared too.
+    this.manifest = extendManifest(CLAUDE_MANIFEST, {
+      ...(opts.command ? { executables: [opts.command] } : {}),
+      ...(opts.envAllow ? { env: opts.envAllow } : {}),
+    });
+  }
+
+  describeLaunch(task: AgentTask): { command: string; args: readonly string[] } {
+    return { command: this.opts.command ?? "claude", args: this.buildArgs(task) };
+  }
+
+  private buildArgs(task: AgentTask): string[] {
+    return [
+      ...(this.opts.baseArgs ?? []),
+      "-p",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      ...(this.opts.safeMode === false ? [] : ["--safe-mode"]),
+      ...(task.sessionId ? ["--resume", task.sessionId] : []),
+      ...claudePermissionArgs(task.permissions),
+      ...(this.opts.extraArgs ?? []),
+    ];
   }
 
   async detect(): Promise<boolean> {
@@ -92,7 +132,12 @@ export class ClaudeAdapter implements AgentAdapter {
     let ended = false;
     let final: AgentEvent | undefined;
     let invalidLines = 0; // non-empty stdout lines that are not JSON: reported if the run has no result
+    const denied = new Set<string>(); // the same denial arrives twice: system/permission_denied, then the result
     const push = (e: AgentEvent) => {
+      if (e.type === "permission_denied" && e.callId !== undefined) {
+        if (denied.has(e.callId)) return;
+        denied.add(e.callId);
+      }
       queue.push(e);
       wake?.();
     };
@@ -105,20 +150,10 @@ export class ClaudeAdapter implements AgentAdapter {
       if (parsed.final) final = parsed.final;
     });
 
-    const args = [
-      ...(this.opts.baseArgs ?? []),
-      "-p",
-      "--output-format",
-      "stream-json",
-      "--verbose",
-      ...(this.opts.safeMode === false ? [] : ["--safe-mode"]),
-      ...(task.sessionId ? ["--resume", task.sessionId] : []),
-      ...claudePermissionArgs(task.permissions),
-      ...(this.opts.extraArgs ?? []),
-    ];
     const proc = startProcess({
       command: this.opts.command ?? "claude",
-      args,
+      args: this.buildArgs(task),
+      manifest: this.manifest,
       cwd: task.cwd,
       ...(this.opts.env ? { env: this.opts.env } : {}),
       stdin: task.prompt,

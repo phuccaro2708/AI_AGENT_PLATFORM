@@ -1,14 +1,20 @@
 import { spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import { killTree } from "./kill-tree.js";
+import { assertExecutableAllowed, filterEnv, type SpawnManifest } from "./manifest.js";
 import { UnsupportedShimError, resolveExecutable, unwrapNpmShim } from "./resolve.js";
 
 export interface RunOptions {
   command: string;
   args?: readonly string[];
   cwd?: string;
-  /** Full environment for the child. Defaults to the parent's; a Phase 4 allowlist will tighten this. */
+  /** Full environment for the child. Defaults to the parent's; with a `manifest` only declared names get through. */
   env?: Record<string, string | undefined>;
+  /**
+   * Adapter allowlist (P4-3). When set, `command` must be a declared executable and the child sees only the
+   * declared environment variables. Optional because `cli-probe` and `git-worktrees` spawn through here too.
+   */
+  manifest?: SpawnManifest;
   /** Text written to stdin, then stdin is closed. Default: stdin is ignored. */
   stdin?: string;
   timeoutMs?: number;
@@ -65,11 +71,22 @@ export function startProcess(opts: RunOptions): RunningProcess {
 
   if (opts.signal?.aborted) return failed("cancelled");
 
+  // The single enforcement point of the adapter manifest (P4-3): checked before anything is resolved or spawned.
+  let env: Record<string, string | undefined> | undefined = opts.env;
+  if (opts.manifest) {
+    try {
+      assertExecutableAllowed(opts.manifest, opts.command);
+    } catch (err) {
+      return failed("spawn_error", err instanceof Error ? err.message : String(err));
+    }
+    env = filterEnv(opts.manifest, opts.env ?? process.env);
+  }
+
   let file: string;
   let prefix: string[];
   try {
     const resolved = resolveExecutable(opts.command, {
-      ...(opts.env ? { env: opts.env } : {}),
+      ...(env ? { env } : {}),
       ...(opts.cwd ? { cwd: opts.cwd } : {}),
     });
     const target = resolved.kind === "shim" ? unwrapNpmShim(resolved) : resolved;
@@ -86,7 +103,7 @@ export function startProcess(opts: RunOptions): RunningProcess {
     windowsHide: true,
     detached: posix, // own process group so the whole tree can be signalled
     cwd: opts.cwd,
-    env: (opts.env ?? process.env) as NodeJS.ProcessEnv,
+    env: (env ?? process.env) as NodeJS.ProcessEnv,
     stdio: [opts.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
   });
 

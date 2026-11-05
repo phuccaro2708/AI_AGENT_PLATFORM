@@ -1,4 +1,5 @@
 import { createInterface } from "node:readline";
+import { NodeResourceSource } from "@agent-studio/resource-monitor";
 import { createLogger } from "@agent-studio/shared-utils";
 import { createEventWriter } from "./event-writer.js";
 import { createSecretRedactor, redactingDestination, takeSecretsFromEnv } from "./secrets.js";
@@ -34,6 +35,7 @@ const service = new SidecarService(
     dbPath,
     secrets,
     onEvent: events.emit,
+    resourceSource: new NodeResourceSource(),
     ...(nativeBinding ? { nativeBinding } : {}),
     ...(migrationsFolder ? { migrationsFolder } : {}),
   },

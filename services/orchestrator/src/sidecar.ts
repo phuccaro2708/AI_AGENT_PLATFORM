@@ -24,6 +24,11 @@ import {
   type ProbeOptions,
   type ProbeResult,
 } from "@agent-studio/cli-probe";
+import {
+  DEFAULT_THRESHOLDS,
+  ResourceMonitor,
+  type ResourceSource,
+} from "@agent-studio/resource-monitor";
 import { createLogger, type Logger } from "@agent-studio/shared-utils";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
 import { dirname, join } from "node:path";
@@ -57,6 +62,17 @@ export interface SidecarOptions {
   schedulerIntervalMs?: number;
   /** Interval of the approval expiry sweep (default 5 s). */
   approvalSweepMs?: number;
+  /**
+   * Where CPU/RAM readings come from. When given, a {@link ResourceMonitor} (default thresholds) samples it
+   * and the scheduler starts fewer tasks under load; when absent there is no monitor and the scheduler runs
+   * at its fixed concurrency. The real process passes `NodeResourceSource` (sidecar-main); tests pass a fake
+   * or nothing, so they never read the real machine.
+   */
+  resourceSource?: ResourceSource;
+  /** How often the resource monitor samples. Default 1000. */
+  resourceSampleMs?: number;
+  /** Tasks the scheduler runs at once at most (the resource monitor can only lower it). Default 2. */
+  schedulerConcurrency?: number;
 }
 
 const ok = (id: number, result: unknown) => ({
@@ -98,6 +114,7 @@ export class SidecarService {
   private readonly registry = new AdapterRegistry();
   private readonly orchestrator: Orchestrator;
   private readonly scheduler: Scheduler;
+  private readonly resourceMonitor: ResourceMonitor | undefined;
   private readonly engine: PeerReviewEngine;
   private readonly approvals: ApprovalService;
   private readonly artifacts: ArtifactRegistry;
@@ -284,9 +301,20 @@ export class SidecarService {
       board: new ContextBoard(this.repo),
       workspaces,
     });
+    if (opts.resourceSource) {
+      this.resourceMonitor = new ResourceMonitor({
+        source: opts.resourceSource,
+        thresholds: DEFAULT_THRESHOLDS,
+      });
+      this.resourceMonitor.start(opts.resourceSampleMs);
+    }
     this.scheduler = new Scheduler({
       repo: this.repo,
       orchestrator: this.orchestrator,
+      ...(opts.schedulerConcurrency !== undefined
+        ? { concurrency: opts.schedulerConcurrency }
+        : {}),
+      ...(this.resourceMonitor ? { admission: this.resourceMonitor } : {}),
       onSettled: (id, result) => this.engine.onSettled(id, result),
     });
     // Workflows left `running` by a previous exit need the scheduler again (it starts lazily otherwise).
@@ -671,6 +699,7 @@ export class SidecarService {
   close(): void {
     this.approvals.stopTimer();
     this.scheduler.stop();
+    this.resourceMonitor?.stop();
     for (const a of this.active.values()) a.abort.abort();
     if (this.db.$client.open) this.db.$client.close();
   }

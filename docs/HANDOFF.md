@@ -1,6 +1,6 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `7e58f89`, đã push, khớp origin). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `b370082`, đã push, khớp origin; CI 5/5 xanh). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Vị trí
 
@@ -25,6 +25,7 @@ Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `7e5
 | Preset, phím tắt cơ bản, radio thẻ ngang           | Xong 2026-11-04, đã kiểm trong app Tauri thật (trừ Ctrl+Enter gửi thật cần CLI)                                                                                                                                                                                                                                                                                         |
 | 3 (quét CLI, `agy`, router)                        | Đang làm: adapter `agy` (CLI giả), router, UI capability thiếu (Peer Review kiểm app thật; nhánh AgentView chỉ có unit test) xong; router đã nối vào `workflows.start` (kèm "Auto" + bật/tắt `agy` trong UI); resource monitor đã nối vào sidecar (chưa VRAM, `trackedPids`, UI, cấu hình); còn Ollama (hoãn), chạy `agy` thật                                          |
 | 4 Policy Engine (mã thuần)                         | ĐÃ ghép vào nhánh chính (`98539d3`): P4-1 a+b (cổng kiểm trước/sau khi chạy), P4-3, P4-6 (gói `diagnostics` + logger xoay vòng, chưa nối IPC), P4-9, P4-10 với agent giả; 5 gate thoát 0 trên nhánh chính (67 file, 662 qua, 6 expected fail, 3 bỏ qua). Còn: P4-1 (c)/(d) chờ probe, P4-2 (đọc CI Windows), P4-4, P4-5, P4-6 nối IPC + nút Settings, P4-7, P4-8, P4-11 |
+| 4 phần còn lại (2026-11-05)                        | Đã ghép `f829e9d`..`b370082`: Job Object sidecar + `agent-job-wrap` (chưa nối orchestrator), capabilities siết, `diagnostics.export` IPC + nút, recovery 5 bước + UI, audit + ghim Actions, `docs/SECURITY.md`; P4-1 c/d chỉ probe. Phase 4 CHƯA đóng, không có `PHASE4_REPORT.md`                                                                                      |
 | 7C-2, 7D Tailwind/shadcn, E2E người dùng mới       | Chưa bắt đầu (7C-2 chờ Phase 4; Tailwind/shadcn chờ duyệt dependency)                                                                                                                                                                                                                                                                                                   |
 | `PHASE7_REPORT.md`                                 | Chỉ viết khi cả Phase 7 đạt tiêu chí đóng                                                                                                                                                                                                                                                                                                                               |
 
@@ -41,12 +42,13 @@ Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `7e5
 - Đọc 2026-11-05 (GraphQL): `603d6fb` xanh đủ 5/5 job (kể cả Security). `341190d`: TypeScript ubuntu/windows, Tauri shell, spike xanh, Security còn chạy. `91317e4`: TypeScript ubuntu/windows xanh, ba job còn lại còn chạy. `0183a85`: TypeScript ubuntu xanh, còn lại còn chạy (commit chỉ đổi docs).
 - `3db3aa9` và `2826397` (cũ): TypeScript ubuntu xanh, TypeScript windows ĐỎ do 8 test `policy-engine` so tên 8.3 `RUNNER~1` với tên dài (test helper `makeTree` dùng `fs.realpathSync`). `603d6fb` (`realpathSync.native`): TypeScript ubuntu, TypeScript windows, Tauri shell, spike ADR-001 xanh; Security còn IN_PROGRESS lúc đọc (GraphQL, 2026-11-05). Chưa có kết luận Security.
 - `91317e4`, `4ade477`: xanh đủ 5/5 job (đọc GraphQL 2026-11-05). `f11a353`: spike ADR-001 ĐỎ ở bước "Build self-contained sidecar bundle": esbuild không phân giải `@agent-studio/resource-monitor` vì `scripts/build-sidecar.mjs` dùng bảng alias gõ tay và thiếu gói mới (sót khi ghép; phiên con không chạy bước bundle). Sửa ở `2137663` (thêm alias), kiểm cục bộ với `dist` ẩn: bundle OK, spike 11/11 qua. `2137663` CHƯA push nên CI vẫn đỏ ở job spike; bốn job còn lại của `f11a353` còn chạy lúc đọc, chưa có kết luận.
+- `b370082` (2026-11-05, GraphQL): xanh đủ 5/5 job. Đường đi: `ee6ed72` Security đỏ (secret scan) → `d37f38a` thêm pragma + 88 tuple lịch sử, Security xanh nhưng Windows TS đỏ (test 8.3 quá 5 giây) → `b370082` timeout 60 giây. Test 8.3 chạy và qua trên runner Windows (P4-2 đạt).
 - Đọc CI bằng GraphQL (`checkSuites`/`checkRuns`), không dùng `gh run view`/`gh run watch` (REST từng chạm trần 5000/giờ, trả 403).
 - `3a9a85b` có chuỗi secret giả trong test. Nếu bộ quét báo, chỉ thêm đúng tuple đã rà soát vào danh sách chấp nhận của `scripts/secret-scan.py`, không nới lỏng bộ quét.
 
 ## Việc tiếp theo (theo thứ tự)
 
-0. Phase 4 phần còn lại: kế hoạch đã duyệt ở `docs/NEXT_PLAN.md` (mục "Quyết định ngày 2026-11-05, đợt 2") và `/goal` đã soạn: lane RUST (P4-4 Job Object cấp sidecar + cấp task, P4-7), IPC (P4-6 nối IPC + nút Settings rồi P4-8 recovery), PROBE (P4-1 c/d, dừng báo người dùng), DEPS (P4-11); phiên chính làm SECURITY.md (P4-5), đọc CI (P4-2). Đọc CI các commit đã push (`7e58f89`) trước — chưa đọc.
+0. Phase 4: duyệt hướng P4-1 c/d (xem `docs/ASSUMPTIONS.md`, mục probe 2026-11-05) rồi nối cổng quyền vào orchestrator; nối `agent-job-wrap` vào process-manager + gói cài đặt; engine resume Peer Review (P4-8 b); kiểm recovery/diagnostics/Job Object trong app Tauri thật; duyệt 5 bước recovery. Sau đó mới xét `PHASE4_REPORT.md`.
 1. Push `2137663` (cùng commit docs) rồi đọc lại CI 5/5 job; ghi kết luận thật. Mọi gói workspace mới phải được thêm vào alias của `scripts/build-sidecar.mjs`.
 2. Xem nút "Auto" + bật/tắt `agy` trong app Tauri thật (NEXT_PLAN Bước 1; mới có unit/sidecar test).
 3. Bước 2B (nối `evaluate()` vào orchestrator): probe đã cho thấy `claude -p` chỉ báo `permission_denied` SAU khi từ chối, `codex exec --json` không phát sự kiện quyền; chưa giao diện nào cho chèn `evaluate()` giữa "model yêu cầu tool" và "tool chạy". Cần probe tiếp `--permission-prompt-tool` (claude) và app-server/MCP (codex) — chờ người dùng duyệt.
@@ -55,6 +57,7 @@ Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `7e5
 
 ## Chờ người dùng quyết
 
+- Duyệt hướng P4-1 c/d (claude `--permission-prompt-tool` nhưng cổng không thấy mọi lời gọi; codex `app-server` có approval có cấu trúc, `exec --json` không có) và định nghĩa 5 bước recovery.
 - Duyệt dependency Tailwind/shadcn và Playwright; cho phép lượt probe `agy` thứ 3; duyệt phạm vi grant 7C-2; xác nhận có bỏ `claude/phase-2-kickoff-8a5732` không.
 - Xoá worktree phiên con đã ghép (policy-win-hardening-057ef1, wire-resource-monitor-df9e6e, flaky-root-cause-361311, probe-permissions-ed36ea; thêm fix-pm-abort-flaky-7e3a1f, repo-current-status-acfd51 nếu bỏ nhánh): chưa xoá cái nào. Duyệt probe tiếp cho Bước 2B; ngưỡng tài nguyên và có hiện trong UI không.
 - Dọn A5 không làm mất dữ liệu người dùng: mục `index/claude.agent-studio` đã xoá là danh sách TÊN secret của provider claude do chính app tạo (`secrets.rs`), nhiều khả năng là tàn dư kiểm 7B; người dùng xác nhận chưa từng nhập secret nào. Không có mục thì Settings hiện danh sách rỗng (NoEntry → rỗng), không lỗi.
@@ -62,7 +65,7 @@ Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `7e5
 
 ## Chưa xác minh / nợ nhỏ
 
-- `canonicalize` đã dùng `realpath.native` trên Windows (ghép từ `policy-win-hardening`), nhưng test 8.3 bị bỏ qua trên máy này nên việc sửa 8.3 chưa được chứng minh bằng test chạy thật. Commit `wire-resource-monitor` có bước rà soát bảo mật tự động không hoàn tất (không đọc được phản hồi mô hình): chưa có kết luận bảo mật.
+- Test 8.3 đã chạy và qua trên CI Windows (2026-11-05); trên máy này vẫn có thể bị bỏ qua nếu volume tắt tên 8.3. Ghi chú cũ: `canonicalize` đã dùng `realpath.native` trên Windows (ghép từ `policy-win-hardening`), nhưng test 8.3 bị bỏ qua trên máy này nên việc sửa 8.3 chưa được chứng minh bằng test chạy thật. Commit `wire-resource-monitor` có bước rà soát bảo mật tự động không hoàn tất (không đọc được phản hồi mô hình): chưa có kết luận bảo mật.
 - `cargo clippy --all-targets -D warnings` qua và `cargo test` 12 qua, 0 lỗi, 1 ignored (2026-11-05, Windows, `--locked`; phiên con đọc, `src-tauri` không đổi).
 - 2026-11-05 trên Windows (sau sửa `..` theo Win32): lint, prettier, typecheck, build qua; `pnpm test` 485 qua, 2 bỏ qua (test POSIX), 0 đỏ (số liệu của thời điểm đó). `process-manager` "cancels via AbortSignal" hết 30 giây 1 lần ở lần chạy trước (qua 2/2 khi chạy riêng và qua ở lần chạy sau): nghi flaky, chưa điều tra. `cargo clippy`/`cargo test` chưa chạy lại. Sau đó đã ghép hai nhánh cloud và thêm nút `agy`: `pnpm test` 54 file, 520 qua, 2 bỏ qua (xem PROGRESS).
 

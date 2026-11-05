@@ -624,7 +624,8 @@ export class SidecarService {
           return ok(req.id, { requested: false, state });
         }
         case "tasks.resolveReconciliation": {
-          const { taskId, decision, note } = req.params;
+          const { taskId, decision } = req.params;
+          const note = this.redactor.text(req.params.note); // free text from the user ends up in reason + event
           const state = this.repo.getTaskState(taskId);
           if (state === undefined) return fail(req.id, `Unknown task: ${taskId}`);
           // Only an explicit user decision gets here; `requeue` is the one path that re-runs work.
@@ -699,7 +700,7 @@ export class SidecarService {
           });
           this.engine.start({
             workflowId: p.workflowId,
-            goal: p.goal,
+            goal: this.redactor.text(p.goal), // stored as a context item and task.request, then returned to the UI
             ...(p.maxRounds !== undefined ? { maxRounds: p.maxRounds } : {}),
           });
           this.scheduler.start(this.opts.schedulerIntervalMs);
@@ -718,7 +719,7 @@ export class SidecarService {
           this.approvals.resolve(
             req.params.approvalId,
             req.params.decision,
-            req.params.note,
+            req.params.note === undefined ? undefined : this.redactor.text(req.params.note),
             req.params.scope,
           );
           return ok(req.id, { resolved: true });

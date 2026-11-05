@@ -1,4 +1,4 @@
-mod job;
+pub mod job;
 mod secrets;
 mod sidecar;
 

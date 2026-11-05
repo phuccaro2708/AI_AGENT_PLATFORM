@@ -9,6 +9,14 @@
 //!
 //! Limits (see ADR-004): this protects against *app* death, not per-task cancel (that is `killTree` in the Node
 //! process manager); on non-Windows platforms this module is a no-op.
+//!
+//! **This is NOT a security sandbox.** A Job Object only (a) kills the process tree when its last
+//! handle closes and (b) optionally caps the memory the whole job may commit. It does not restrict
+//! files, network, registry or the user token; a process in the job can still read and write
+//! anything the user can. Do not describe it as isolation (ADR-002).
+//!
+//! The same type serves two callers: the app puts the sidecar in one job, and the small
+//! `agent-job-wrap` binary puts each task's CLI in its own job.
 
 #[cfg(windows)]
 mod imp {
@@ -22,8 +30,8 @@ mod imp {
     };
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
-        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        QueryInformationJobObject, SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOB_OBJECT_LIMIT_PROCESS_MEMORY,
     };
     use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
 
@@ -35,6 +43,19 @@ mod imp {
 
     impl JobObject {
         pub fn new_kill_on_close() -> io::Result<Self> {
+            Self::with_memory_limit(None)
+        }
+
+        /// Kill-on-close job, optionally capping the memory each process in the job may commit
+        /// (`JOB_OBJECT_LIMIT_PROCESS_MEMORY`, i.e. per process, NOT the sum over the tree). Past
+        /// the cap that process's allocations fail; Windows does not kill it, so a process that
+        /// cannot cope exits by itself.
+        ///
+        /// Measured on the dev machine (Windows 11): `JOB_OBJECT_LIMIT_JOB_MEMORY` (job-wide sum)
+        /// was set and read back correctly but did NOT stop a 600 MB allocation under a 300 MB
+        /// cap, so it is deliberately not used; the per-process limit did stop it. The cause of
+        /// the job-wide miss is unknown (see docs/ASSUMPTIONS.md).
+        pub fn with_memory_limit(limit_bytes: Option<u64>) -> io::Result<Self> {
             // SAFETY: null attributes/name are valid; the returned handle is owned by `JobObject`.
             let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
             if handle.is_null() {
@@ -44,6 +65,10 @@ mod imp {
             // SAFETY: zeroed is a valid bit pattern for this plain-data struct.
             let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
             info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if let Some(bytes) = limit_bytes {
+                info.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_PROCESS_MEMORY;
+                info.ProcessMemoryLimit = usize::try_from(bytes).unwrap_or(usize::MAX);
+            }
             // SAFETY: `info` outlives the call and the size matches the struct.
             let ok = unsafe {
                 SetInformationJobObject(
@@ -71,6 +96,29 @@ mod imp {
                 return Err(e);
             }
             Ok(child)
+        }
+
+        /// Highest committed memory (bytes) of all processes in the job so far, as reported by
+        /// Windows (`PeakJobMemoryUsed`). Committed, not resident. Measured: it is only maintained
+        /// while no per-process limit is set (reads 0 under one), so use it on uncapped jobs.
+        pub fn peak_job_memory(&self) -> io::Result<u64> {
+            // SAFETY: zeroed is valid for this plain-data struct; the size matches; the return
+            // length pointer may be null.
+            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
+            let ok = unsafe {
+                QueryInformationJobObject(
+                    self.0,
+                    JobObjectExtendedLimitInformation,
+                    &mut info as *mut _ as *mut _,
+                    std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                    std::ptr::null_mut(),
+                )
+            };
+            if ok == 0 {
+                Err(io::Error::last_os_error())
+            } else {
+                Ok(info.PeakJobMemoryUsed as u64)
+            }
         }
 
         fn assign(&self, child: &Child) -> io::Result<()> {
@@ -134,6 +182,12 @@ mod imp {
     impl JobObject {
         pub fn new_kill_on_close() -> io::Result<Self> {
             Ok(JobObject)
+        }
+        pub fn with_memory_limit(_limit_bytes: Option<u64>) -> io::Result<Self> {
+            Ok(JobObject)
+        }
+        pub fn peak_job_memory(&self) -> io::Result<u64> {
+            Err(io::Error::other("job objects exist only on Windows"))
         }
         pub fn spawn(&self, cmd: &mut Command, _flags: u32) -> io::Result<Child> {
             cmd.spawn()
@@ -223,6 +277,75 @@ mod tests {
         assert!(
             wait_for(|| !pid_alive(grandchild), 30),
             "grandchild still running"
+        );
+    }
+
+    /// Test-helper "test": does nothing normally. When `AGENT_STUDIO_ALLOC_MB` is set (by the
+    /// real test below, in a child process) it commits and touches that much memory and prints
+    /// `ALLOC_OK` or `ALLOC_FAIL`. Plain Rust allocation, so no runtime second-guesses the limit.
+    #[test]
+    fn alloc_helper() {
+        let Some(mb) = std::env::var("AGENT_STUDIO_ALLOC_MB")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+        else {
+            return;
+        };
+        let mut v: Vec<u8> = Vec::new();
+        if v.try_reserve_exact(mb * 1024 * 1024).is_err() {
+            println!("ALLOC_FAIL");
+            return;
+        }
+        v.resize(mb * 1024 * 1024, 1); // touch every page
+        println!("ALLOC_OK {}", v[v.len() - 1]);
+    }
+
+    /// Runs the helper in a job with `limit`; returns (stdout, peak job memory).
+    fn run_alloc_in_job(limit: Option<u64>, mb: u64) -> (String, u64) {
+        let job = JobObject::with_memory_limit(limit).expect("create job");
+        let child = job
+            .spawn(
+                Command::new(std::env::current_exe().unwrap())
+                    .args(["--exact", "job::tests::alloc_helper", "--nocapture"])
+                    .env("AGENT_STUDIO_ALLOC_MB", mb.to_string())
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::null()),
+                0,
+            )
+            .expect("spawn helper in job");
+        let out = child.wait_with_output().expect("wait");
+        let peak = job.peak_job_memory().expect("peak");
+        (String::from_utf8_lossy(&out.stdout).to_string(), peak)
+    }
+
+    /// Real measurement (P4-4): Windows-reported peak with no cap, and the cap changing the outcome.
+    #[test]
+    fn memory_limit_caps_what_a_process_can_commit() {
+        const MB: u64 = 1024 * 1024;
+        let (out, free_peak) = run_alloc_in_job(None, 600);
+        assert!(out.contains("ALLOC_OK"), "control run failed: {out}");
+        assert!(
+            free_peak >= 600 * MB,
+            "uncapped peak only {} MB",
+            free_peak / MB
+        );
+        eprintln!(
+            "uncapped job memory peak for a 600 MB allocation: {} MB",
+            free_peak / MB
+        );
+
+        // Cap above the need: still works, so the cap below is what makes the difference.
+        let (out, _) = run_alloc_in_job(Some(1000 * MB), 600);
+        assert!(
+            out.contains("ALLOC_OK"),
+            "1000 MB cap blocked a 600 MB allocation: {out}"
+        );
+
+        let (out, _) = run_alloc_in_job(Some(300 * MB), 600);
+        assert!(
+            !out.contains("ALLOC_OK"),
+            "allocation survived the 300 MB cap: {out}"
         );
     }
 }

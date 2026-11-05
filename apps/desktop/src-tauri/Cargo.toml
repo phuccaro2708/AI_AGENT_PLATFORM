@@ -5,6 +5,7 @@ description = "Agent Workspace desktop shell"
 edition = "2021"
 rust-version = "1.90"
 publish = false
+default-run = "agent-studio"
 
 [lib]
 name = "agent_studio_lib"

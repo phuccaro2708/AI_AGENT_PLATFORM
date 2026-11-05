@@ -385,3 +385,9 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Người dùng chọn giữ thứ tự phase (ADR-005), chỉ chỉnh trạng thái; không có ADR mới.
 - `docs/ROADMAP.md`: tách dòng `4–6` thành Phase 4 và Phase 5–6; thêm khối "Trạng thái" cho Phase 4 (đã ghép / còn thiếu để đóng); làm mới dòng Phase 7 (điều gì bị chặn bởi Phase 4, điều gì chờ duyệt dependency) và ghi chú gate diagnostics không còn "chưa tồn tại".
 - Đã chạy: `prettier --write docs/ROADMAP.md`. Chưa chạy gate đầy đủ (chỉ đổi tài liệu). Không push.
+
+## 2026-11-05 (muộn): đọc CI eae7ec9 và dc2c188
+
+- Phiên con `ci-read-eae7ec9` không đọc được vì bộ phân loại an toàn tự động báo lỗi tạm; phiên chính đọc lại bằng `gh api graphql` (biến `oid`).
+- `eae7ec9`: Tauri, TypeScript ubuntu và windows, spike xanh; Security đỏ, secret scan 6 phát hiện (chuỗi giả trong test ở commit lịch sử `86ee0e9f`, `596bd258`). Chưa sửa; cần đồng ý sửa `ACCEPTED_HISTORY`.
+- `dc2c188` (chỉ đổi tài liệu): ubuntu xanh, 4 job còn lại đang chạy lúc đọc, chưa có kết quả cuối.

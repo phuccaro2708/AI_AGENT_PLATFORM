@@ -290,31 +290,24 @@ describe("P4-6: no registered secret in DB, log, IPC or pushed events (fake agen
     expect(found).toEqual([]);
   }, 30_000);
 
-  // Reproduced 2026-11-05: the workflow GOAL given to workflows.startPeerReview is stored verbatim in
-  // context_items.content (kind=goal, source=verified) and in the task.request message payload, and is returned by
-  // context.list / logs.query and pushed in task.message events. The user's plain `prompt` (workflows.start) IS masked,
-  // so this is a gap on the goal path only. Fix idea: run the goal through the redactor in startPeerReview.
-  it.fails(
-    "PRODUCT BUG (sidecar/peer review): a secret typed into the peer-review goal is stored and returned unmasked",
-    async () => {
-      const projectId = await project();
-      const { workflowId } = await call<{ workflowId: string }>("workflows.create", { projectId });
-      await call("workflows.startPeerReview", {
-        workflowId,
-        implementerAgent: "writer",
-        reviewerAgent: "leaky",
-        goal: `ship it, token ${SECRET_A}`,
-      });
-      for (let i = 0; i < 300; i++) {
-        const r = await call<{ workflowState: string }>("tasks.list", { workflowId });
-        if (r.workflowState === "completed" || r.workflowState === "failed") break;
-        await new Promise((res) => setTimeout(res, 25));
-      }
-      await readEverything(projectId, [workflowId]);
-      expect(leaks({ "DB rows": dumpAllTables(), ...surfaces() })).toEqual([]);
-    },
-    30_000,
-  );
+  // Was a product bug (the goal was stored and returned unmasked); fixed upstream in c774611: regression test.
+  it("a secret typed into the peer-review goal is stored, returned and pushed masked", async () => {
+    const projectId = await project();
+    const { workflowId } = await call<{ workflowId: string }>("workflows.create", { projectId });
+    await call("workflows.startPeerReview", {
+      workflowId,
+      implementerAgent: "writer",
+      reviewerAgent: "leaky",
+      goal: `ship it, token ${SECRET_A}`,
+    });
+    for (let i = 0; i < 300; i++) {
+      const r = await call<{ workflowState: string }>("tasks.list", { workflowId });
+      if (r.workflowState === "completed" || r.workflowState === "failed") break;
+      await new Promise((res) => setTimeout(res, 25));
+    }
+    await readEverything(projectId, [workflowId]);
+    expect(leaks({ "DB rows": dumpAllTables(), ...surfaces() })).toEqual([]);
+  }, 30_000);
 
   // The secret is in a FILE the agent wrote (not in an event). The orchestrator's file diff / artifact surfaces
   // show file content verbatim. Probed empirically; see the result in the P4-6 report.

@@ -50,7 +50,7 @@ describe("createScrubber", () => {
     const text = [
       `a ${SECRET_A} b`,
       JSON.stringify({ note: SECRET_B }),
-      JSON.stringify({ password: "hunter2-not-known", ok: 1 }),
+      JSON.stringify({ password: "hunter2-not-known", ok: 1 }), // pragma: allowlist secret
       "Authorization: Bearer abcdefghijklmnop12345",
     ].join("\n");
     const out = s.text(text);
@@ -111,7 +111,7 @@ describe("exportDiagnostics", () => {
       `INSERT INTO runs VALUES (2,'${JSON.stringify(SECRET_B)}');\n`;
     const res = exportDiagnostics({
       ...baseInput(),
-      config: { api: { apiKey: "not-in-the-known-list" }, note: `uses ${SECRET_A}` },
+      config: { api: { apiKey: "not-in-the-known-list" }, note: `uses ${SECRET_A}` }, // pragma: allowlist secret
       versions: { app: `0.0.0 (${SECRET_B})` },
       attachments: [{ name: "..\\..\\evil/db-dump.sql", content: dbDump }],
     });

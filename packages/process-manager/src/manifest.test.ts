@@ -92,7 +92,7 @@ describe("startProcess with a manifest", () => {
       args: printEnv,
       env: {
         ...process.env,
-        UNDECLARED_SECRET: "leak",
+        UNDECLARED_SECRET: "leak", // pragma: allowlist secret
         NODE_OPTIONS: "--no-warnings",
         DECLARED_ONE: "ok",
       },

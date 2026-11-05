@@ -8,8 +8,8 @@ import type { SidecarEvent } from "@agent-studio/contracts";
 import { createLogger } from "@agent-studio/shared-utils";
 import { SidecarService } from "./sidecar.js";
 
-const SECRET = "sk-live-0123456789abcdefSECRET";
-const SETTINGS_SECRET = "tok-from-settings-98765432";
+const SECRET = "sk-live-0123456789abcdefSECRET"; // pragma: allowlist secret
+const SETTINGS_SECRET = "tok-from-settings-98765432"; // pragma: allowlist secret
 
 let dir: string;
 let svc: SidecarService;

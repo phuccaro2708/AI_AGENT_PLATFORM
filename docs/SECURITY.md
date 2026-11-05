@@ -3,18 +3,49 @@
 ## Implemented
 
 - Logger redaction (`shared-utils`): sensitive keys (token, apiKey, secret, password, authorization, cookie, …) are masked, and credential-shaped strings (Bearer, `sk-`, `ghp_`, `AIza…`) are scrubbed from values and messages. Tested. This is best-effort pattern matching, not a guarantee.
-- Tauri capability `default` grants only `core:default` — no shell, fs or http plugins. CSP set in `tauri.conf.json`.
+- Tauri capability `default` (P4-7, 2026-11-05) grants only `core:event:allow-listen` and `core:event:allow-unlisten` — no shell, fs, http, dialog, window, app, path, menu, tray or webview commands. App commands (`invoke`) need no permission and are gated in Rust by `ALLOWED_METHODS`. CSP set in `tauri.conf.json`. No WebSocket. Checked in the real app over WebView2 CDP: `emit`, window title, app version and path commands are refused by the ACL; not checked: the full UI by hand, `tauri dev`.
 - Supply chain: `minimumReleaseAge` 14 days, exact version pins, install scripts allowlisted (`better-sqlite3`, `esbuild` only).
 - `.gitignore` excludes `.env*`, `*.db`.
 - Agent secrets (Phase 7B): API keys for the CLI agents live in the Windows Credential Manager, written by the native side (`secret_set`/`secret_delete`/`secret_names`). The webview can write or delete a secret and list names; no command returns a value. Secret names must end in `KEY`/`TOKEN`/`SECRET`/`PASSWORD`, so this cannot set `PATH` or `NODE_OPTIONS`. Values reach the sidecar only as `AGENT_STUDIO_SECRET__<PROVIDER>__<NAME>` environment variables at spawn; the sidecar removes them from its own environment at start and passes each agent only its own provider's secrets. Changing a secret restarts the sidecar and is refused while tasks are queued or running. Tested: no secret in the database, logs or IPC responses (`sidecar-secrets.test.ts`); real store round-trip is an opt-in `cargo test -- --ignored`.
 - Agent launch settings (Phase 7B): command must resolve to a real executable; extra arguments cannot carry permission, tool, sandbox or working-folder flags; environment settings are an allowlist (proxies, `LANG`, `LC_*`, `TZ`, certificate paths). Settings are saved only after a probe that saw real CLI capabilities.
 - Redaction of loaded secret values (`secrets.ts`, `createSecretRedactor`): the sidecar knows the exact values it hands to agents, so it masks them (`[REDACTED]`) at the single point where agent output enters the system: each agent event is masked once as the orchestrator ingests it, so the stored messages, the pushed `task.message` events, the summaries and context items the workflow engine derives, task `reason`s, adapter error messages and the sidecar's own error logs/responses all derive from the masked copy. The sidecar's stderr log stream is also masked line by line as a last line of defence. Values of every provider are masked, in raw and JSON-escaped form. Tested with fake agents that print the secret in text, tool call/result, usage, errors and thrown exceptions: the value appears in no SQLite table (read generically through `sqlite_master`), no database file bytes, no log, no IPC response (`logs.query`, `logs.search`, `tasks.*`, `context.list`, `agents.*`) and no pushed event (`sidecar-redaction.test.ts`).
-- Limits of that redaction: it matches the EXACT value only. A value that was transformed (base64, URL-encoding, hashed, truncated) or split across two chunks/events is NOT masked. Values shorter than 6 characters are never masked (it would shred ordinary words). The prompt a person types is stored as typed (a secret pasted into a prompt is not masked, and masking it would change what the agent is asked). Whatever a CLI writes to its own transcript/session files outside this application is out of scope. There is no diagnostics export yet, so it is not covered. The logger's pattern-based scrubbing (`sk-`, `Bearer`, …) remains a best-effort extra.
+- Limits of that redaction: it matches the EXACT value only. A value that was transformed (base64, URL-encoding, hashed, truncated) or split across two chunks/events is NOT masked. Values shorter than 6 characters are never masked (it would shred ordinary words). The prompt a person types is stored as typed (a secret pasted into a prompt is not masked, and masking it would change what the agent is asked). Whatever a CLI writes to its own transcript/session files outside this application is out of scope. The diagnostics export (`packages/diagnostics`, IPC `diagnostics.export`, Settings button; P4-6) runs the same redactor and has a leak test, so it is covered to the same extent; whatever the redactor misses is missed there too. The logger's pattern-based scrubbing (`sk-`, `Bearer`, …) remains a best-effort extra.
 - Other limits: a secret becomes part of the agent process environment, so the agent (and anything it runs) can read it and can send it anywhere it can reach. Not an OS sandbox.
+
+## Phase 4 additions (2026-11-05)
+
+### Job Objects (P4-4) — lifecycle and memory, NOT a sandbox
+
+- Sidecar: runs inside a Windows Job Object with `KILL_ON_JOB_CLOSE` (ADR-004), so its process tree dies with the app. Optional per-process memory cap via `AGENT_STUDIO_SIDECAR_MEM_LIMIT_MB` (unset = no cap).
+- Per task: `agent-job-wrap` (`src-tauri/src/bin/`) wraps one CLI in its own Job Object (argv array, no shell, `--mem-limit-mb`, `--timeout-secs`). Tested on Windows: killing the wrapper kills child and grandchild; timeout kills the tree (exit 124); missing program exits 125; `&`/`;` in arguments reach the program verbatim.
+- Limits: the memory cap is per process, not for the whole tree (`JOB_OBJECT_LIMIT_JOB_MEMORY` did not enforce in tests; cause unknown). A job grants no file, network or registry restriction: the process keeps the user's full rights. **The orchestrator does not call `agent-job-wrap` yet** and the binary is not in the installer, so per-task limits are NOT active in the product. Not checked: abrupt kill of the app on a real machine, Ctrl+C through the wrapper.
+
+### AppContainer / Windows Sandbox (P4-5) — documentation only, nothing built
+
+ADR-002 keeps an OS sandbox out of 1.0. No prototype was written and nothing was run on this machine, so every statement below is design analysis, not a result.
+
+- Idea: run each CLI under a restricted token or an AppContainer profile with capabilities limited to the worktree. Windows Sandbox (a disposable VM) is the heavier alternative.
+- Expected obstacles (unverified): CLIs such as claude and codex need their own config/credential folders, the network and `%TEMP%`; an AppContainer denies these by default and needs explicit ACL grants on each folder, which changes system state. Windows Sandbox needs the optional feature enabled, is not available on Home editions (this machine is Home), and cannot share a live worktree without a mapped folder.
+- Probe facts that do exist (P4-1 d, see `docs/ASSUMPTIONS.md`): codex `workspace-write` blocks writes outside the working folder (but treats `%TEMP%` as writable); claude `acceptEdits` blocks writes outside the working folder, while `--allowedTools Write` does not. Claude enforces by tool/path rules inside the CLI, not by the OS.
+- **Not achieved:** no OS-level containment of agent processes; agents can read files and use the network as the user. Git worktrees remain branch isolation only.
+
+### Policy gate in the permission loop (P4-1 c/d) — probed, not wired
+
+Probe results (claude 2.1.318, codex-cli 0.166.0) are in `docs/ASSUMPTIONS.md`. The gate is NOT connected: the orchestrator does not see individual tool calls before they run. Do not describe the product as having per-command approval.
+
+### Recovery (P4-8, recovery steps only)
+
+On restart, tasks that were `running`/`waiting_approval` become `needs_reconciliation`; the person chooses resume, retry or abandon (`recovery.inspect` / `recovery.resolve`). Retry or resume of a task whose side effects cannot be verified is refused by the sidecar. Not done: resuming a Peer Review mid-run. Not checked in the real Tauri app.
+
+### Dependency audit (P4-11) — details in `docs/DEPS_AUDIT.md`
+
+- `pnpm audit`: 0 high/critical, 2 moderate, both dev-only and ACCEPTED: nested `esbuild` via `drizzle-kit` (dev server issue, never run in the product) and `minimatch` via `eslint` (DoS; the patch 11.0.1 is not yet 14 days old on 2026-11-05 and eslint pins the older range). Upgrade when a patch is at least 14 days old and compatible.
+- `cargo audit`: 0 vulnerabilities, 2 warnings ACCEPTED: `proc-macro-error` (unmaintained) and `glib 0.18` (unsound) enter only through Tauri's GTK3 stack on Linux; neither is in the Windows build graph (`cargo tree --target x86_64-pc-windows-msvc`). Revisit if a Linux build ships.
+- GitHub Actions in `ci.yml` are pinned to full commit SHAs. Not yet verified on a real runner at the time of writing.
+- Direct dependencies: exact pins, none younger than 14 days. Not checked: age of transitive dependencies. `serde`/`serde_json` are `"1"` in `Cargo.toml` (locked by `Cargo.lock`).
 
 ## Not implemented yet (do not assume)
 
-- Process spawning (`shell:false`), path scope, command/network policy, approvals, Job Objects — Phase 1/4.
-- Policy Engine: `packages/policy-engine` có mã quyết định thuần (path scope, command/network policy, 4 mức quyền, grant) và test trên Linux, nhưng CHƯA được nối vào orchestrator/IPC/UI và chưa kiểm trên Windows; xem `docs/ASSUMPTIONS.md`, mục "Phase 4: Policy Engine". Không có nghĩa là agent đã bị giới hạn.
-- Secret scanning in CI (see ASSUMPTIONS.md).
+- Policy Engine: `packages/policy-engine` has the pure decision code (path scope, command/network policy, 4 permission levels, grants). Phase 4 wired the pre-run gate at the points the platform controls and a post-run check; the in-loop gate and CLI sandbox-flag mapping are not connected (see above). Not a statement that agents are confined.
+- Per-task Job Object wrapper in the orchestrator; OS sandbox / AppContainer.
 - Git worktrees are branch isolation, **not** a security sandbox. Isolation target for 1.0 is in ADR-002 and is explicitly not an OS-level sandbox.

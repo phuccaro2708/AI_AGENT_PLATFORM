@@ -36,3 +36,17 @@ Chưa hỏi/chưa quyết: việc push mọi commit và mở PR (chỉ làm khi 
 - Đã xoá 7 nhánh local; origin vẫn giữ `fix-pm-abort-flaky`, `phase-2-kickoff`, `repo-current-status`. Git đã gỡ đăng ký cả 6 worktree.
 - Cập nhật sau khi người dùng cho phép xoá: đã xoá `fix-pm-abort-flaky-7e3a1f` và `repo-current-status-acfd51`. Còn 4 thư mục RỖNG (`flaky-root-cause`, `policy-win-hardening`, `probe-permissions`, `wire-resource-monitor`) bị một tiến trình khác giữ ("being used by another process"); nhiều khả năng là phiên con tương ứng còn mở với thư mục đó làm cwd (chưa xác minh). Cần đóng/lưu trữ các phiên con đó rồi xoá lại.
 - Ghi chú gốc (trước khi cho phép xoá): 6 thư mục worktree vẫn còn trên đĩa (`.claude/worktrees/*`) vì `git worktree remove` báo "Filename too long" / "Permission denied". Lệnh xoá cưỡng bức bằng robocopy bị chặn nên chưa thử lại. Cần người dùng cho phép hoặc tự xoá.
+
+## Quyết định ngày 2026-11-05, đợt 2 (kế hoạch Phase 4 phần còn lại, đã duyệt)
+
+| Mục          | Quyết định                                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| P4-1 (c)/(d) | Probe cả ba trong thư mục tạm, không bỏ qua quyền; ghi ASSUMPTIONS + fixture; DỪNG báo người dùng, không viết mã tích hợp |
+| P4-2         | Dựa vào log CI Windows; không dùng fsutil                                                                                 |
+| P4-4         | Job Object cấp sidecar (Rust) và cấp task (binary phụ); không gọi là sandbox                                              |
+| P4-5         | Chỉ tài liệu hoá AppContainer vào `SECURITY.md`                                                                           |
+| P4-6         | Nối `diagnostics.export` thành method IPC (đủ 4 chỗ + `cargo`) và nút Settings                                            |
+| P4-7         | Rà capabilities, xoá quyền thừa, giữ `ALLOWED_METHODS`; không WebSocket                                                   |
+| P4-8         | Tách: recovery 5 bước + UI trước; resume Peer Review sau                                                                  |
+| P4-11        | Chấp nhận có lý do hai cảnh báo moderate dev-only và hai transitive; nâng khi có bản vá ≥ 2 tuần                          |
+| Ghép/push    | Ghép và push khi 5 gate (và `cargo`) xanh trên bản ghép                                                                   |

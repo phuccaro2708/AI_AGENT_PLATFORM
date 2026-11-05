@@ -151,17 +151,17 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 
 ## Phase 4 — Security & Reliability
 
-- [~] Policy engine: 4 mức quyền, path scope, command policy, network policy — phần mã thuần xong 2026-11-05 (`packages/policy-engine`, 41 test trên Linux); đã nối cổng kiểm trước/sau khi chạy vào orchestrator (P4-1 a+b) trên nhánh lane, CHƯA ghép vào nhánh chính; vòng phê duyệt từng lệnh (P4-1 c/d) chờ probe (ASSUMPTIONS, mục Phase 4)
+- [~] Policy engine: 4 mức quyền, path scope, command policy, network policy — phần mã thuần xong 2026-11-05 (`packages/policy-engine`, 41 test trên Linux); đã nối cổng kiểm trước/sau khi chạy vào orchestrator (P4-1 a+b) đã ghép vào nhánh chính (`98539d3`); vòng phê duyệt từng lệnh (P4-1 c/d) chờ probe (ASSUMPTIONS, mục Phase 4)
 - [~] Canonical path validation + test traversal/symlink — Linux đã chạy; Windows 2026-11-05: `..` theo Win32, từ chối `\?\`/`\.\`, `realpath.native`, UNC/ADS fail-closed, test xanh; test 8.3 bị bỏ qua trên máy này (chưa chạy thật)
-- [~] Env var allowlist, executable allowlist theo adapter — xong trên nhánh lane `claude/p4-policy-f38236` (manifest ở `process-manager`, test), chưa ghép vào nhánh chính
+- [~] Env var allowlist, executable allowlist theo adapter — xong và đã ghép (`98539d3`): manifest ở `process-manager`, test
 - [ ] Windows Job Object giới hạn process tree/RAM
 - [ ] Spike AppContainer / Windows Sandbox (chỉ đánh giá, không cam kết 1.0) — ghi kết quả, kể cả hạn chế vào SECURITY.md
 - [~] Credential Manager cho secrets (7B); redaction test: DB + log + IPC + sự kiện đã có test với agent giả (`sidecar-redaction.test.ts`, che theo giá trị chính xác ≥ 6 ký tự); còn thiếu diagnostics export (chưa tồn tại) và giới hạn đã ghi ở SECURITY.md
 - [ ] Siết Tauri capabilities; nếu có localhost WS: token + Origin check + test
 - [ ] Recovery 5 bước + UI resume/retry/abandon
-- [~] Log rotation, retention, diagnostics export (redacted) — gói `diagnostics` + logger xoay vòng có test trên nhánh lane `claude/p4-obs-7f0c36`, chưa ghép, chưa nối sidecar/IPC
-- [~] Security tests: prompt injection, output độc hại, path escape — xong với agent giả trên nhánh lane `claude/p4-tests-c781ca`, chưa ghép; chưa chạy CLI thật
-- [~] Soak test 100 workflow — xong với agent giả (`tests/soak`) trên nhánh lane, chưa ghép; chưa chạy CLI thật
+- [~] Log rotation, retention, diagnostics export (redacted) — gói `diagnostics` + logger xoay vòng có test đã ghép (`98539d3`); chưa nối sidecar/IPC (quyết định: method IPC + nút Settings)
+- [~] Security tests: prompt injection, output độc hại, path escape — xong với agent giả đã ghép (`98539d3`); chưa chạy CLI thật
+- [~] Soak test 100 workflow — xong với agent giả (`tests/soak`) đã ghép (`98539d3`); chưa chạy CLI thật
 - [ ] `pnpm audit` + rà dependency; SECURITY.md cập nhật threat model
 - [ ] PHASE4_REPORT.md
 

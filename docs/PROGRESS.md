@@ -326,3 +326,11 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Kết quả 5 gate trên `tmp/p4-int` @ `a2b42c6` (Windows): `eslint . --ignore-pattern ".claude/**"` 0, `prettier --check .` 0, `pnpm typecheck` 0, `pnpm build` 0, `pnpm test` 0 (67 file, 662 qua, 6 expected fail, 3 bỏ qua; ba lần liên tiếp trước khi commit và một lần sau).
 - Chưa làm/chưa chứng minh: ghép vào nhánh chính, push; P4-1 (c)/(d) (chờ probe); chi tiết `diagnostics` chưa nối vào sidecar/IPC thành method; `cargo` không chạy (không lane nào đổi `src-tauri`); CI không đọc; P4-2, P4-4, P4-5, P4-7, P4-8, P4-11 chưa làm; mọi kiểm chứng dùng agent giả, chưa chạy CLI thật.
 - Quyết định người dùng 2026-11-05 (trả lời `PHASE_PLANS.md`): xem `docs/NEXT_PLAN.md`. Dọn nhánh: bốn thư mục worktree rỗng vẫn bị khoá vì phiên con còn mở (cần lưu trữ phiên).
+
+## 2026-11-05 (Windows): ghép Phase 4 mã thuần vào nhánh chính, push, lên kế hoạch phần còn lại
+
+- Ghép `tmp/p4-int` (`a2b42c6`) vào `claude/loving-lovelace-32lh71` bằng `--no-ff`: merge `98539d3` (dry-run `merge-tree` thoát 0, không xung đột). Gồm p4-policy `c774611`, p4-obs `44978ca`, p4-tests `9e01edc`, `maxWorkers: 4`. Bỏ `86ee0e9` (chưa kiểm). Đã xoá worktree `int` và nhánh `tmp/p4-int`.
+- Kiểm trên nhánh chính sau ghép: `eslint . --ignore-pattern ".claude/**"` 0, `prettier --check .` 0, `pnpm typecheck` 0, `pnpm build` 0, `pnpm test` 0 (67 file, 662 qua, 6 expected fail, 3 bỏ qua). `cargo` chưa chạy (`src-tauri` không đổi).
+- Hai commit nhỏ: `0de30a8` (`CLAUDE.md`: cho phép phiên con song song, có quy tắc), `7e58f89` (`.claude/launch.json` cho preview `desktop-ui`). Đã push `23acd7b..7e58f89`.
+- CI của các commit vừa push: chưa đọc.
+- Quyết định người dùng (đợt 2, hỏi bằng AskUserQuestion): P4-1 c/d probe rồi dừng báo; P4-2 dựa vào CI Windows; P4-4 Job Object cấp sidecar và cấp task (binary phụ); P4-5 chỉ tài liệu; P4-6 nối method IPC + nút Settings; P4-7 rà capabilities, không WebSocket; P4-8 tách, recovery trước; P4-11 chấp nhận có lý do, nâng khi có bản vá ≥ 2 tuần; ghép và push khi gate xanh. Kế hoạch ở `docs/NEXT_PLAN.md`.

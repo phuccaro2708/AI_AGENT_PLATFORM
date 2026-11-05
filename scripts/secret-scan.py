@@ -142,6 +142,14 @@ ACCEPTED_HISTORY = {
     ("f829e9d5", "services/orchestrator/src/sidecar-diagnostics.test.ts", "Base64 High Entropy String", 11),
     ("f829e9d5", "services/orchestrator/src/sidecar-diagnostics.test.ts", "Secret Keyword", 11),
     ("f829e9d5", "services/orchestrator/src/sidecar-diagnostics.test.ts", "Secret Keyword", 12),
+    # History brought in by merging p4-tests (2026-11-05): FAKE fixture values ("hunter2-not-known",
+    # "not-in-the-known-list", "leak") from before the inline pragmas. Reviewed by hand.
+    ("86ee0e9f", "packages/diagnostics/src/diagnostics.test.ts", "Secret Keyword", 53),
+    ("86ee0e9f", "packages/diagnostics/src/diagnostics.test.ts", "Secret Keyword", 114),
+    ("86ee0e9f", "packages/process-manager/src/manifest.test.ts", "Secret Keyword", 95),
+    ("596bd258", "packages/diagnostics/src/diagnostics.test.ts", "Secret Keyword", 53),
+    ("596bd258", "packages/diagnostics/src/diagnostics.test.ts", "Secret Keyword", 114),
+    ("596bd258", "packages/process-manager/src/manifest.test.ts", "Secret Keyword", 95),
 }
 
 # Reviewed by hand, valid at any commit: exact (file, type, line). Line 28 of the Phase 0 spike

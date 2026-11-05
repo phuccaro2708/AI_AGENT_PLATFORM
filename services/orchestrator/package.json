@@ -23,6 +23,7 @@
     "@agent-studio/cli-probe": "workspace:*",
     "@agent-studio/contracts": "workspace:*",
     "@agent-studio/git-worktrees": "workspace:*",
+    "@agent-studio/policy-engine": "workspace:*",
     "@agent-studio/process-manager": "workspace:*",
     "@agent-studio/resource-monitor": "workspace:*",
     "@agent-studio/shared-utils": "workspace:*",

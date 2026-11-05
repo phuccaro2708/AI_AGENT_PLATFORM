@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -119,6 +119,7 @@ beforeEach(() => {
   const registry = new AdapterRegistry();
   registry.register(adapter);
   const feeder = new Orchestrator(registry, repo, quiet);
+  mkdirSync(join(dir, "p")); // the gate refuses a project folder that does not exist
   const wf = repo.createWorkflow(repo.createProject("demo", join(dir, "p")));
   enqueueOne = () => feeder.enqueue({ workflowId: wf, agentId: "parked", prompt: "p" });
 });

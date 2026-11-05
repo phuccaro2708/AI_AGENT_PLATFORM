@@ -188,6 +188,9 @@ importers:
       '@agent-studio/git-worktrees':
         specifier: workspace:*
         version: link:../../packages/git-worktrees
+      '@agent-studio/policy-engine':
+        specifier: workspace:*
+        version: link:../../packages/policy-engine
       '@agent-studio/process-manager':
         specifier: workspace:*
         version: link:../../packages/process-manager

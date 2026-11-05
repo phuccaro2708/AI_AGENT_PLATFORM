@@ -1,16 +1,10 @@
 import { useEffect, useState } from "react";
-import {
-  api,
-  type AdapterInfo,
-  type Approval,
-  type Project,
-  type ResolveDecision,
-  type WorkflowTask,
-} from "./api";
+import { api, type AdapterInfo, type Approval, type Project, type WorkflowTask } from "./api";
 import { PEER_REVIEW_REQUIRES, capabilityBlocker, gapOf } from "./capabilityGap";
 import { Composer, StartSteps } from "./Composer";
 import { Badge, msg, TaskLogView } from "./components";
 import { whenText } from "./history";
+import { RecoveryPanel } from "./RecoveryPanel";
 import {
   approvalText,
   decisionLog,
@@ -18,7 +12,6 @@ import {
   awaitingDecision,
   boardRows,
   diffTask,
-  resolutionBlocker,
   type PeerRun,
   type Row,
 } from "./peerReview";
@@ -333,16 +326,9 @@ function ApprovalCenter({
   );
 }
 
-const CHOICES: [ResolveDecision, string, string][] = [
-  ["completed", "It finished", "Keep the work in the worktree and hand over to the next step"],
-  ["failed", "It did not work", "End this workflow as failed"],
-  ["cancelled", "Stop here", "End this workflow as cancelled"],
-  ["requeue", "Run it again", "Same worktree; may repeat side effects, so check the diff first"],
-];
-
 /**
  * A task stopped with unknown side effects (the app closed, the worker died...). Nothing runs it
- * again by itself: a person looks at what it left behind and decides. The note goes to the audit trail.
+ * again by itself: the sidecar reports what it found and a person decides (resume / retry / abandon).
  */
 function ReconcileCard({
   row,
@@ -353,19 +339,6 @@ function ReconcileCard({
   onResolved: () => void;
   onError: (m: string) => void;
 }) {
-  const [decision, setDecision] = useState<ResolveDecision | null>(null);
-  const [note, setNote] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const blocker = resolutionBlocker(decision, note, confirmed);
-  const send = () => {
-    if (decision === null || blocker !== null) return;
-    setBusy(true);
-    api
-      .resolveReconciliation(row.task.id, decision, note.trim())
-      .then(onResolved, (e: unknown) => onError(msg(e)))
-      .finally(() => setBusy(false));
-  };
   return (
     <section className="card reconcile" aria-label="Needs your decision">
       <div className="head">
@@ -375,54 +348,8 @@ function ReconcileCard({
         </span>
         <Badge state={row.task.state} />
       </div>
-      <p className="small">
-        This task stopped before it reported a result, so what it changed is not known. Nothing
-        continues until you decide. Look at the changes below first.
-      </p>
       {row.role === "implementer" && <DiffViewer task={row.task} onError={onError} />}
-      <fieldset className="choices">
-        <legend className="muted small">What happened?</legend>
-        {CHOICES.map(([value, label, hint]) => (
-          <label key={value} className={decision === value ? "chip active" : "chip"}>
-            <span className="chip-title">
-              <input
-                type="radio"
-                name={`decision-${row.task.id}`}
-                checked={decision === value}
-                onChange={() => {
-                  setDecision(value);
-                  setConfirmed(false);
-                }}
-              />
-              {label}
-            </span>
-            <span className="muted small">{hint}</span>
-          </label>
-        ))}
-      </fieldset>
-      {decision === "requeue" && (
-        <label className="choice">
-          <input
-            type="checkbox"
-            checked={confirmed}
-            onChange={(e) => setConfirmed(e.target.checked)}
-          />
-          <span>I checked the worktree and running this task again is safe</span>
-        </label>
-      )}
-      <textarea
-        aria-label="What did you check?"
-        placeholder="What did you check? (kept in the audit trail)"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        rows={2}
-      />
-      <div className="actions">
-        <button disabled={busy || blocker !== null} onClick={send}>
-          Confirm decision
-        </button>
-        {blocker && <span className="muted small">{blocker}</span>}
-      </div>
+      <RecoveryPanel taskId={row.task.id} onResolved={onResolved} onError={onError} />
     </section>
   );
 }

@@ -320,6 +320,25 @@ export const SidecarRequest = z.discriminatedUnion("method", [
       limit: z.number().int().min(1).max(200).default(50),
     }),
   }),
+  // ---- Phase 4 (P4-8): recovery of tasks that stopped with unknown side effects. `inspect` only reads. ----
+  z.object({
+    id: z.number().int(),
+    method: z.literal("recovery.inspect"),
+    params: z.object({ taskId: z.string().min(1) }),
+  }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("recovery.resolve"),
+    params: z.object({
+      taskId: z.string().min(1),
+      action: z.enum(["resume", "retry", "abandon"]),
+      note: z.string().trim().min(3).max(2000),
+      /** The person says they checked the worktree; required when the task's side effects are unverified. */
+      confirmUnverified: z.boolean().default(false),
+    }),
+  }),
+  // ---- Phase 4 (P4-6): a redacted support bundle. No params: the UI never chooses where it is written. ----
+  z.object({ id: z.number().int(), method: z.literal("diagnostics.export") }),
   z.object({ id: z.number().int(), method: z.literal("shutdown") }),
 ]);
 export type SidecarRequest = z.infer<typeof SidecarRequest>;

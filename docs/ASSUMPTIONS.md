@@ -276,3 +276,18 @@ KHÔNG phải sandbox bảo mật (ADR-002): Job Object chỉ quản vòng đờ
 - **Chưa nối:** orchestrator CHƯA gọi `agent-job-wrap`; process-manager vẫn spawn CLI trực tiếp. Binary chưa nằm trong gói cài đặt/`sidecar-dist`; việc nối là lane khác. Chưa kiểm Ctrl+C / console của CLI khi chạy qua wrapper (stdio được kế thừa nên không đụng).
 - **P4-7 capabilities:** `capabilities/default.json` từ `core:default` xuống chỉ `core:event:allow-listen` + `core:event:allow-unlisten`. Frontend chỉ dùng `invoke` (lệnh app, không cần quyền) và `listen('sidecar://event')`. Không dùng `emit`, window, app, path, menu, tray, resources, image, webview. `tauri.conf.json` không có gì thừa để xoá (không `withGlobalTauri`, không asset protocol, CSP chỉ `self`/`ipc:`). `ALLOWED_METHODS` và phía TS không đổi; không thêm WebSocket.
 - **P4-7 đã kiểm:** `cargo build`/`cargo test`/`tauri build --no-bundle` (release) qua; chạy app thật với WebView2 CDP: `system_health` OK, `plugin:event|listen` OK, còn `plugin:event|emit`, `plugin:window|title`, `plugin:app|version`, `plugin:path|resolve_directory` bị "not allowed by ACL"; selftest (`AGENT_STUDIO_SELFTEST_OUT`) thoát 0, `ok: true`, stub `completed`. Chưa kiểm: giao diện người dùng đầy đủ bằng tay (chỉ listen + selftest), `tauri dev`.
+
+## P4-8 Recovery trong năm bước (giả định của lane IPC, chờ người dùng duyệt)
+
+`docs/PHASE_PLANS.md`, `ROADMAP.md` chỉ nêu "quy trình 5 bước" và "resume / retry an toàn / bỏ", không liệt kê từng bước. Năm bước dưới đây là lựa chọn của người cài (mô tả trong `services/orchestrator/src/recovery.ts`); đổi tên/thứ tự là việc nhỏ nếu người dùng có định nghĩa khác.
+
+1. **Detect**: khi khởi động, `recoverInterruptedTasks` chuyển task `running`/`waiting_approval` sang `needs_reconciliation` (đã có từ 7A).
+2. **Inspect**: `recovery.inspect` (chỉ đọc) gom bằng chứng: tin nhắn đã lưu, tool call chưa có kết quả, worktree có thay đổi hay không, cờ của policy gate.
+3. **Classify**: `no_evidence_of_side_effects` (không có tool call, worktree sạch hoặc không có, không bị gate gắn cờ) hoặc `side_effects_unverified`. Đây là gợi ý cho người dùng, KHÔNG phải bằng chứng; worktree không đọc được tính là chưa xác minh.
+4. **Decide**: chỉ người dùng, qua `recovery.resolve`: `resume` (giữ kết quả hiện có, đặt `completed`, workflow đi tiếp), `retry` (đặt `queued`, `attempt` + 1), `abandon` (đặt `cancelled`). `retry`/`resume` trên task `side_effects_unverified` bị sidecar từ chối nếu thiếu `confirmUnverified: true`; `resume` bị từ chối nếu task chưa tạo đầu ra nào; `retry` bị từ chối nếu không có prompt đã lưu.
+5. **Record**: quyết định, ghi chú (đã che secret) và tóm tắt bằng chứng ghi vào lý do chuyển trạng thái (audit) và phát `task.state`; engine được báo để workflow đi tiếp.
+
+- **"Resume" không phải nối lại phiên CLI.** Ở đây nó chỉ có nghĩa "chấp nhận kết quả đang có và tiếp tục workflow". Chưa có engine resume Peer Review giữa chừng (P4-8 phần (b), để sau).
+- **Retry của task chạy trực tiếp** (`workflows.start`) trước đây thất bại an toàn ("no task.request message") vì `runTask` chỉ lưu `task.accepted`. `execute` nay dùng `task.accepted` khi thiếu `task.request` (cùng prompt, thư mục gốc project, quyền mặc định như lần chạy đầu). Prompt trong `task.accepted` đã bị che secret, nên lần chạy lại dùng bản đã che.
+- `tasks.resolveReconciliation` (7A) vẫn còn trong IPC; UI không còn dùng, vì lựa chọn "failed" không còn trên giao diện (abandon = cancelled).
+- **Chưa kiểm:** trong app Tauri thật; mới có test sidecar (kill/restart bằng adapter giả) và xem trước qua stub.

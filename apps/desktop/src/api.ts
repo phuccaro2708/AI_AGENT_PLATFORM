@@ -31,6 +31,35 @@ export interface ScannedCli extends CliProbe {
   error?: { message: string };
 }
 
+export interface DiagnosticsExport {
+  dir: string;
+  manifestPath: string;
+  files: { path: string; bytes: number }[];
+  verified: boolean;
+  problems: string[];
+  limits: string;
+}
+
+export type RecoveryAction = "resume" | "retry" | "abandon";
+/** What `recovery.inspect` found out about a task that stopped with unknown side effects. */
+export interface RecoveryReport {
+  taskId: string;
+  state: TaskState;
+  attempt: number;
+  classification: "no_evidence_of_side_effects" | "side_effects_unverified";
+  evidence: {
+    messageCount: number;
+    producedOutput: boolean;
+    toolCalls: number;
+    unfinishedToolCalls: number;
+    hasStoredPrompt: boolean;
+    hasWorktree: boolean;
+    worktreeChanged: boolean | null;
+    flaggedByPolicy: boolean;
+  };
+  actions: Record<RecoveryAction, { allowed: boolean; confirmation: boolean; why?: string }>;
+}
+
 export type Provider = "claude" | "codex";
 export interface AgentLaunchSettings {
   command: string;
@@ -176,9 +205,13 @@ export const api = {
     call<{ hits: LogHit[] }>("logs.search", { query, ...(projectId ? { projectId } : {}) }).then(
       (r) => r.hits,
     ),
-  /** A person's decision about a task whose side effects are unknown; the note is kept in the audit trail. */
-  resolveReconciliation: (taskId: string, decision: ResolveDecision, note: string) =>
-    call<{ state: TaskState }>("tasks.resolveReconciliation", { taskId, decision, note }),
+  /** Read-only evidence and what each recovery action needs (P4-8). */
+  inspectRecovery: (taskId: string) => call<RecoveryReport>("recovery.inspect", { taskId }),
+  /** resume = keep what exists and continue; retry = run again (attempt + 1); abandon = cancel. Never automatic. */
+  recover: (taskId: string, action: RecoveryAction, note: string, confirmUnverified: boolean) =>
+    call<{ state: TaskState }>("recovery.resolve", { taskId, action, note, confirmUnverified }),
+  /** A redacted support bundle written next to the database; the UI cannot choose where. */
+  exportDiagnostics: () => call<DiagnosticsExport>("diagnostics.export"),
   cancel: (taskId: string) =>
     call<{ requested: boolean; state: TaskState }>("tasks.cancel", { taskId }),
   task: (taskId: string) => call<{ state: TaskState | null }>("queryTask", { taskId }),

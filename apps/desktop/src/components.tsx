@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { TaskState } from "@agent-studio/contracts";
 import { api } from "./api";
+import { RecoveryPanel } from "./RecoveryPanel";
 import { describeMessage, isTerminal, type Line } from "./taskLog";
 import { useTaskLog } from "./useTaskLog";
 
@@ -26,6 +27,7 @@ export function TaskLogView({
   kinds,
   cancellable = true,
   variant = "card",
+  recover = false,
 }: {
   taskId: string;
   title?: string;
@@ -34,6 +36,8 @@ export function TaskLogView({
   kinds?: Line["kind"][];
   cancellable?: boolean;
   variant?: "card" | "term";
+  /** Offer resume / retry / abandon when the task needs reconciliation (not where the page has its own card). */
+  recover?: boolean;
 }) {
   const { log, error } = useTaskLog(taskId);
   const [cancelling, setCancelling] = useState(false);
@@ -66,6 +70,9 @@ export function TaskLogView({
           The outcome could not be verified (a tool may have been running). Check the project before
           running this again; Agent Workspace will not retry it automatically.
         </p>
+      )}
+      {variant === "card" && recover && log.state === "needs_reconciliation" && (
+        <RecoveryPanel taskId={taskId} onError={onError} />
       )}
       <ol className="log" aria-live="polite">
         {log.messages.map((m) => {

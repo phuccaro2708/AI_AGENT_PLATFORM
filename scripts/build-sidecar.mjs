@@ -33,6 +33,7 @@ await build({
     "@agent-studio/adapter-codex": join(root, "packages/adapter-codex/src/index.ts"),
     "@agent-studio/adapter-antigravity": join(root, "packages/adapter-antigravity/src/index.ts"),
     "@agent-studio/resource-monitor": join(root, "packages/resource-monitor/src/index.ts"),
+    "@agent-studio/diagnostics": join(root, "packages/diagnostics/src/index.ts"),
     "@agent-studio/policy-engine": join(root, "packages/policy-engine/src/index.ts"),
   },
   banner: {

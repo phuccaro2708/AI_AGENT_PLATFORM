@@ -145,7 +145,13 @@ export class Orchestrator {
     const task = this.repo.getTask(taskId);
     if (!task) throw new Error(`Unknown task: ${taskId}`);
     if (task.state !== "running") throw new Error(`Task ${taskId} is ${task.state}, not running`);
-    const request = this.repo.listMessages(taskId).find((m) => m.type === "task.request");
+    // A task started directly (`runTask`) stores no `task.request`, only `task.accepted` with the same prompt;
+    // re-running it after a reconciliation decision uses that, with the project root and default permissions
+    // exactly as the first run had.
+    const stored = this.repo.listMessages(taskId);
+    const request =
+      stored.find((m) => m.type === "task.request") ??
+      stored.find((m) => m.type === "task.accepted");
     const payload = request?.payload as
       { prompt?: unknown; permissions?: unknown; cwd?: unknown } | undefined;
     const root = this.repo.getWorkflowRoot(task.workflowId);

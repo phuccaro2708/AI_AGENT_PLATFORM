@@ -1,4 +1,4 @@
-import type { Approval, ResolveDecision, WorkflowState, WorkflowTask } from "./api";
+import type { Approval, WorkflowState, WorkflowTask } from "./api";
 
 /** A Peer Review run as the UI remembers it; tasks and state always come from `tasks.list`. */
 export interface PeerRun {
@@ -99,17 +99,3 @@ export function approvalsFor(approvals: Approval[], tasks: WorkflowTask[]): Appr
 /** Rows whose task stopped with unknown side effects: nothing continues until a person decides. */
 export const awaitingDecision = (rows: Row[]): Row[] =>
   rows.filter((r) => r.task.state === "needs_reconciliation");
-
-/** Why the decision cannot be sent yet (null = it can). `requeue` also needs an explicit confirmation. */
-export function resolutionBlocker(
-  decision: ResolveDecision | null,
-  note: string,
-  confirmedRequeue: boolean,
-): string | null {
-  if (decision === null) return "Choose what happened to this task";
-  if (note.trim().length < 3) return "Write what you checked (at least 3 characters)";
-  if (decision === "requeue" && !confirmedRequeue) {
-    return "Confirm that you checked the worktree: running again may repeat side effects";
-  }
-  return null;
-}

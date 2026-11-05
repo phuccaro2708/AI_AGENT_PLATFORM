@@ -1,6 +1,6 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `c0928af`, đã push, khớp origin; CI `191e7b9` 5/5 xanh, CI `c0928af` mới đọc 2/5 job xanh, 3 job còn đang chạy). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `642135d`, đi trước origin 6 commit (CHƯA push: `1d95056`, hai merge `87cc0e6`/`9f5de1a`, `642135d`); CI `191e7b9` 5/5 xanh, CI các commit sau chưa đọc xong). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Vị trí
 
@@ -59,9 +59,9 @@ Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `c09
 
 - Duyệt hướng P4-1 c/d (claude `--permission-prompt-tool` nhưng cổng không thấy mọi lời gọi; codex `app-server` có approval có cấu trúc, `exec --json` không có) và định nghĩa 5 bước recovery.
 - Duyệt dependency Tailwind/shadcn và Playwright; cho phép lượt probe `agy` thứ 3; duyệt phạm vi grant 7C-2; xác nhận có bỏ `claude/phase-2-kickoff-8a5732` không.
-- Xoá worktree phiên con đã ghép (policy-win-hardening-057ef1, wire-resource-monitor-df9e6e, flaky-root-cause-361311, probe-permissions-ed36ea; thêm fix-pm-abort-flaky-7e3a1f, repo-current-status-acfd51 nếu bỏ nhánh): chưa xoá cái nào. Duyệt probe tiếp cho Bước 2B; ngưỡng tài nguyên và có hiện trong UI không.
+- Dọn nhánh 2026-11-05: đã xoá 20 nhánh cục bộ và 4 nhánh origin đã ghép, gỡ 7 worktree khỏi git. Còn thư mục rỗng bị Windows giữ (`p4-deps`, `p4-ipc`, `p4-probe`, `p4-rust`) và 5 thư mục worktree cũ không đăng ký trong `.claude/worktrees/`. Sau khi push, xoá được `origin/claude/fix-pm-abort-flaky-7e3a1f`. Duyệt probe tiếp cho Bước 2B; ngưỡng tài nguyên và có hiện trong UI không.
 - Dọn A5 không làm mất dữ liệu người dùng: mục `index/claude.agent-studio` đã xoá là danh sách TÊN secret của provider claude do chính app tạo (`secrets.rs`), nhiều khả năng là tàn dư kiểm 7B; người dùng xác nhận chưa từng nhập secret nào. Không có mục thì Settings hiện danh sách rỗng (NoEntry → rỗng), không lỗi.
-- Nhánh `claude/phase-2-kickoff-8a5732` là bản Phase 2 cũ, xung đột add/add; khuyến nghị không gộp.
+- Nhánh `origin/claude/phase-2-kickoff-8a5732` (10 commit, tụt 169 commit) là bản Phase 2 cũ, nhánh chính đã tiến hoá; khuyến nghị không gộp, chờ người dùng quyết xoá hay giữ. `CLAUDE.md` có mục tự động hoá commit/merge/đối chiếu nhánh (không tự push, không tạo PR).
 
 ## Chưa xác minh / nợ nhỏ
 

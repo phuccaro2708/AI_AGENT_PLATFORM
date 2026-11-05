@@ -285,3 +285,9 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Chạy `/know`, thấy docs cũ so với git: đầu nhánh là `0183a85` (đã push), router đã nối vào `workflows.start`, `policy-engine` đã tồn tại, số test hiện tại 520 qua. Đã sửa HANDOFF (vị trí, dòng Phase 3, CI, "Việc tiếp theo", mục kiểm) và ROADMAP (hàng Phase 3, Phase 4–6, ngày tiêu đề). Không đổi thứ tự phase, không đóng phase.
 - CI đọc qua GraphQL: `603d6fb` xanh đủ 5/5 (Security xanh); `341190d` còn Security chạy; `91317e4` và `0183a85` còn chạy. Chưa có kết luận.
 - Không chạy lại lint/test/build ở lượt này (chỉ đổi docs).
+
+## 2026-11-05 (Windows): nguyên nhân gốc flaky `scheduler` và điều tra lại `process-manager`
+
+- **scheduler "never runs more than `concurrency` tasks at once": tìm ra nguyên nhân gốc, đây là lỗi TEST, không phải lỗi mã sản phẩm.** Bản test ở `48ff83e` gọi `adapter.release("1")` cố định, nhưng các task enqueue cùng mili giây hòa nhau về priority/createdAt và ULID phá hòa ngẫu nhiên, nên "1" có thể chưa chạy; `release` khi chưa có cổng là no-op nên task còn lại treo đến hết 5s. Ngoài ra `setImmediate` rồi `tick` chỉ đoán thời điểm slot được giải phóng. Đã được sửa ở `1956b2c` + `786a8e6` (chờ điều kiện có giới hạn, `release` ném lỗi, dùng `adapter.started`); lượt này không đổi thêm mã.
+- Tái hiện (Windows, vitest 5.0.5, `{ repeats }`, timeout 1500ms chỉ cho thí nghiệm): bản test cũ (`48ff83e`) 101 lượt → 71 qua, 5 lỗi assertion (`tick` trả 0 sau một `setImmediate`), 25 hết giờ (treo). Bản hiện tại 301 lượt → 301 qua, 0 lỗi.
+- **process-manager "cancels via AbortSignal": KHÔNG tái hiện, nguyên nhân gốc chưa chứng minh, không đổi mã.** Thêm 151 lượt với 8 tiến trình node chiếm CPU: 151 qua, 0 treo (cộng ~680 lượt ở lượt trước, tổng 0 lỗi). Giả thuyết chưa kiểm chứng: `taskkill` chậm/lỗi âm thầm khi tải cao (`kill-tree.ts` bỏ qua mã thoát). Nếu gặp lại: log mã thoát `taskkill` và thời điểm abort/exit/close.

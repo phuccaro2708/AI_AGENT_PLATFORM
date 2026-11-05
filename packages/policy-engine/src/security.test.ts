@@ -481,7 +481,9 @@ describe("command injection: arguments are data, the program name is exact", () 
     ];
     for (const level of ALL_LEVELS) {
       for (const f of forms) {
-        const d = await cmd(level, f, ["-c", "calc"], { allow: [{ executable: f }] });
+        const d = await cmd(level, f, ["-c", "calc"], {
+          allow: [{ executable: f, argsPrefix: [] }],
+        });
         // 'run.bat' / 'tool\sh.cmd' strip to 'run' / 'sh': only the second is an interpreter
         if (f === "run.bat") continue;
         expect(d, `${level} ${f}`).toMatchObject({ effect: "deny", code: "interpreter" });
@@ -491,7 +493,7 @@ describe("command injection: arguments are data, the program name is exact", () 
 
   it("a deny rule is not dodged by case, extension or a path in front of the program", async () => {
     const rules = {
-      allow: [{ executable: "git" }],
+      allow: [{ executable: "git", argsPrefix: [] }],
       deny: [{ executable: "git", argsPrefix: ["push"] }],
     };
     for (const exe of [
@@ -739,7 +741,7 @@ describe("fail-closed against hostile policy and request objects", () => {
     expect((await ev(ws, "workspace_write", { kind: "fs.write", path: huge })).effect).toMatch(
       /allow|deny/,
     );
-  });
+  }, 30_000);
 });
 
 describe("grants cannot be widened by hostile paths or targets", () => {

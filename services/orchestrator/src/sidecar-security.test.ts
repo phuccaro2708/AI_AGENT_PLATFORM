@@ -788,10 +788,12 @@ describe("context board: provenance labels and line structure", () => {
           source: "agent_reported",
           createdBy: "reviewer",
         });
-        const t = render(b, wf);
-        const lines = t
-          .split(/\r\n|[\n\r\u2028\u2029\u0085\u000b\u000c]/)
-          .filter((l) => l.startsWith("- "));
+        let t = render(b, wf);
+        // every character a reader may treat as a line break becomes "\n" (no control chars in a regex: lint)
+        for (const brk of ["\r", "\u2028", "\u2029", "\u0085", "\u000b", "\u000c"]) {
+          t = t.split(brk).join("\n");
+        }
+        const lines = t.split("\n").filter((l) => l.startsWith("- "));
         expect(lines, JSON.stringify(sep)).toHaveLength(1);
       }
     },

@@ -276,6 +276,20 @@ export class Orchestrator {
         needsReconciliation: outcome.state === "needs_reconciliation",
       });
     }
+    // A person's answer to an approval (denied / expired) already settled the task while the policy gate waited:
+    // that state stands, and a second transition out of a settled state would be illegal. Still `waiting_approval`
+    // means the wait was cut short (cancel), which settles through the normal path below.
+    const current = this.repo.getTaskState(taskId);
+    if (current !== undefined && current !== "running" && current !== "waiting_approval") {
+      const state = current as FinalState;
+      this.log.info({ taskId, finalState: state, reason: outcome.reason }, "task already settled");
+      return {
+        taskId,
+        finalState: state,
+        ...(outcome.reason ? { reason: outcome.reason } : {}),
+        events,
+      };
+    }
     const finalState = outcome.state;
     this.repo.setTaskState(taskId, finalState, outcome.reason ? { reason: outcome.reason } : {});
     this.notify(() => this.hooks.onState?.(taskId, finalState, outcome.reason));

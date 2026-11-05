@@ -13,6 +13,7 @@ import {
   type SecretRedactor,
 } from "./secrets.js";
 import { checkAgentSettings, type AgentLaunchSettings } from "./agent-settings.js";
+import { evaluate } from "@agent-studio/policy-engine";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAdapter } from "@agent-studio/adapter-codex";
 import { AntigravityAdapter } from "@agent-studio/adapter-antigravity";
@@ -39,6 +40,7 @@ import { describeRouteFailure, selectAgent, snapshotAdapters } from "./capabilit
 import { Orchestrator } from "./orchestrator.js";
 import { Scheduler } from "./scheduler.js";
 import { checkProjectRoot, duplicateOf } from "./project-policy.js";
+import { PolicyGate } from "./policy-gate.js";
 import { PeerReviewEngine } from "./workflow-engine.js";
 import { ProjectWorkspaces } from "./workspaces.js";
 
@@ -73,7 +75,23 @@ export interface SidecarOptions {
   resourceSampleMs?: number;
   /** Tasks the scheduler runs at once at most (the resource monitor can only lower it). Default 2. */
   schedulerConcurrency?: number;
+  /** Test seam: replaces the Policy Engine's `evaluate` in the pre-run gate (the real one never throws). */
+  policyEvaluate?: typeof evaluate;
+  /**
+   * Test seam: also check the program `extraAdapters` report in `describeLaunch`. Off by default because those
+   * adapters come from the embedding code, not from user settings; their folder is always checked.
+   */
+  policyCheckExtraLaunch?: boolean;
+  /** How often a gate waiting for an approval looks at the task. Default 200 ms. */
+  policyPollMs?: number;
 }
+
+/** The program each built-in agent is launched as unless the user stored another (probed) command. */
+const DEFAULT_COMMANDS: Readonly<Record<string, string>> = {
+  claude: "claude",
+  codex: "codex",
+  agy: "agy",
+};
 
 const ok = (id: number, result: unknown) => ({
   response: { id, result } as SidecarResponse,
@@ -126,6 +144,9 @@ export class SidecarService {
   private readonly probes: Record<"claude" | "codex", (o?: ProbeOptions) => Promise<ProbeResult>>;
   /** Tasks currently executing in this process. */
   private readonly active = new Map<string, { abort: AbortController; done: Promise<void> }>();
+  /** Pre-run policy check and post-run scope check around every agent (P4-1 a + b). */
+  private readonly gate: PolicyGate;
+  private gateWorkspaces: ProjectWorkspaces | undefined;
 
   private get rootPolicy() {
     return {
@@ -153,14 +174,18 @@ export class SidecarService {
     s?: { command: string; args: string[]; env: Record<string, string> },
   ): AgentAdapter {
     const secret = this.secrets[provider];
+    // Variables the user (stored settings) or the native side (secrets) named on purpose may reach the child;
+    // the rest of this process's environment is cut down by the adapter's own manifest (P4-3).
+    const envAllow = [...Object.keys(s?.env ?? {}), ...Object.keys(secret)];
     const o =
       s || Object.keys(secret).length > 0
         ? {
             ...(s ? { command: s.command, extraArgs: s.args } : {}),
             env: this.childEnv(provider, s?.env ?? {}),
+            envAllow,
           }
         : {};
-    return provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o);
+    return this.gate.wrap(provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o));
   }
 
   /**
@@ -273,11 +298,34 @@ export class SidecarService {
       );
     }
     this.recoveredTasks = recovered.length;
+    this.gate = new PolicyGate({
+      repo: this.repo,
+      log,
+      approvals: () => this.approvals,
+      workspaces: () => {
+        if (!this.gateWorkspaces) throw new Error("workspaces are not ready");
+        return this.gateWorkspaces;
+      },
+      allowedCommands: (agentId) => {
+        const stored =
+          agentId === "claude" || agentId === "codex"
+            ? this.repo.getAgentSettings(agentId)?.command
+            : undefined;
+        const base = DEFAULT_COMMANDS[agentId];
+        return [...(base ? [base] : []), ...(stored ? [stored] : [])];
+      },
+      redact: (t) => this.redactor.text(t),
+      ...(opts.policyEvaluate ? { evaluate: opts.policyEvaluate } : {}),
+      ...(opts.policyPollMs !== undefined ? { pollMs: opts.policyPollMs } : {}),
+    });
     this.registry.register(new StubAdapter());
     this.registry.register(this.buildCliAdapter("claude", this.repo.getAgentSettings("claude")));
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
-    this.registry.register(new AntigravityAdapter());
-    for (const a of opts.extraAdapters ?? []) this.registry.register(a);
+    this.registry.register(this.gate.wrap(new AntigravityAdapter()));
+    for (const a of opts.extraAdapters ?? [])
+      this.registry.register(
+        this.gate.wrap(a, { checkLaunch: opts.policyCheckExtraLaunch === true }),
+      );
     this.orchestrator = new Orchestrator(this.registry, this.repo, log, {
       redactor: this.redactor,
       onMessage: (message) =>
@@ -295,6 +343,7 @@ export class SidecarService {
       this.repo,
       opts.worktreesDir ?? join(dirname(opts.dbPath), "worktrees"),
     );
+    this.gateWorkspaces = workspaces;
     this.engine = new PeerReviewEngine({
       repo: this.repo,
       orchestrator: this.orchestrator,
@@ -575,7 +624,8 @@ export class SidecarService {
           return ok(req.id, { requested: false, state });
         }
         case "tasks.resolveReconciliation": {
-          const { taskId, decision, note } = req.params;
+          const { taskId, decision } = req.params;
+          const note = this.redactor.text(req.params.note); // free text from the user ends up in reason + event
           const state = this.repo.getTaskState(taskId);
           if (state === undefined) return fail(req.id, `Unknown task: ${taskId}`);
           // Only an explicit user decision gets here; `requeue` is the one path that re-runs work.
@@ -650,7 +700,7 @@ export class SidecarService {
           });
           this.engine.start({
             workflowId: p.workflowId,
-            goal: p.goal,
+            goal: this.redactor.text(p.goal), // stored as a context item and task.request, then returned to the UI
             ...(p.maxRounds !== undefined ? { maxRounds: p.maxRounds } : {}),
           });
           this.scheduler.start(this.opts.schedulerIntervalMs);
@@ -669,7 +719,7 @@ export class SidecarService {
           this.approvals.resolve(
             req.params.approvalId,
             req.params.decision,
-            req.params.note,
+            req.params.note === undefined ? undefined : this.redactor.text(req.params.note),
             req.params.scope,
           );
           return ok(req.id, { resolved: true });

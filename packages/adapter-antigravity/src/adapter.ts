@@ -4,6 +4,9 @@ import {
   createLineSplitter,
   resolveExecutable,
   startProcess,
+  BASE_ENV_ALLOWLIST,
+  extendManifest,
+  type SpawnManifest,
   type RunningProcess,
 } from "@agent-studio/process-manager";
 import { createAntigravityParser } from "./parse.js";
@@ -29,7 +32,19 @@ export interface AntigravityAdapterOptions {
   /** Extra flags after the built-in ones. */
   extraArgs?: readonly string[];
   env?: Record<string, string | undefined>;
+  /** Variable names (besides the manifest's) that the host declares on purpose. */
+  envAllow?: readonly string[];
 }
+
+/**
+ * What an `agy` child may be started with (P4-3): the executable `agy` and the base environment plus
+ * `GEMINI_*` / `GOOGLE_*` / `AGY_*`. The prefixes are a GUESS (not probed); see docs/ASSUMPTIONS.md.
+ */
+export const ANTIGRAVITY_MANIFEST: SpawnManifest = {
+  executables: ["agy"],
+  env: BASE_ENV_ALLOWLIST,
+  envPrefixes: ["GEMINI_", "GOOGLE_", "AGY_"],
+};
 
 /**
  * Runs `agy --print <prompt> --output-format stream-json` (the exact shape probed on 1.4.8) and
@@ -44,8 +59,29 @@ export class AntigravityAdapter implements AgentAdapter {
   readonly id: string;
   private readonly running = new Map<string, RunningProcess>();
 
+  private readonly manifest: SpawnManifest;
+
   constructor(private readonly opts: AntigravityAdapterOptions = {}) {
     this.id = opts.id ?? "agy";
+    this.manifest = extendManifest(ANTIGRAVITY_MANIFEST, {
+      ...(opts.command ? { executables: [opts.command] } : {}),
+      ...(opts.envAllow ? { env: opts.envAllow } : {}),
+    });
+  }
+
+  describeLaunch(task: AgentTask): { command: string; args: readonly string[] } {
+    return { command: this.opts.command ?? "agy", args: this.buildArgs(task) };
+  }
+
+  private buildArgs(task: AgentTask): string[] {
+    return [
+      ...(this.opts.baseArgs ?? []),
+      "--print",
+      task.prompt,
+      "--output-format",
+      "stream-json",
+      ...(this.opts.extraArgs ?? []),
+    ];
   }
 
   async detect(): Promise<boolean> {
@@ -98,17 +134,10 @@ export class AntigravityAdapter implements AgentAdapter {
       if (parsed.final) final = parsed.final;
     });
 
-    const args = [
-      ...(this.opts.baseArgs ?? []),
-      "--print",
-      task.prompt,
-      "--output-format",
-      "stream-json",
-      ...(this.opts.extraArgs ?? []),
-    ];
     const proc = startProcess({
       command: this.opts.command ?? "agy",
-      args,
+      args: this.buildArgs(task),
+      manifest: this.manifest,
       cwd: task.cwd,
       ...(this.opts.env ? { env: this.opts.env } : {}),
       signal: task.signal,

@@ -22,6 +22,8 @@ export default defineConfig({
     },
   },
   test: {
+    // Several suites start real git repositories/worktrees and sidecars; with one worker per core they time out on Windows.
+    maxWorkers: 4,
     include: [
       "packages/*/src/**/*.test.ts",
       "apps/*/src/**/*.test.ts",

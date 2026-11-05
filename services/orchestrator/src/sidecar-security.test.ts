@@ -344,25 +344,26 @@ describe("hostile project roots", () => {
   // administrative share (enabled by default for admins). Fix idea: reject UNC roots (as policy-engine's canonicalize does).
   const adminShare = (p: string) => "\\\\localhost\\" + p[0] + "$" + p.slice(2);
   const sysDir = process.env["SystemRoot"] ?? "C:\\Windows";
-  it.fails(
-    "PRODUCT BUG (project-policy): an administrative-share (UNC) spelling bypasses the system-folder rule",
+  const homeDir = process.env["USERPROFILE"] ?? "";
+  // Shown as SKIPPED where the administrative share cannot be reached (non-Windows, or shares disabled).
+  describe.skipIf(!WIN || !existsSync(adminShare(sysDir)) || !existsSync(adminShare(homeDir)))(
+    "administrative-share (UNC) spellings",
     () => {
-      if (!WIN || !existsSync(adminShare(sysDir)))
-        throw new Error("not reproducible here: keeps it.fails green");
-      const ctx = { dbPath: join(dir, "data", "s.db"), worktreesDir: join(dir, "wt") };
-      expect(checkProjectRoot(adminShare(sysDir), ctx).ok).toBe(false);
-    },
-  );
-  it.fails(
-    "PRODUCT BUG (project-policy): the same bypass for the home folder (and via projects.create)",
-    async () => {
-      if (!WIN)
-        throw new Error("Windows-only defect: keep failing elsewhere so it.fails stays green");
-      const home = process.env["USERPROFILE"] ?? "";
-      if (!existsSync(adminShare(home))) throw new Error("administrative share not reachable here");
-      open([]);
-      const r = await rpc("projects.create", { name: "x", rootPath: adminShare(home) });
-      expect(r.error).toBeDefined();
+      it.fails(
+        "PRODUCT BUG (project-policy): an administrative-share (UNC) spelling bypasses the system-folder rule",
+        () => {
+          const ctx = { dbPath: join(dir, "data", "s.db"), worktreesDir: join(dir, "wt") };
+          expect(checkProjectRoot(adminShare(sysDir), ctx).ok).toBe(false);
+        },
+      );
+      it.fails(
+        "PRODUCT BUG (project-policy): the same bypass for the home folder (and via projects.create)",
+        async () => {
+          open([]);
+          const r = await rpc("projects.create", { name: "x", rootPath: adminShare(homeDir) });
+          expect(r.error).toBeDefined();
+        },
+      );
     },
   );
 
@@ -427,6 +428,18 @@ describe("malicious agent output", () => {
       { type: "error", message: "crashed" },
     ]);
     expect(task.state).toBe("needs_reconciliation");
+  });
+
+  // KNOWN LIMIT (pinned by outcome.test.ts: `[callA, result, done]` is `completed`): a `completed` event wins over a tool
+  // call that never got its result, so side effects of that call are not flagged. Only an error/cancel/crash does.
+  // This is not a defect of this lane's tests; whether `completed` + open tool should be `needs_reconciliation`
+  // (CLAUDE.md #6) is a POLICY-lane decision, recorded here so that changing it is deliberate.
+  it("KNOWN LIMIT: an open tool call followed by `completed` is still completed", async () => {
+    const { task } = await run(() => [
+      { type: "tool_call", name: "bash", args: { command: "x" }, callId: "c1" },
+      done,
+    ]);
+    expect(task.state).toBe("completed");
   });
 
   it("events after the terminal event are ignored", async () => {

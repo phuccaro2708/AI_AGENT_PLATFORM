@@ -81,6 +81,55 @@ const leakSensitive = (h: Record<string, number>) =>
     0,
   );
 
+/**
+ * `process.getActiveResourcesInfo()` skips unref'd timers, and the scheduler's timers are unref'd, so it cannot see
+ * them. This counts live intervals/timeouts created through the global functions (what the product code uses).
+ */
+const NL = String.fromCharCode(10);
+function spyOnTimers() {
+  const live = new Map<unknown, { interval: boolean; at: string }>();
+  const real = {
+    setInterval: globalThis.setInterval,
+    clearInterval: globalThis.clearInterval,
+    setTimeout: globalThis.setTimeout,
+    clearTimeout: globalThis.clearTimeout,
+  };
+  const wrapSet =
+    (set: (...a: never[]) => unknown, repeats: boolean) =>
+    (cb: () => void, ...rest: unknown[]) => {
+      const ref: { h?: unknown } = {};
+      const fn = repeats
+        ? cb
+        : () => {
+            live.delete(ref.h); // a one-shot timeout is no longer pending once it fires
+            cb();
+          };
+      const h = (set as (...a: unknown[]) => unknown)(fn, ...rest);
+      ref.h = h;
+      live.set(h, {
+        interval: repeats,
+        at: new Error().stack?.split(NL).slice(2, 4).join(" | ") ?? "",
+      });
+      return h;
+    };
+  const wrapClear = (clear: (h: never) => void) => (h: never) => {
+    live.delete(h);
+    clear(h);
+  };
+  globalThis.setInterval = wrapSet(real.setInterval as never, true) as never;
+  globalThis.clearInterval = wrapClear(real.clearInterval as never) as never;
+  globalThis.setTimeout = wrapSet(real.setTimeout as never, false) as never;
+  globalThis.clearTimeout = wrapClear(real.clearTimeout as never) as never;
+  return {
+    /** Pending intervals (never end by themselves: a leak if they outlive close()). */
+    intervals: () => [...live.values()].filter((v) => v.interval).length,
+    /** Pending one-shot timeouts (end by themselves; e.g. process-manager's 1 s stdio grace timer). */
+    timeouts: () => [...live.values()].filter((v) => !v.interval).length,
+    where: () => [...live.values()].map((v) => v.at).join(NL),
+    restore: () => Object.assign(globalThis, real),
+  };
+}
+
 let dir: string;
 let svc: SidecarService | undefined;
 let rpcId = 0;
@@ -106,6 +155,9 @@ describe("soak: many workflows through SidecarService with fake adapters", () =>
     `runs ${ROUNDS} workflows back to back; DB stays consistent and nothing leaks`,
     async () => {
       const before = handles();
+      const timers = spyOnTimers();
+      const liveBefore = timers.intervals();
+      const timeoutsBefore = timers.timeouts();
 
       const plain = new Fake("plain", () => [
         { type: "text", content: "ok" },
@@ -170,6 +222,10 @@ describe("soak: many workflows through SidecarService with fake adapters", () =>
       let expectedCompleted = 0;
       let expectedReconcile = 0;
       let warm: number | undefined;
+      let warmTimers: number | undefined;
+      // The spy must actually see the sidecar's intervals, otherwise the leak check below proves nothing.
+      const liveOpen = timers.intervals();
+      expect(liveOpen, "spy sees the sidecar's intervals").toBeGreaterThan(liveBefore);
       const t0 = Date.now();
       const slowest = { ms: 0, round: -1 };
 
@@ -276,7 +332,10 @@ describe("soak: many workflows through SidecarService with fake adapters", () =>
           slowest.ms = ms;
           slowest.round = i;
         }
-        if (i === Math.min(19, ROUNDS - 1)) warm = leakSensitive(handles());
+        if (i === Math.min(19, ROUNDS - 1)) {
+          warm = leakSensitive(handles());
+          warmTimers = timers.intervals();
+        }
       }
       const elapsed = Date.now() - t0;
 
@@ -290,19 +349,38 @@ describe("soak: many workflows through SidecarService with fake adapters", () =>
       expect(after, `handles after ${ROUNDS} rounds vs after 20 (warm)`).toBeLessThanOrEqual(
         (warm ?? after) + 3,
       );
+      const endTimers = timers.intervals();
+      expect(
+        endTimers,
+        `live intervals after ${ROUNDS} rounds vs after warm-up:
+${timers.where()}`,
+      ).toBeLessThanOrEqual(warmTimers ?? endTimers);
+      const client = svc.db.$client;
       svc.close();
       svc = undefined;
-      await new Promise((res) => setTimeout(res, 50));
+      // the longest self-ending timer in the product is process-manager's 1 s stdio grace timer
+      await new Promise((res) => setTimeout(res, 1300));
       const closed = leakSensitive(handles());
       expect(closed, "handles after close() vs before the sidecar was opened").toBeLessThanOrEqual(
         leakSensitive(before) + 2,
       );
+      const closedTimers = timers.intervals();
+      const closedTimeouts = timers.timeouts();
+      const whereClosed = timers.where();
+      timers.restore();
+      expect(
+        closedTimers,
+        `live intervals after close() vs before the sidecar was opened:${NL}${whereClosed}`,
+      ).toBe(liveBefore);
+      expect(closedTimeouts, "pending timeouts 1.3 s after close()").toBe(timeoutsBefore);
+      expect(client.open, "database connection closed").toBe(false);
 
       console.info(
         `[soak] rounds=${ROUNDS} tasks=${expectedTasks} completed=${expectedCompleted} ` +
           `needs_reconciliation=${expectedReconcile} elapsed=${elapsed}ms ` +
           `(${(elapsed / ROUNDS).toFixed(0)} ms/round, slowest round #${slowest.round}: ${slowest.ms}ms) ` +
-          `handles before=${leakSensitive(before)} warm=${warm} end=${after} closed=${closed}`,
+          `handles before=${leakSensitive(before)} warm=${warm} end=${after} closed=${closed} ` +
+          `intervals(spy) open=${liveOpen - liveBefore} warm=${warmTimers} end=${endTimers} closed=${closedTimers} timeouts-after-close=${closedTimeouts}`,
       );
     },
     Math.max(120_000, ROUNDS * 3_000),

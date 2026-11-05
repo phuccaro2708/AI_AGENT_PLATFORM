@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Real git/SQLite/filesystem work: the whole suite runs these files in parallel, so the 5 s default is too tight.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -98,7 +101,7 @@ beforeEach(() => {
 afterEach(() => {
   svc?.close();
   svc = undefined;
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 function plainProject(name = "plain"): string {

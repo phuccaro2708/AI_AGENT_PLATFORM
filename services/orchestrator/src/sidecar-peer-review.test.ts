@@ -132,7 +132,7 @@ describe("Peer Review through the sidecar (real git worktree, fake agents)", () 
     expect(items.map((i) => i.kind)).toContain("artifact");
     const { roles } = await call<{ roles: { name: string }[] }>("roles.list", { workflowId });
     expect(roles.map((r) => r.name).sort()).toEqual(["implementer", "reviewer"]);
-  });
+  }, 60_000);
 
   it("refuses unknown agents and a second start of the same workflow", async () => {
     const { projectId } = await call<{ projectId: string }>("projects.create", {
@@ -177,7 +177,7 @@ describe("Peer Review through the sidecar (real git worktree, fake agents)", () 
     });
     expect(await waitForWorkflow(workflowId)).toBe("failed");
     expect(impl.tasks).toHaveLength(0); // nothing ran without a workspace
-  });
+  }, 60_000);
 });
 
 describe("approvals through the sidecar", () => {

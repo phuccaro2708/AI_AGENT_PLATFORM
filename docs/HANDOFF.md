@@ -1,6 +1,6 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `b370082`, đã push, khớp origin; CI 5/5 xanh). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `c0928af`, đã push, khớp origin; CI `191e7b9` 5/5 xanh, CI `c0928af` mới đọc 2/5 job xanh, 3 job còn đang chạy). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Vị trí
 

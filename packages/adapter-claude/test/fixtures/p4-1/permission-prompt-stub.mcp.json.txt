@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "gate": {
+      "command": "node",
+      "args": [
+        "<SCRATCH>/c1/stub.mjs"
+      ]
+    }
+  }
+}

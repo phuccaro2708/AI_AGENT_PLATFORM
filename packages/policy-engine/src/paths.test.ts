@@ -105,7 +105,8 @@ describe("canonicalize", () => {
       expect(isWithin(ws, canon)).toBe(true);
       // a short name for a not-yet-existing file below it is expanded through the existing prefix
       expect(await canonicalize(path.join(short, "new.txt"))).toBe(path.join(long, "new.txt"));
-    });
+      // powershell.exe cold start alone took ~5 s on the Windows CI runner (default timeout 5 s).
+    }, 60_000);
 
     it("follows a directory junction (no privilege needed) to its real location", async () => {
       const { ws, outside } = tree();

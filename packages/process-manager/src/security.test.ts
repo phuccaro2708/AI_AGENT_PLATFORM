@@ -1,7 +1,10 @@
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Real git/SQLite/filesystem work: the whole suite runs these files in parallel, so the 5 s default is too tight.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 import { runProcess } from "./process.js";
 
 /**
@@ -12,7 +15,7 @@ let dir: string;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "pm-sec-"));
 });
-afterEach(() => rmSync(dir, { recursive: true, force: true }));
+afterEach(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
 
 const ECHO_ARGV = "process.stdout.write(JSON.stringify(process.argv.slice(1)))";
 const sentinel = () => join(dir, "PWNED");

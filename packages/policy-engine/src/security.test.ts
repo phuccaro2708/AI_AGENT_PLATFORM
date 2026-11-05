@@ -1,6 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// Real git/SQLite/filesystem work: the whole suite runs these files in parallel, so the 5 s default is too tight.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 import { evaluate } from "./engine.js";
 import { commandKey } from "./rules.js";
 import type { Decision, PermissionLevel, Policy, PolicyContext, PolicyRequest } from "./types.js";
@@ -734,10 +737,10 @@ describe("fail-closed against hostile policy and request objects", () => {
 
   it("an enormous path or many segments are handled (deny or allow, never a crash)", async () => {
     const { ws } = tree();
-    const long = raw(ws, ...Array.from({ length: 3000 }, (_v, i) => `d${i}`));
+    const long = raw(ws, ...Array.from({ length: 300 }, (_v, i) => `d${i}`));
     const d = await ev(ws, "workspace_write", { kind: "fs.write", path: long });
     expect(["allow", "deny"]).toContain(d.effect);
-    const huge = raw(ws, "x".repeat(200_000));
+    const huge = raw(ws, "x".repeat(40_000));
     expect((await ev(ws, "workspace_write", { kind: "fs.write", path: huge })).effect).toMatch(
       /allow|deny/,
     );

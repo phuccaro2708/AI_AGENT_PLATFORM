@@ -120,7 +120,7 @@ export class PolicyGate {
       if (event.type === "permission_denied") denials.push(event);
       if (event.type === "completed" || event.type === "error") {
         terminal = event; // held back until the worktree has been checked
-        continue;
+        break; // nothing after the terminal event is forwarded; leaving the loop closes the adapter
       }
       yield event;
     }

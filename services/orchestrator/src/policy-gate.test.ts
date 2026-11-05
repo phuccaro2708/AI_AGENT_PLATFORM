@@ -358,6 +358,30 @@ describe("post-run check (P4-1b)", () => {
     expect(result.finalState).toBe("completed");
   });
 
+  it("events after the terminal event are not forwarded and the adapter is closed", async () => {
+    let closed = false;
+    const late: AgentAdapter = {
+      id: "late",
+      detect: async () => true,
+      capabilities: async () => [],
+      cancel: async () => {},
+      async *execute() {
+        try {
+          yield { type: "text", content: "before" };
+          yield { type: "completed" };
+          yield { type: "text", content: "late" };
+        } finally {
+          closed = true;
+        }
+      },
+    };
+    open(late);
+    const { result } = await runTask("late", "read-only");
+    expect(result.finalState).toBe("completed");
+    expect(result.events.map((e) => e.type)).toEqual(["text", "completed"]);
+    expect(closed).toBe(true);
+  });
+
   it("an adapter's own error still passes through when nothing changed", async () => {
     const failing: AgentAdapter = {
       id: "f",

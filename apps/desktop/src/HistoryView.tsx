@@ -202,6 +202,7 @@ export function HistoryView({
           title={open.title}
           onError={onError}
           cancellable={false}
+          recover
         />
       )}
     </div>

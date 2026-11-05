@@ -66,6 +66,7 @@ export function AgentView({
               title={task.agentId}
               onError={onError}
               kinds={["text", "info", "error"]}
+              recover
             />
           </>
         ) : (

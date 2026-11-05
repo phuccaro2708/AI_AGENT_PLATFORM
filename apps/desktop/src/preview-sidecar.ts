@@ -138,6 +138,32 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
         problems: [],
         limits: "preview stub: nothing was written",
       };
+    case "recovery.inspect":
+      return {
+        taskId: String(p.taskId),
+        state: "needs_reconciliation",
+        attempt: 0,
+        classification: "side_effects_unverified",
+        evidence: {
+          messageCount: 4,
+          producedOutput: true,
+          toolCalls: 1,
+          unfinishedToolCalls: 1,
+          hasStoredPrompt: true,
+          hasWorktree: false,
+          worktreeChanged: null,
+          flaggedByPolicy: false,
+        },
+        actions: {
+          resume: { allowed: true, confirmation: true },
+          retry: { allowed: true, confirmation: true },
+          abandon: { allowed: true, confirmation: false },
+        },
+      };
+    case "recovery.resolve":
+      return {
+        state: { resume: "completed", retry: "queued", abandon: "cancelled" }[String(p.action)],
+      };
     case "logs.search":
       return { hits: [] };
     case "roles.list":

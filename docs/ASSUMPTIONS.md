@@ -200,3 +200,18 @@ Mục đích: biết hai CLI báo yêu cầu quyền ở dạng nào để sau n
 - Hệ quả: với Codex ở `exec --json`, bằng chứng hiện có KHÔNG đủ để ánh xạ yêu cầu quyền sang `PolicyRequest`. Muốn bắt yêu cầu quyền thật của Codex có lẽ phải dùng app-server / MCP của Codex (chưa probe, ghi vào TODO).
 
 **Hệ quả cho Policy Engine:** vẫn chưa có CLI nào cho phép ta chèn `evaluate()` vào giữa "model đòi công cụ" và "công cụ chạy" qua giao diện đã kiểm chứng. Những gì đã kiểm chứng chỉ là: CLI tự từ chối khi không có ai phê duyệt (fail-closed ở phía CLI). `PolicyRequest` vẫn là hình dạng do ta chọn.
+
+## P4-8 Recovery trong năm bước (giả định của lane IPC, chờ người dùng duyệt)
+
+`docs/PHASE_PLANS.md`, `ROADMAP.md` chỉ nêu "quy trình 5 bước" và "resume / retry an toàn / bỏ", không liệt kê từng bước. Năm bước dưới đây là lựa chọn của người cài (mô tả trong `services/orchestrator/src/recovery.ts`); đổi tên/thứ tự là việc nhỏ nếu người dùng có định nghĩa khác.
+
+1. **Detect**: khi khởi động, `recoverInterruptedTasks` chuyển task `running`/`waiting_approval` sang `needs_reconciliation` (đã có từ 7A).
+2. **Inspect**: `recovery.inspect` (chỉ đọc) gom bằng chứng: tin nhắn đã lưu, tool call chưa có kết quả, worktree có thay đổi hay không, cờ của policy gate.
+3. **Classify**: `no_evidence_of_side_effects` (không có tool call, worktree sạch hoặc không có, không bị gate gắn cờ) hoặc `side_effects_unverified`. Đây là gợi ý cho người dùng, KHÔNG phải bằng chứng; worktree không đọc được tính là chưa xác minh.
+4. **Decide**: chỉ người dùng, qua `recovery.resolve`: `resume` (giữ kết quả hiện có, đặt `completed`, workflow đi tiếp), `retry` (đặt `queued`, `attempt` + 1), `abandon` (đặt `cancelled`). `retry`/`resume` trên task `side_effects_unverified` bị sidecar từ chối nếu thiếu `confirmUnverified: true`; `resume` bị từ chối nếu task chưa tạo đầu ra nào; `retry` bị từ chối nếu không có prompt đã lưu.
+5. **Record**: quyết định, ghi chú (đã che secret) và tóm tắt bằng chứng ghi vào lý do chuyển trạng thái (audit) và phát `task.state`; engine được báo để workflow đi tiếp.
+
+- **"Resume" không phải nối lại phiên CLI.** Ở đây nó chỉ có nghĩa "chấp nhận kết quả đang có và tiếp tục workflow". Chưa có engine resume Peer Review giữa chừng (P4-8 phần (b), để sau).
+- **Retry của task chạy trực tiếp** (`workflows.start`) trước đây thất bại an toàn ("no task.request message") vì `runTask` chỉ lưu `task.accepted`. `execute` nay dùng `task.accepted` khi thiếu `task.request` (cùng prompt, thư mục gốc project, quyền mặc định như lần chạy đầu). Prompt trong `task.accepted` đã bị che secret, nên lần chạy lại dùng bản đã che.
+- `tasks.resolveReconciliation` (7A) vẫn còn trong IPC; UI không còn dùng, vì lựa chọn "failed" không còn trên giao diện (abandon = cancelled).
+- **Chưa kiểm:** trong app Tauri thật; mới có test sidecar (kill/restart bằng adapter giả) và xem trước qua stub.

@@ -81,6 +81,8 @@ const ALLOWED_METHODS: &[&str] = &[
     "logs.search",
     "tasks.resolveReconciliation",
     "diagnostics.export",
+    "recovery.inspect",
+    "recovery.resolve",
 ];
 
 fn is_allowed(method: &str) -> bool {
@@ -353,6 +355,8 @@ mod tests {
             "logs.search",
             "tasks.resolveReconciliation",
             "diagnostics.export",
+            "recovery.inspect",
+            "recovery.resolve",
             "agents.getSettings",
             "agents.setSettings",
             "agents.probe",

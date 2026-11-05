@@ -3,6 +3,7 @@ import {
   SidecarRequest,
   type AgentCapability,
   type SidecarEvent,
+  type TaskState,
   type SidecarResponse,
 } from "@agent-studio/contracts";
 import { AdapterRegistry, StubAdapter, type AgentAdapter } from "@agent-studio/agent-core";
@@ -42,6 +43,13 @@ import { Orchestrator } from "./orchestrator.js";
 import { Scheduler } from "./scheduler.js";
 import { checkProjectRoot, duplicateOf } from "./project-policy.js";
 import { PolicyGate } from "./policy-gate.js";
+import {
+  auditNote,
+  buildEvidence,
+  buildReport,
+  planResolution,
+  type RecoveryReport,
+} from "./recovery.js";
 import { PeerReviewEngine } from "./workflow-engine.js";
 import { ProjectWorkspaces } from "./workspaces.js";
 
@@ -436,6 +444,46 @@ export class SidecarService {
     };
   }
 
+  /** P4-8 steps 2 and 3: evidence and classification for a task. Read-only; undefined when the task is unknown. */
+  private async recoveryReport(taskId: string): Promise<RecoveryReport | undefined> {
+    const task = this.repo.getTask(taskId);
+    if (!task) return undefined;
+    const has = this.repo.getWorktreeForTask(taskId) !== undefined;
+    let changed: boolean | null = null;
+    if (has) {
+      try {
+        changed = (await this.artifacts.diff(taskId)).patch.trim().length > 0;
+      } catch {
+        changed = null; // unreadable is not "clean": the classification treats it as unverified
+      }
+    }
+    return buildReport({
+      taskId,
+      state: task.state as TaskState,
+      attempt: task.attempt,
+      evidence: buildEvidence(this.repo.listMessages(taskId), { has, changed }),
+    });
+  }
+
+  /** After a reconciliation decision: let the workflow continue (or run a requeued task) and announce the state. */
+  private async afterReconciliation(taskId: string, note: string): Promise<TaskState | undefined> {
+    const wf = this.repo.getTaskWorkflowId(taskId);
+    if (wf) {
+      this.scheduler.start(this.opts.schedulerIntervalMs); // a requeued task needs a running scheduler
+      await this.engine.resume(wf);
+    }
+    const next = this.repo.getTaskState(taskId);
+    if (next !== undefined) {
+      this.opts.onEvent?.({
+        event: "task.state",
+        taskId,
+        state: next,
+        reason: `reconciled by user: ${note}`,
+      });
+    }
+    return next;
+  }
+
   private spikeWorkflow(): string {
     this.spikeWorkflowId ??= this.repo.createWorkflow(
       this.repo.createProject(`spike-${process.pid}`, `spike://${process.pid}-${Date.now()}`),
@@ -687,21 +735,22 @@ export class SidecarService {
           // Only an explicit user decision gets here; `requeue` is the one path that re-runs work.
           this.orchestrator.resolveReconciliation(taskId, decision, note);
           // The decision may unblock a workflow (e.g. `completed` hands over to the reviewer).
-          const wf = this.repo.getTaskWorkflowId(taskId);
-          if (wf) {
-            this.scheduler.start(this.opts.schedulerIntervalMs); // a requeued task needs a running scheduler
-            await this.engine.resume(wf);
-          }
-          const next = this.repo.getTaskState(taskId);
-          if (next !== undefined) {
-            this.opts.onEvent?.({
-              event: "task.state",
-              taskId,
-              state: next,
-              reason: `reconciled by user: ${note}`,
-            });
-          }
-          return ok(req.id, { state: next });
+          return ok(req.id, { state: await this.afterReconciliation(taskId, note) });
+        }
+        case "recovery.inspect": {
+          const report = await this.recoveryReport(req.params.taskId);
+          if (!report) return fail(req.id, `Unknown task: ${req.params.taskId}`);
+          return ok(req.id, report);
+        }
+        case "recovery.resolve": {
+          const { taskId, action, confirmUnverified } = req.params;
+          const report = await this.recoveryReport(taskId);
+          if (!report) return fail(req.id, `Unknown task: ${taskId}`);
+          const decision = planResolution(report, action, confirmUnverified);
+          // Free text from the user ends up in the reason and in the event, so it is masked first.
+          const note = auditNote(report, action, this.redactor.text(req.params.note));
+          this.orchestrator.resolveReconciliation(taskId, decision, note);
+          return ok(req.id, { state: await this.afterReconciliation(taskId, note) });
         }
         case "logs.query": {
           const { taskId, afterSequence, limit } = req.params;

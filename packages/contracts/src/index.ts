@@ -78,7 +78,26 @@ export const AgentEvent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("approval"), request: z.unknown() }),
   z.object({ type: z.literal("usage"), data: z.unknown() }),
   z.object({ type: z.literal("completed"), sessionId: z.string().optional() }),
-  z.object({ type: z.literal("error"), message: z.string() }),
+  /**
+   * The CLI refused a tool use because it needed an approval nobody could give (claude: `system/permission_denied`
+   * and `permission_denials[]`). The action was NOT performed. Reported, not treated as a failure by itself.
+   */
+  z.object({
+    type: z.literal("permission_denied"),
+    toolName: z.string(),
+    callId: z.string().min(1).optional(),
+    input: z.unknown().optional(),
+    reason: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("error"),
+    message: z.string(),
+    /**
+     * Set by the policy gate when the run may have changed things outside what it was granted (or the check could
+     * not be made): the task becomes `needs_reconciliation` instead of `failed`, and is never retried on its own.
+     */
+    needsReconciliation: z.boolean().optional(),
+  }),
 ]);
 export type AgentEvent = z.infer<typeof AgentEvent>;
 

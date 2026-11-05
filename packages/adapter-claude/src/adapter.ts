@@ -132,7 +132,12 @@ export class ClaudeAdapter implements AgentAdapter {
     let ended = false;
     let final: AgentEvent | undefined;
     let invalidLines = 0; // non-empty stdout lines that are not JSON: reported if the run has no result
+    const denied = new Set<string>(); // the same denial arrives twice: system/permission_denied, then the result
     const push = (e: AgentEvent) => {
+      if (e.type === "permission_denied" && e.callId !== undefined) {
+        if (denied.has(e.callId)) return;
+        denied.add(e.callId);
+      }
       queue.push(e);
       wake?.();
     };

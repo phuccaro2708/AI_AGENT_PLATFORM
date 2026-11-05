@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Minimal capability for the main window. No shell, fs, http or dialog access from the webview; the folder picker is a native command (pick_folder).",
+  "description": "Minimal capability for the main window. Only the event channel the UI subscribes to (sidecar://event): listen/unlisten. No window, app, path, menu, tray, resources, image or webview commands, and no shell, fs, http or dialog access from the webview; the folder picker is a native command (pick_folder). App commands (invoke) need no permission and are gated in Rust (ALLOWED_METHODS).",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
 }

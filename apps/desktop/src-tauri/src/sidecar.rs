@@ -93,7 +93,14 @@ impl Sidecar {
             .stdout(Stdio::piped())
             .stderr(Stdio::from(log_file));
         // Created suspended, put in the job, then resumed: nothing the sidecar starts can escape it.
-        let job = JobObject::new_kill_on_close().map_err(|e| format!("job object: {e}"))?;
+        // Optional cap on the memory the sidecar tree may commit (MB); unset or invalid = no cap.
+        // Not a sandbox: it only limits memory (see job.rs).
+        let limit = std::env::var("AGENT_STUDIO_SIDECAR_MEM_LIMIT_MB")
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .filter(|mb| *mb > 0)
+            .map(|mb| mb.saturating_mul(1024 * 1024));
+        let job = JobObject::with_memory_limit(limit).map_err(|e| format!("job object: {e}"))?;
         let mut child = job
             .spawn(&mut cmd, 0x0800_0000) // CREATE_NO_WINDOW
             .map_err(|e| format!("failed to spawn sidecar in job object: {e}"))?;

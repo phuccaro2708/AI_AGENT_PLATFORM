@@ -379,3 +379,9 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Đã xoá: 20 nhánh cục bộ đã ghép (`git branch -d`, gồm `p4-integ`), 4 nhánh origin đã nằm trong nhánh chính (`dreamy-faraday`, `fervent-thompson`, `gracious-ritchie`, `repo-current-status`), 3 worktree sạch đã gỡ (`p4-obs`, `p4-policy`, `p4-tests`). Còn lại: `claude/loving-lovelace-32lh71`, `origin/claude/fix-pm-abort-flaky-7e3a1f` (chưa xoá vì commit của nó mới chỉ có ở local, đợi push), `origin/claude/phase-2-kickoff-8a5732`.
 - Bốn thư mục worktree rỗng (`p4-deps`, `p4-ipc`, `p4-probe`, `p4-rust`) còn lại vì Windows báo "busy" (có tiến trình giữ thư mục); đã gỡ khỏi git. Năm thư mục worktree cũ không còn đăng ký (`flaky-root-cause`, `int`, `policy-win-hardening`, `probe-permissions`, `wire-resource-monitor`) chưa đụng tới.
 - `CLAUDE.md`: thêm mục "Tự động hoá commit / merge / đối chiếu nhánh" (giới hạn: không tự push, không tạo PR, không xoá nhánh chưa ghép).
+
+## 2026-11-05: Sắp xếp lại ROADMAP cho khớp thực tế
+
+- Người dùng chọn giữ thứ tự phase (ADR-005), chỉ chỉnh trạng thái; không có ADR mới.
+- `docs/ROADMAP.md`: tách dòng `4–6` thành Phase 4 và Phase 5–6; thêm khối "Trạng thái" cho Phase 4 (đã ghép / còn thiếu để đóng); làm mới dòng Phase 7 (điều gì bị chặn bởi Phase 4, điều gì chờ duyệt dependency) và ghi chú gate diagnostics không còn "chưa tồn tại".
+- Đã chạy: `prettier --write docs/ROADMAP.md`. Chưa chạy gate đầy đủ (chỉ đổi tài liệu). Không push.

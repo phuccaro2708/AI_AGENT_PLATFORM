@@ -1,6 +1,6 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `4595705`, đi trước origin 7 commit, CHƯA push; origin ở `1d95056`, CI `191e7b9`, `c0928af`, `1d95056` đều xanh 5/5, 7 commit local chưa có CI). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `eae7ec9`, đã push, khớp origin; CI `191e7b9`, `c0928af`, `1d95056` xanh 5/5; CI của các commit sau đó chưa đọc xong, phiên con `ci-read-eae7ec9` đang đọc). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Vị trí
 

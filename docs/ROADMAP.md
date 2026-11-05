@@ -11,9 +11,10 @@ Nguyên tắc ưu tiên: **Agent Runtime → Message Router → Durable Task Sta
 | 0     | **PASS (có hạn chế)** — CI xanh (runner), đã xác minh trên Windows vật lý bằng `tauri dev`; xem PHASE0_REPORT                                                                                                                                                                                                                                                                                                                                      |
 | 1     | **ĐÓNG (2026-11-02), có ngoại lệ** — cả 4 tiêu chí đạt/đạt có giới hạn, CI xanh; ngoại lệ chuyển phase sau (sai version → Phase 6, release máy thứ hai → Phase 5, tool ghi/phê duyệt → Phase 2/4). Xem PHASE1_REPORT                                                                                                                                                                                                                               |
 | 2     | **ĐÓNG (2026-11-03), có ngoại lệ** — CI xanh 5/5; xem PHASE2_REPORT                                                                                                                                                                                                                                                                                                                                                                                |
-| 7     | **ĐANG LÀM (từ 2026-11-03)** — 7A và 7B đã có code, test và push; kiểm trong app Tauri thật đã chạy cho 7B (còn lỗi nhỏ đã sửa); 7C-1 (thẻ phê duyệt, nhật ký, timer, phạm vi khoá) xong 2026-11-04; 7C-2 chờ Phase 4; 7D (Tailwind/shadcn, phím tắt), preset, E2E người dùng mới chưa làm                                                                                                                                                         |
+| 7     | **ĐANG LÀM (từ 2026-11-03)** — 7A và 7B đã có code, test và push; kiểm trong app Tauri thật đã chạy cho 7B (còn lỗi nhỏ đã sửa); 7C-1 (thẻ phê duyệt, nhật ký, timer, phạm vi khoá) xong 2026-11-04; preset, phím tắt cơ bản, radio thẻ ngang xong. **Chặn bởi Phase 4:** 7C-2. **Chờ duyệt dependency:** 7D Tailwind/shadcn. Chưa làm: E2E người dùng mới, `PHASE7_REPORT.md`                                                                     |
 | 3     | **ĐANG LÀM (từ 2026-11-04)** — quét CLI, probe `agy` (2/3 lượt), `adapter-antigravity` (qua contract test với CLI giả), capability router đã có; UI capability thiếu xong (Peer Review kiểm app thật); router đã nối vào `workflows.start` (UI có "Auto" + bật/tắt `agy`, chưa xem trong app thật); `packages/resource-monitor` đã nối vào sidecar (chưa VRAM, `trackedPids`, UI, cấu hình); còn Ollama (hoãn), chạy `agy` thật; xem PHASE3_REPORT |
-| 4–6   | Phase 4: mã thuần + Job Object + capabilities + recovery 5 bước + diagnostics IPC + audit đã ghép (2026-11-05, CI 5/5 xanh ở `b370082`); P4-1 c/d mới probe, chưa nối; chưa đóng. Phase 5–6: chưa bắt đầu                                                                                                                                                                                                                                          |
+| 4     | **ĐANG LÀM, CHƯA ĐÓNG** — phần đã ghép (CI 5/5 xanh ở `b370082`, kiểm app thật) và phần còn thiếu để đóng xem mục "Phase 4" bên dưới. Chặn đóng: P4-1 c/d chưa nối, `agent-job-wrap` chưa nối, chưa có giới hạn RAM cả cây, P4-8 (b), threat model                                                                                                                                                                                                 |
+| 5–6   | Chưa bắt đầu (Phase 5 chờ Phase 4 đóng; Phase 6 chờ Phase 5, `mcp-gateway` tối thiểu kéo lên đầu)                                                                                                                                                                                                                                                                                                                                                  |
 | 8–10  | Kế hoạch mở rộng "ngang AionUi, hơn ở an toàn / tin cậy / multi-agent / nhẹ" — xem cuối tài liệu; chưa bắt đầu                                                                                                                                                                                                                                                                                                                                     |
 
 ## Thứ tự thực hiện (chốt lại 2026-11-04)
@@ -137,6 +138,11 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 
 ## Phase 4 — Security & Reliability (2–3 tuần)
 
+**Trạng thái (2026-11-05): ĐANG LÀM, chưa đóng.** Bằng chứng: `docs/PROGRESS.md` (mục 2026-11-05), `docs/SECURITY.md`, `docs/DEPS_AUDIT.md`.
+
+- **Đã ghép, CI xanh 5/5 (`b370082`), kiểm trong app Tauri thật:** policy engine mã thuần (path scope, command policy; test 8.3 qua trên runner Windows), Job Object cho sidecar (kill đột ngột app thì sidecar chết), capabilities `default` chỉ còn event listen/unlisten, recovery 5 bước + UI (5 bước là giả định chờ duyệt), log rotation + `diagnostics.export`, audit + ghim Actions theo SHA, AppContainer chỉ ở mức tài liệu (không có prototype).
+- **Còn thiếu để đóng:** (1) P4-1 c/d: nối cổng quyền vào vòng lặp (claude `--permission-prompt-tool` không thấy mọi lời gọi; codex `app-server` có approval có cấu trúc) — chờ người dùng duyệt hướng; (2) nối `agent-job-wrap` vào process-manager và installer, giới hạn RAM cả cây; (3) P4-8 (b) engine resume Peer Review; (4) threat model đầy đủ và tuổi gói transitive; (5) soak 100 workflow và security tests theo gate.
+
 - Policy Engine: path scope (canonical path, chống traversal/symlink escape), command policy, network policy, 4 mức quyền (Read Only / Workspace Write / Restricted Tools / Privileged).
 - Cô lập: Job Objects (giới hạn process tree/RAM), whitelist env var, executable allowlist; spike đánh giá AppContainer/Windows Sandbox (không cam kết 1.0, ADR-002) — ghi rõ phần chưa đạt.
 - Secrets qua Windows Credential Manager; redaction test.
@@ -192,7 +198,7 @@ AionUi thiên về hội thoại tự do, nhiều agent và nhiều kênh (YOLO 
 
 ### Phase 7 — Ngang AionUi về trải nghiệm cốt lõi (2–3 tuần, sau Phase 2)
 
-**Tiến độ:** lát 7A (lịch sử task, tìm log, engine resume, UI giải quyết reconciliation) đã có code và test; còn kiểm với CLI thật và trong app Tauri. lát 7B (chọn thư mục qua backend, policy `rootPath`, Settings → Agents, secrets vào Credential Manager) đã có code và test; còn kiểm trong app Tauri thật. 7C–7D chưa bắt đầu.
+**Tiến độ:** lát 7A (lịch sử task, tìm log, engine resume, UI giải quyết reconciliation) đã có code và test; còn kiểm với CLI thật và trong app Tauri. lát 7B (chọn thư mục qua backend, policy `rootPath`, Settings → Agents, secrets vào Credential Manager) đã có code và test, đã kiểm trong app Tauri thật. 7C-1 xong (2026-11-04); preset, phím tắt cơ bản và radio thẻ ngang xong. Còn: 7C-2 (sau Phase 4), 7D Tailwind/shadcn (chờ duyệt dependency), E2E người dùng mới.
 
 Lấp khoảng trống UX so với AionUi, nhưng theo cách task-centric.
 
@@ -207,7 +213,7 @@ Lấp khoảng trống UX so với AionUi, nhưng theo cách task-centric.
 
 - [ ] Người dùng mới đi từ cài đặt → thêm project → chạy task thật mà không đụng terminal (đo bằng kịch bản E2E).
 - [ ] Mọi yêu cầu phê duyệt hiển thị đủ lệnh/đường dẫn; từ chối không làm treo task.
-- [ ] Không có mật khẩu/token nào xuất hiện trong DB, log hoặc diagnostics (test redaction). Đã có test cho DB, log, IPC và sự kiện đẩy ra; chưa tick vì diagnostics export chưa tồn tại và che chỉ theo giá trị chính xác (xem SECURITY.md).
+- [ ] Không có mật khẩu/token nào xuất hiện trong DB, log hoặc diagnostics (test redaction). Đã có test cho DB, log, IPC, sự kiện đẩy ra và gói diagnostics (nối IPC 2026-11-05, kiểm trong app thật: không rò đường dẫn); chưa tick vì che chỉ theo giá trị chính xác (xem SECURITY.md) và chưa kiểm redaction secret thật trong bundle.
 
 ### Phase 8 — Mở rộng agent: ACP, MCP, Skills (2–3 tuần)
 

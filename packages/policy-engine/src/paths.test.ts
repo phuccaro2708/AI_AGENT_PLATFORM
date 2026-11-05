@@ -1,7 +1,8 @@
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { canonicalize, isWithin } from "./paths.js";
+import { PathError, canonicalize, isWithin } from "./paths.js";
 import { canSymlink, makeTree } from "./test-helpers.js";
 
 const trees: Array<() => void> = [];
@@ -74,6 +75,64 @@ describe("canonicalize", () => {
       await expect(canonicalize("//?/" + ws)).rejects.toThrow();
     },
   );
+
+  describe.skipIf(process.platform !== "win32")("Windows hardening", () => {
+    /** 8.3 short form of an existing path (null when the volume has 8.3 names disabled). */
+    function shortPath(p: string): string | null {
+      const out = execFileSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "(New-Object -ComObject Scripting.FileSystemObject).GetFolder($env:POLICY_TEST_PATH).ShortPath",
+        ],
+        { encoding: "utf8", env: { ...process.env, POLICY_TEST_PATH: p } },
+      ).trim();
+      return out !== "" && out.toLowerCase() !== p.toLowerCase() ? out : null;
+    }
+
+    it("expands a user-typed 8.3 short path to the long form before isWithin", async (ctx) => {
+      const { ws } = tree();
+      const long = path.join(ws, "LongDirectoryNamePolicy");
+      fs.mkdirSync(long);
+      fs.writeFileSync(path.join(long, "file.txt"), "x");
+      const short = shortPath(long);
+      if (short === null) return ctx.skip("8.3 name generation is disabled on this volume");
+      expect(short).toMatch(/~\d/);
+      const canon = await canonicalize(path.join(short, "file.txt"));
+      expect(canon).toBe(path.join(long, "file.txt"));
+      expect(isWithin(ws, canon)).toBe(true);
+      // a short name for a not-yet-existing file below it is expanded through the existing prefix
+      expect(await canonicalize(path.join(short, "new.txt"))).toBe(path.join(long, "new.txt"));
+    });
+
+    it("follows a directory junction (no privilege needed) to its real location", async () => {
+      const { ws, outside } = tree();
+      fs.symlinkSync(outside, path.join(ws, "jn"), "junction");
+      const canon = await canonicalize(path.join(ws, "jn", "secret.txt"));
+      expect(canon).toBe(path.join(outside, "secret.txt"));
+      expect(isWithin(ws, canon)).toBe(false);
+    });
+
+    it("rejects UNC paths without touching the network (fail-closed)", async () => {
+      await expect(canonicalize("\\\\server\\share\\a.txt")).rejects.toThrow(PathError);
+      await expect(canonicalize("//server/share/a.txt")).rejects.toThrow(PathError);
+      await expect(canonicalize("\\\\localhost\\c$\\Windows")).rejects.toThrow(PathError);
+    });
+
+    it("rejects alternate data streams, existing or not", async () => {
+      const { ws } = tree();
+      const file = path.join(ws, "src", "a.txt");
+      fs.writeFileSync(file + ":stream", "hidden");
+      await expect(canonicalize(file + ":stream")).rejects.toThrow(PathError);
+      await expect(canonicalize(file + "::$DATA")).rejects.toThrow(PathError);
+      await expect(canonicalize(path.join(ws, "src") + ":stream")).rejects.toThrow(PathError);
+      await expect(canonicalize(path.join(ws, "nope.txt:stream"))).rejects.toThrow(PathError);
+      // the drive-letter colon is fine
+      await expect(canonicalize(file)).resolves.toBe(file);
+    });
+  });
 
   it.skipIf(!symlinks)("follows a dangling symlink to where a write would land", async () => {
     const { ws, outside } = tree();

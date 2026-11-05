@@ -285,3 +285,11 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Chạy `/know`, thấy docs cũ so với git: đầu nhánh là `0183a85` (đã push), router đã nối vào `workflows.start`, `policy-engine` đã tồn tại, số test hiện tại 520 qua. Đã sửa HANDOFF (vị trí, dòng Phase 3, CI, "Việc tiếp theo", mục kiểm) và ROADMAP (hàng Phase 3, Phase 4–6, ngày tiêu đề). Không đổi thứ tự phase, không đóng phase.
 - CI đọc qua GraphQL: `603d6fb` xanh đủ 5/5 (Security xanh); `341190d` còn Security chạy; `91317e4` và `0183a85` còn chạy. Chưa có kết luận.
 - Không chạy lại lint/test/build ở lượt này (chỉ đổi docs).
+
+## 2026-11-04 (Windows): probe yêu cầu quyền thật của `claude` và `codex` (Bước 2B phần 1)
+
+- Người dùng cho phép chạy CLI thật để QUAN SÁT. Thư mục tạm rỗng ngoài repo, env lọc, `shell:false`, không dùng chế độ bỏ qua quyền, không chạm repo. Phiên bản: claude 2.1.318, codex-cli 0.166.0; cả hai đã đăng nhập.
+- Lệnh đã chạy (mọi lần thoát 0): `claude -p --output-format stream-json --verbose --model haiku --no-session-persistence --setting-sources local --disable-slash-commands --tools Write,Bash,Read --max-budget-usd 0.5` với 5 prompt (Write file; Bash `echo`; Read ngoài cwd; Write kèm `--permission-prompts none`; Bash `mkdir`), và `codex exec --json --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules -s read-only` với 3 prompt (ghi file; `echo`; đọc ngoài cwd).
+- Kết quả: Claude phát `system/permission_denied` + `permission_denials[]` trong `result` (công cụ không chạy, thoát 0); `echo` được tự chấp nhận nên không có sự kiện. Codex `exec --json` không phát sự kiện quyền nào trên stdout; việc từ chối chỉ có trên stderr và trong lời model. Không CLI nào treo hay chờ tương tác. Chi tiết và phần chưa kiểm: `docs/ASSUMPTIONS.md` mục "probe yêu cầu quyền thật".
+- Fixture đã lọc (đường dẫn, id): `packages/adapter-claude/test/fixtures/`, `packages/adapter-codex/test/fixtures/`. Không thêm test mới, không sửa mã nguồn, không nối `evaluate()`.
+- Chưa làm: `--permission-prompt-tool` của claude, app-server của codex, `workspace-write`, các chế độ khác.

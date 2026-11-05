@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"id-15"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll try to create `hello.txt` with the content `hi`. The workspace is currently read-only, so the write may be blocked."}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Couldn’t create `hello.txt`: the workspace’s read-only sandbox blocked the write."}}
+{"type":"turn.completed","usage":{"input_tokens":48188,"cached_input_tokens":36352,"cache_write_input_tokens":0,"output_tokens":146,"reasoning_output_tokens":0}}

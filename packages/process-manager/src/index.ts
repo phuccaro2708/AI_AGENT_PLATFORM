@@ -7,5 +7,14 @@ export {
   unwrapNpmShim,
 } from "./resolve.js";
 export type { ExecutableKind, ResolveOptions, ResolvedExecutable } from "./resolve.js";
+export {
+  BASE_ENV_ALLOWLIST,
+  SpawnDeniedError,
+  assertExecutableAllowed,
+  executableName,
+  extendManifest,
+  filterEnv,
+} from "./manifest.js";
+export type { SpawnManifest } from "./manifest.js";
 export { killTree } from "./kill-tree.js";
 export { createLineSplitter } from "./lines.js";

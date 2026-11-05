@@ -56,6 +56,10 @@ export function classifyOutcome(input: {
   }
   if (terminal.type === "completed") return { state: "completed" };
   // terminal.type === "error"
+  // The policy gate says the run may have gone beyond its grant (or could not be checked): a person decides.
+  if (terminal.needsReconciliation === true) {
+    return { state: "needs_reconciliation", reason: terminal.message };
+  }
   if (terminal.message === "cancelled") {
     return unfinishedTools
       ? unverified("cancelled while a tool was running")

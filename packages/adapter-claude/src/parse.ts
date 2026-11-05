@@ -12,6 +12,17 @@ const obj = (v: unknown): Record<string, unknown> | undefined =>
     ? (v as Record<string, unknown>)
     : undefined;
 
+/** `system/permission_denied` and `result.permission_denials[]` describe the same event; the adapter dedupes by callId. */
+function denial(tool: unknown, id: unknown, input: unknown, reason: unknown): AgentEvent {
+  return {
+    type: "permission_denied",
+    toolName: typeof tool === "string" && tool ? tool : "unknown",
+    ...(typeof id === "string" && id ? { callId: id } : {}),
+    ...(input !== undefined ? { input } : {}),
+    ...(typeof reason === "string" && reason ? { reason } : {}),
+  };
+}
+
 /**
  * Pure mapper. Unknown types/subtypes (hook_*, future additions) are ignored, never an error.
  * OBSERVED on the Legion (fixture print-stream-json.jsonl): system/init, assistant text, result.
@@ -57,8 +68,18 @@ export function parseClaudeLine(line: string): ParsedLine {
     return { events };
   }
 
+  if (e.type === "system" && e.subtype === "permission_denied") {
+    return { events: [denial(e.tool_name, e.tool_use_id, undefined, e.decision_reason)] };
+  }
+
   if (e.type === "result") {
     const events: AgentEvent[] = [];
+    if (Array.isArray(e.permission_denials)) {
+      for (const d of e.permission_denials) {
+        const o = obj(d);
+        if (o) events.push(denial(o.tool_name, o.tool_use_id, o.tool_input, undefined));
+      }
+    }
     if (e.usage !== undefined || e.total_cost_usd !== undefined) {
       events.push({
         type: "usage",

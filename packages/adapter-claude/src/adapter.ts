@@ -61,6 +61,11 @@ export interface ClaudeAdapterOptions {
   safeMode?: boolean;
   /** Extra flags, e.g. a tool allowlist (`--tools Read --allowed-tools Read`). */
   extraArgs?: readonly string[];
+  /**
+   * Flags that depend on the task, added after `extraArgs` (P4-1 d: `--permission-prompt-tool`, `--mcp-config`
+   * for a gate built from this task's cwd and permissions). Must be pure data; it runs for `describeLaunch` too.
+   */
+  taskArgs?: (task: AgentTask) => readonly string[];
   env?: Record<string, string | undefined>;
   /** Variable names (besides the manifest's) that the host declares on purpose: stored settings, secrets. */
   envAllow?: readonly string[];
@@ -100,6 +105,7 @@ export class ClaudeAdapter implements AgentAdapter {
       ...(task.sessionId ? ["--resume", task.sessionId] : []),
       ...claudePermissionArgs(task.permissions),
       ...(this.opts.extraArgs ?? []),
+      ...(this.opts.taskArgs?.(task) ?? []),
     ];
   }
 

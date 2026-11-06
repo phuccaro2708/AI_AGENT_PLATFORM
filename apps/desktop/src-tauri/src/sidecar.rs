@@ -42,12 +42,32 @@ fn dispatch(line: &str, pending: &Pending, on_event: &dyn Fn(Value)) {
     }
 }
 
+/// The reason of a `{"event":"fatal","message":…}` line: the sidecar is about to exit and says why
+/// (e.g. another sidecar owns the database), which beats a bare "sidecar exited".
+fn fatal_message(line: &str) -> Option<String> {
+    let v = serde_json::from_str::<Value>(line).ok()?;
+    if v.get("event")?.as_str()? != "fatal" {
+        return None;
+    }
+    Some(v.get("message")?.as_str()?.to_string())
+}
+
+/// `base` plus the sidecar's own reason for dying, when it gave one.
+fn with_reason(base: &str, fatal: &Mutex<Option<String>>) -> String {
+    match lock(fatal).as_deref() {
+        Some(reason) => format!("{base}: {reason}"),
+        None => base.to_string(),
+    }
+}
+
 pub struct Sidecar {
     child: Mutex<Child>,
     stdin: Mutex<Option<ChildStdin>>,
     pending: Pending,
     next_id: AtomicI64,
     alive: Arc<AtomicBool>,
+    /// Set when the sidecar announced `fatal` before exiting.
+    fatal: Arc<Mutex<Option<String>>>,
     pid: u32,
     /// Kept alive for the lifetime of the sidecar; dropping it (or dying) kills the process tree.
     _job: JobObject,
@@ -110,16 +130,21 @@ impl Sidecar {
 
         let pending: Pending = Arc::default();
         let alive = Arc::new(AtomicBool::new(true));
+        let fatal: Arc<Mutex<Option<String>>> = Arc::default();
         {
-            let (pending, alive) = (pending.clone(), alive.clone());
+            let (pending, alive, fatal) = (pending.clone(), alive.clone(), fatal.clone());
             std::thread::spawn(move || {
                 for line in BufReader::new(stdout).lines() {
                     let Ok(line) = line else { break };
+                    if let Some(reason) = fatal_message(&line) {
+                        *lock(&fatal) = Some(reason);
+                    }
                     dispatch(&line, &pending, &on_event);
                 }
                 alive.store(false, Ordering::SeqCst);
+                let reason = with_reason("sidecar exited", &fatal);
                 for (_, tx) in lock(&pending).drain() {
-                    let _ = tx.send(Err("sidecar exited".into()));
+                    let _ = tx.send(Err(reason.clone()));
                 }
             });
         }
@@ -129,6 +154,7 @@ impl Sidecar {
             pending,
             next_id: AtomicI64::new(0),
             alive,
+            fatal,
             pid,
             _job: job,
         })
@@ -145,7 +171,7 @@ impl Sidecar {
     /// Sends one request and waits for its reply (or `timeout`).
     pub fn request(&self, method: &str, params: Option<Value>, timeout: Duration) -> Reply {
         if !self.is_alive() {
-            return Err("sidecar is not running".into());
+            return Err(with_reason("sidecar is not running", &self.fatal));
         }
         let id = self.next_id.fetch_add(1, Ordering::SeqCst) + 1;
         let mut req = json!({ "id": id, "method": method });
@@ -160,7 +186,7 @@ impl Sidecar {
         // The reader may have drained `pending` just before the insert above.
         if !self.is_alive() {
             forget();
-            return Err("sidecar is not running".into());
+            return Err(with_reason("sidecar is not running", &self.fatal));
         }
         let written = {
             let mut guard = lock(&self.stdin);
@@ -283,6 +309,49 @@ mod tests {
         assert_eq!(
             s.request("fast", None, T).unwrap_err(),
             "sidecar is not running"
+        );
+    }
+
+    #[test]
+    fn fatal_message_reads_only_well_formed_fatal_events() {
+        assert_eq!(
+            fatal_message(r#"{"event":"fatal","message":"another sidecar owns it"}"#).as_deref(),
+            Some("another sidecar owns it")
+        );
+        assert_eq!(
+            fatal_message(r#"{"event":"task.state","taskId":"1"}"#),
+            None
+        );
+        assert_eq!(fatal_message(r#"{"event":"fatal"}"#), None);
+        assert_eq!(fatal_message("not json"), None);
+    }
+
+    #[test]
+    fn a_sidecar_that_announces_fatal_then_exits_explains_itself_to_waiters_and_later_calls() {
+        let mut cmd = Command::new("node");
+        cmd.arg("-e").arg(
+            r#"
+            process.stdin.once('data', () => {
+              process.stdout.write(JSON.stringify({ event: 'fatal', message: 'database is owned elsewhere' }) + '\n',
+                () => process.exit(75));
+            });
+            "#,
+        );
+        let log = std::env::temp_dir().join(format!(
+            "agent-studio-test-fatal-{}.log",
+            std::process::id()
+        ));
+        let s = Sidecar::spawn_command(cmd, &log, |_| {})
+            .expect("node must be on PATH to run these tests");
+        let err = s.request("anything", None, T).unwrap_err();
+        assert_eq!(err, "sidecar exited: database is owned elsewhere");
+        let deadline = Instant::now() + T;
+        while s.is_alive() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            s.request("again", None, T).unwrap_err(),
+            "sidecar is not running: database is owned elsewhere"
         );
     }
 

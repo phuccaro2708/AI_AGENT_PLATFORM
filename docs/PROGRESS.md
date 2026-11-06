@@ -448,3 +448,11 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Đối chiếu docs với git/CI: nhánh `9db9c7c` khớp origin (đã push `c914033..9db9c7c`); CI `c914033` xanh (`gh run list`), nghĩa là lỗi ubuntu của khóa single-instance nằm ở test helper; CI `9db9c7c` còn chạy, chưa đọc kết quả cuối. `938a708` đã push.
 - Sửa `docs/HANDOFF.md`: header, dòng CI, dòng Codex subagent, bước Phase 4 (P4-1 c đã có adapter, chưa nối orchestrator). Mục PROGRESS "Codex subagent" (ghi "chưa commit, chưa push") là lời cũ của phiên khác, giữ nguyên; trạng thái đúng nằm ở HANDOFF.
 - Chưa làm: nhánh cục bộ `claude/p4-1c-codex-approval-57e833` đã nằm trọn trong nhánh chính, xoá được khi người dùng đồng ý dọn; TODO.md/ROADMAP.md chưa cập nhật P4-1 c (cổng chưa nối orchestrator nên chưa tick). Chỉ đổi tài liệu, không chạy gate đầy đủ.
+
+## 2026-11-06 (khuya): sửa secret scan cục bộ (`e4095f0`)
+
+- Nguyên nhân Security đỏ: dòng 13 của `.codex/agents/security-reviewer.toml` bắt đầu bằng "Secrets:", detect-secrets báo Secret Keyword ở worktree và ở các snapshot `938a708`, `c99c93e`, `426c200`, `9db9c7c`, `56cbc94`.
+- Đổi lời dòng 13 thành "Credential handling:" (giữ ý); thêm 5 tuple lịch sử đã rà soát vào `ACCEPTED_HISTORY` (4 tuple được duyệt + `56cbc94e`, được người dùng đồng ý thêm sau khi quét lần đầu thấy nó). Không đổi pragma, ngưỡng hay bộ quét.
+- Đã chạy: venv ngoài repo (`%TEMP%\secscan-venv`), `pip install detect-secrets==1.5.0`, `python scripts/secret-scan.py` → "scanned worktree + 270 commits; findings: 2 (accepted fixture hits: 568)". 2 phát hiện còn lại (`docs\reports\phase0-windows\spike-report.json:28`, `packages\git-worktrees\src\git-worktrees.test.ts:42`) chỉ do đường dẫn `\` trên Windows không khớp `ACCEPTED_ANYWHERE`; không phải lỗi thật. Chưa chạy trên Linux/CI.
+- `prettier --check` và `eslint` không áp dụng được: prettier "No parser could be inferred" cho `.toml` và `.py`, eslint báo file bị bỏ qua (cảnh báo, 0 lỗi). Không có kiểm tra định dạng thực sự cho 2 file này.
+- Commit `e4095f0` (chỉ 2 file), chưa push, chưa tạo PR; CI chưa chạy lại.

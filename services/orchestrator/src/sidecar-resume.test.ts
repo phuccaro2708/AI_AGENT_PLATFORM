@@ -15,6 +15,7 @@ class Fake implements AgentAdapter {
   constructor(
     readonly id: string,
     private readonly hang = false,
+    private readonly hangReview = false,
   ) {}
   async detect() {
     return true;
@@ -30,6 +31,10 @@ class Fake implements AgentAdapter {
       yield { type: "text", content: "wrote feature.txt" };
       if (this.hang) await new Promise<void>(() => undefined); // never settles: the "process" is killed
     } else {
+      if (this.hangReview) {
+        yield { type: "text", content: "reviewing" };
+        await new Promise<void>(() => undefined); // the reviewer's process is killed
+      }
       yield { type: "text", content: '{"verdict":"approve","comments":[]}' };
     }
     yield { type: "completed" };
@@ -80,10 +85,15 @@ async function until(workflowId: string, ok: (l: Listing) => boolean): Promise<L
   throw new Error(`timeout: ${JSON.stringify(await list(workflowId))} ${JSON.stringify(ctx)}`);
 }
 
-/** Starts a Peer Review whose implementer "dies" mid-run, then restarts on the same database. */
-async function crashedWorkflow(): Promise<{ workflowId: string; implementerTask: string }> {
-  const hanging = new Fake("impl", true);
-  svc = open([hanging, new Fake("rev")]);
+/**
+ * Starts a Peer Review whose implementer (default) or reviewer "dies" mid-run, then restarts on the same database.
+ * `implementerTask` is the id of the interrupted task, whichever role it had.
+ */
+async function crashedWorkflow(
+  stage: "implement" | "review" = "implement",
+): Promise<{ workflowId: string; implementerTask: string }> {
+  const hanging = stage === "implement" ? new Fake("impl", true) : new Fake("rev", false, true);
+  svc = open(stage === "implement" ? [hanging, new Fake("rev")] : [new Fake("impl"), hanging]);
   const { projectId } = await call<{ projectId: string }>("projects.create", {
     name: "p",
     rootPath: projectRoot,
@@ -102,7 +112,7 @@ async function crashedWorkflow(): Promise<{ workflowId: string; implementerTask:
   impl = new Fake("impl");
   rev = new Fake("rev");
   svc = open([impl, rev]);
-  return { workflowId, implementerTask: running.tasks[0]!.id };
+  return { workflowId, implementerTask: running.tasks.at(-1)!.id };
 }
 
 beforeEach(() => {
@@ -170,5 +180,52 @@ describe("Peer Review after a restart", () => {
     expect(impl.runs).toBe(1);
     const wts = await call<{ worktrees: { state: string }[] }>("worktrees.list", { workflowId });
     expect(wts.worktrees).toHaveLength(1);
+  });
+
+  describe("when the REVIEWER was interrupted", () => {
+    it("waits for a person; the finished implementer is not re-run and no new reviewer starts", async () => {
+      const { workflowId } = await crashedWorkflow("review");
+      await new Promise((r) => setTimeout(r, 300));
+      const l = await list(workflowId);
+      expect(l.workflowState).toBe("running");
+      expect(l.tasks.map((t) => t.state)).toEqual(["completed", "needs_reconciliation"]);
+      expect(impl.runs + rev.runs).toBe(0);
+    });
+
+    it("`requeue` runs the reviewer again on the same worktree and the workflow completes", async () => {
+      const { workflowId, implementerTask: reviewerTask } = await crashedWorkflow("review");
+      await call("tasks.resolveReconciliation", {
+        taskId: reviewerTask,
+        decision: "requeue",
+        note: "review is read-only: safe to repeat",
+      });
+      const l = await until(workflowId, (x) => x.workflowState === "completed");
+      expect(l.tasks.map((t) => t.state)).toEqual(["completed", "completed"]);
+      expect(impl.runs).toBe(0);
+      expect(rev.runs).toBe(1);
+    });
+
+    it("`completed` without a stored verdict does not approve the work: the workflow fails", async () => {
+      const { workflowId, implementerTask: reviewerTask } = await crashedWorkflow("review");
+      await call("tasks.resolveReconciliation", {
+        taskId: reviewerTask,
+        decision: "completed",
+        note: "claimed done by hand",
+      });
+      const l = await until(workflowId, (x) => x.workflowState !== "running");
+      expect(l.workflowState).toBe("failed");
+      expect(rev.runs).toBe(0);
+    });
+
+    it("`failed` fails the workflow", async () => {
+      const { workflowId, implementerTask: reviewerTask } = await crashedWorkflow("review");
+      await call("tasks.resolveReconciliation", {
+        taskId: reviewerTask,
+        decision: "failed",
+        note: "no verdict",
+      });
+      const l = await until(workflowId, (x) => x.workflowState === "failed");
+      expect(l.tasks).toHaveLength(2);
+    });
   });
 });

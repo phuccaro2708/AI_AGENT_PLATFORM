@@ -335,3 +335,12 @@ Chưa kiểm / giới hạn đã chấp nhận:
 - Đường dẫn DB khác nhau trỏ cùng tệp qua ổ ánh xạ (`subst`, ổ mạng) hoặc UNC/`\?\` chưa thử; hai đường dẫn đó có thể băm khác nhau và cùng mở một DB.
 - Sidecar treo (vòng lặp sự kiện kẹt) khi Tauri còn sống giữ khoá: sidecar mới thất bại sau 3 giây với `fatal`, không tự giết tiến trình kia; mỗi lời gọi UI sau đó spawn một sidecar mới chờ 3 giây rồi thất bại (backoff phía Tauri để sau).
 - Chưa kiểm dưới Job Object bị đóng bởi Tauri thật (test dùng `kill`); Node 22 (CI) chưa chạy thử cục bộ.
+
+## Codex subagent: `.codex/agents/*.toml` và `[agents]` (2026-11-06, codex-cli 0.166.0, Windows)
+
+Nguồn ý tưởng: tài liệu thiết kế do người dùng cung cấp (chưa xác minh độc lập). Chỉ quan sát cục bộ, đọc-chỉ.
+
+- QUAN SÁT (Cao): chuỗi khoá `max_concurrent_threads_per_session`, `default_subagent_reasoning_effort`, `default_subagent_model`, `max_depth`, `job_max_runtime_seconds` có trong `codex.exe`. `codex features list`: `multi_agent` stable/true.
+- QUAN SÁT (Trung bình): `codex exec --strict-config --sandbox read-only --ephemeral` chạy trong repo với `.codex/config.toml` (`[agents]`) và 4 file `.codex/agents/*.toml`: không báo lỗi cấu hình; model trả lời liệt kê đúng bốn tên vai (`explorer`, `implementer`, `test-engineer`, `security-reviewer`). Đây là lời model, chưa phải bằng chứng cứng về cách nạp.
+- CHƯA kiểm: khoá `sandbox_mode` và `model` trong file vai có được áp dụng hay bị bỏ qua (`--strict-config` có thể không kiểm file vai); vai `implementer`/`test-engineer` thật sự chạy ở `workspace-write`; số luồng song song thực tế; spawn subagent trong một task thật; `--output-schema` và `--worktree` của `codex exec` (chỉ thấy trong `--help`).
+- Hệ quả: coi các vai là cấu hình đề xuất. Cách gọi từ Claude đi qua `.claude/agents/codex-delegator.md` bằng `codex exec` với cờ sandbox tường minh, không dựa vào `sandbox_mode` trong file vai.

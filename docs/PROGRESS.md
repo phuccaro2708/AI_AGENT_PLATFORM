@@ -421,3 +421,9 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Chưa push, chưa tạo PR, chưa đọc CI. Chưa kiểm: Linux, macOS, Job Object thật của Tauri, Node 22.
 
 - Push `c2856af..b1abf87` lên `origin/claude/loving-lovelace-32lh71` (không force, không PR). Chưa đọc CI của đợt push này. Cập nhật `docs/HANDOFF.md` theo trạng thái mới.
+
+## 2026-11-06 (khuya): Codex subagent và `codex-delegator`
+
+- Thêm `.codex/agents/{explorer,implementer,test-engineer,security-reviewer}.toml`, `.codex/config.toml` (`[agents]`, tối đa 2 luồng), `AGENTS.md` (trỏ về `CLAUDE.md`), `.claude/agents/codex-delegator.md`. Không đụng mã nguồn. Không dùng `.ai-workflow/` và wrapper PowerShell của tài liệu thiết kế (trùng SQLite/scheduler/`adapter-codex`).
+- Đã chạy: tìm khoá `[agents]` trong binary `codex.exe` (có); `codex exec --strict-config --sandbox read-only --ephemeral -m gpt-6.1-sol` hỏi danh sách vai (không lỗi, trả đủ 4 tên; ~31k token). Chi tiết và phần chưa kiểm: `docs/ASSUMPTIONS.md`, mục "Codex subagent".
+- Chưa chạy gate đầy đủ (chỉ thêm file cấu hình/tài liệu), chưa commit, chưa push.

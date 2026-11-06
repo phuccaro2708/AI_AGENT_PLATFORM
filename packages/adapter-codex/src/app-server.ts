@@ -84,6 +84,45 @@ export function splitPlainCommand(
   return executable === undefined ? undefined : { executable, args };
 }
 
+/**
+ * The ONE wrapper seen from the real CLI on Windows (docs/ASSUMPTIONS.md c2/c3):
+ * `"<path>\pwsh.exe" -Command '<inner>'` — double-quoted executable path, exactly `-Command`, one single-quoted
+ * argument and nothing after it. Any other shape (other flags, `-EncodedCommand`, double-quoted inner, `''`
+ * escapes, another host) returns `undefined` and is declined. This only strips the wrapper; the inner text still has to
+ * pass `splitPlainCommand` and the Policy Engine, and nothing is ever evaluated or re-joined into a shell string.
+ */
+const PWSH_WRAPPER = /^"([^"]*)" -Command '([^']*)'$/;
+export function unwrapPowerShellCommand(command: string): string | undefined {
+  const m = PWSH_WRAPPER.exec(command);
+  if (!m) return undefined;
+  const host = (m[1] ?? "").split(/[\\/]/).pop()?.toLowerCase();
+  const inner = (m[2] ?? "").trim();
+  return host === "pwsh.exe" && inner !== "" ? inner : undefined;
+}
+
+/**
+ * PowerShell commands that run text or other programs. Refused here even if a policy rule would list them: allowing
+ * one makes every other rule meaningless (the engine's interpreter list does not know PowerShell cmdlets).
+ */
+const POWERSHELL_EXEC = new Set([
+  "invoke-expression",
+  "iex",
+  "invoke-command",
+  "icm",
+  "start-process",
+  "saps",
+  "start",
+  "invoke-item",
+  "ii",
+  "add-type",
+  "powershell",
+  "powershell.exe",
+  "pwsh",
+  "pwsh.exe",
+  "cmd",
+  "cmd.exe",
+]);
+
 interface Verdict {
   accept: boolean;
   reason: string;
@@ -262,12 +301,21 @@ export class CodexAppServerAdapter implements AgentAdapter {
           return { ...base, accept: false, reason: "request belongs to another thread" };
         }
         const command = str(params["command"]);
-        const parts = command === undefined ? undefined : splitPlainCommand(command);
+        const inner =
+          command === undefined ? undefined : (unwrapPowerShellCommand(command) ?? command);
+        const parts = inner === undefined ? undefined : splitPlainCommand(inner);
         if (!parts) {
           return {
             ...base,
             accept: false,
             reason: "command is not a plain program + arguments (shell syntax or a shell wrapper)",
+          };
+        }
+        if (POWERSHELL_EXEC.has(parts.executable.toLowerCase())) {
+          return {
+            ...base,
+            accept: false,
+            reason: "command runs other code (interpreter, Invoke-Expression, Start-Process…)",
           };
         }
         return {

@@ -12,7 +12,11 @@ import {
 // The real Policy Engine by relative path: adapter-codex declares no dependency on it (the host injects `evaluate`).
 import { evaluate, type Policy } from "../../policy-engine/src/index.js";
 import { makeTree } from "../../policy-engine/src/test-helpers.js";
-import { CodexAppServerAdapter, type AppServerGateContext } from "./app-server.js";
+import {
+  CodexAppServerAdapter,
+  unwrapPowerShellCommand,
+  type AppServerGateContext,
+} from "./app-server.js";
 
 const fake = fileURLToPath(new URL("../test/fake-app-server.mjs", import.meta.url));
 
@@ -38,7 +42,9 @@ const gate = (ctx: AppServerGateContext) => {
   const policy: Policy = {
     level: ctx.permissions === "read-only" ? "read_only" : "workspace_write",
     workspaceRoot: ctx.cwd,
-    commands: { allow: [{ executable: "git", argsPrefix: ["status"] }] },
+    commands: {
+      allow: [{ executable: "git", argsPrefix: ["status"] }, { executable: "Get-ChildItem" }],
+    },
   };
   return policy;
 };
@@ -185,7 +191,7 @@ describe("command approvals", () => {
     expect(events.at(-1)?.type).toBe("completed");
   });
 
-  it("declines the Windows pwsh -Command wrapper (shell, quotes) and audits it", async () => {
+  it("declines a wrapped command the policy does not allow, and audits it", async () => {
     const e = env();
     const command = `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command 'mkdir newdir'`;
     const events = await run(make(e, [cmdRequest(command)]), task(e));
@@ -334,5 +340,81 @@ describe("unknown server requests, timeout, lost connection", () => {
     setTimeout(() => ac.abort(), 300);
     const events = await p;
     expect(events.at(-1)).toMatchObject({ type: "error", message: "cancelled" });
+  });
+});
+
+// The only wrapper shape seen from the real CLI (ASSUMPTIONS c2/c3): "<abs path>\\pwsh.exe" -Command '<inner>'
+const wrap = (inner: string) => `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command '${inner}'`;
+
+describe("pwsh -Command wrapper (the observed Windows shape)", () => {
+  it("unwraps only the exact observed shape", () => {
+    expect(unwrapPowerShellCommand(wrap("Get-ChildItem -File -Force"))).toBe(
+      "Get-ChildItem -File -Force",
+    );
+    expect(unwrapPowerShellCommand("git status")).toBeUndefined();
+    expect(unwrapPowerShellCommand(wrap("it''s"))).toBeUndefined(); // '' escape: not analysed
+    expect(unwrapPowerShellCommand(wrap(""))).toBeUndefined();
+    expect(unwrapPowerShellCommand(`"C:\\x\\pwsh.exe" -NoProfile -Command 'ls'`)).toBeUndefined();
+    expect(unwrapPowerShellCommand(`"C:\\x\\cmd.exe" -Command 'ls'`)).toBeUndefined();
+    expect(unwrapPowerShellCommand(`${wrap("ls")} extra`)).toBeUndefined();
+  });
+
+  it("accepts a wrapped plain command the policy allows (engine decides, not the wrapper)", async () => {
+    const e = env();
+    const events = await run(make(e, [cmdRequest(wrap("Get-ChildItem -File -Force"))]), task(e));
+    expect(replies(e)).toEqual([{ id: 100, result: { decision: "accept" } }]);
+    expect(denied(events)).toEqual([]);
+  });
+
+  it("still declines a wrapped command the engine does not allow", async () => {
+    const e = env();
+    await run(make(e, [cmdRequest(wrap("mkdir newdir"))]), task(e));
+    expect(replies(e)).toEqual([{ id: 100, result: { decision: "decline" } }]);
+  });
+
+  it("declines on a read-only task even for an allow-listed wrapped command", async () => {
+    const e = env();
+    await run(make(e, [cmdRequest(wrap("Get-ChildItem"))]), task(e, { permissions: "read-only" }));
+    expect(replies(e)).toEqual([{ id: 100, result: { decision: "decline" } }]);
+  });
+
+  // Negative cases: even with an engine that would allow ANYTHING, the engine must not be asked at all.
+  const hostile: [string, string][] = [
+    ["chained with ;", wrap("Get-ChildItem; Remove-Item x")],
+    ["pipeline", wrap("Get-ChildItem | Remove-Item")],
+    ["&&", wrap("Get-ChildItem && Remove-Item x")],
+    ["subexpression", wrap("Get-ChildItem $(whoami)")],
+    ["backtick", wrap("Get-ChildItem `whoami")],
+    ["redirect out of scope", wrap("Get-ChildItem > C:\\outside\\out.txt")],
+    ["redirect (no path chars)", wrap("Get-ChildItem >out.txt")],
+    ["environment variable", wrap("Get-ChildItem $env:USERPROFILE")],
+    ["%VAR%", wrap("Get-ChildItem %USERPROFILE%")],
+    ["here-string", wrap('@" x "@')],
+    ["Invoke-Expression", wrap("Invoke-Expression calc")],
+    ["iex alias", wrap("iex calc")],
+    ["Invoke-Command", wrap("Invoke-Command -ScriptBlock x")],
+    ["Start-Process", wrap("Start-Process calc")],
+    ["nested pwsh", wrap("pwsh -Command ls")],
+    ["inner -EncodedCommand", wrap("pwsh -EncodedCommand AAAA")],
+    ["outer -EncodedCommand", `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -EncodedCommand AAAA`],
+    ["extra outer flag", `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoProfile -Command 'ls'`],
+    ["double-quoted inner", `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command "git status"`],
+    ["unquoted outer path", `pwsh.exe -Command 'git status'`],
+    ["call operator", wrap("& calc")],
+    ["empty inner", wrap("   ")],
+  ];
+  it.each(hostile)("never reaches the engine: %s", async (_name, command) => {
+    const e = env();
+    let calls = 0;
+    const a = make(e, [cmdRequest(command)], {
+      evaluate: () => {
+        calls++;
+        return Promise.resolve({ effect: "allow", code: "x", reason: "allow all" });
+      },
+    });
+    const events = await run(a, task(e, { permissions: "workspace-write" }));
+    expect(calls).toBe(0);
+    expect(replies(e)).toEqual([{ id: 100, result: { decision: "decline" } }]);
+    expect(denied(events)).toHaveLength(1);
   });
 });

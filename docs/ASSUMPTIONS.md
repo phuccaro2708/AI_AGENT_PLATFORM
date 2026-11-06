@@ -291,3 +291,29 @@ KHÔNG phải sandbox bảo mật (ADR-002): Job Object chỉ quản vòng đờ
 - **Retry của task chạy trực tiếp** (`workflows.start`) trước đây thất bại an toàn ("no task.request message") vì `runTask` chỉ lưu `task.accepted`. `execute` nay dùng `task.accepted` khi thiếu `task.request` (cùng prompt, thư mục gốc project, quyền mặc định như lần chạy đầu). Prompt trong `task.accepted` đã bị che secret, nên lần chạy lại dùng bản đã che.
 - `tasks.resolveReconciliation` (7A) vẫn còn trong IPC; UI không còn dùng, vì lựa chọn "failed" không còn trên giao diện (abandon = cancelled).
 - **Chưa kiểm:** trong app Tauri thật; mới có test sidecar (kill/restart bằng adapter giả) và xem trước qua stub.
+
+## Harness làm giao diện cho Agent Workspace (probe 2026-11-06)
+
+Nguồn: tài liệu `deepseek-ai/deepseek-harness@fcc0ad4` (xem `REFERENCES.md`). Mọi mục dưới đây là ĐỌC TÀI LIỆU, chưa chạy thật với bản Harness đã cài.
+
+**Đã có trong tài liệu (chưa kiểm bằng thực nghiệm):**
+
+- Harness có MCP client: `@deepseek-ai/dsh-mcp-client`, transport `stdio` và `streamable-http`, dùng SDK MCP chính thức. Tool hiện cho model dạng `mcp__<serverName>__<tool>`.
+- Profile Web và Desktop mount `mcp-manager`: thêm/sửa/bật/tắt server qua Settings, có `probe` và `restart`. Manager không có API ghi qua Remote nên trình duyệt không tự định nghĩa được lệnh server.
+- Tool MCP đi qua cùng cơ chế quyền của tool registry (preset `workspace-write` + `ask` là mặc định).
+- Timeout gọi tool mặc định 60 giây (`toolCallTimeoutMs`). Task dài phải trả `taskId` rồi truy vấn lại, không giữ kết nối chờ.
+
+**Hệ quả thiết kế đã rút ra từ source của chúng ta (đã kiểm):**
+
+- `SidecarService` gọi `recoverInterruptedTasks()` ngay trong constructor (`sidecar.ts:307`), không có khoá single-instance. Sidecar thứ hai trên cùng DB sẽ chuyển task `running`/`waiting_approval` của sidecar đầu sang `needs_reconciliation`.
+- Harness chạy server stdio như tiến trình con và `probe` kết nối rồi đóng. Nếu cầu nối MCP tự spawn sidecar thì mỗi lần probe/restart/reload của Harness sinh thêm một sidecar và kích hoạt đúng lỗi trên. Cầu nối stdio KHÔNG được spawn sidecar.
+- Tauri đang sở hữu sidecar qua stdin/stdout nên cầu nối không đính kèm vào được. Cần một kênh cục bộ mới (named pipe hoặc loopback có xác thực) do MỘT tiến trình sở hữu DB phục vụ; đây là thay đổi ở orchestrator, cần ADR.
+- `approvals.resolve`, `tasks.resolveReconciliation`, `recovery.resolve` không phân biệt người gọi. Cầu nối phải allowlist, không phải denylist.
+
+**Chưa kiểm, cần probe tiếp:**
+
+- Bản Harness đã cài (kênh nightly) có thật sự mount `mcp-manager` và `dsh-mcp-client`; tài liệu mô tả nhánh `master`, bản cài có thể cũ hơn.
+- Cách thêm MCP server trong Desktop thực tế (Settings UI hay `cordis.yml`) và chỗ lưu trên máy.
+- Tool MCP có hiện thẻ phê duyệt trong Harness hay chạy ngầm ở preset `danger-full-access`.
+- Hành vi khi cầu nối rơi giữa chừng (reconnect, tool call treo).
+- Harness là developer preview, "có thay đổi phá tương thích": cần pin phiên bản.

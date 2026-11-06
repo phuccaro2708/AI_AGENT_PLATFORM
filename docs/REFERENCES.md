@@ -39,3 +39,12 @@ Không tham khảo repo công khai mới trong Phase 2; tài liệu và hành vi
 ## Phiên phụ 2026-11-04
 
 - https://github.com/github/spec-kit, tag `v1.3.0`, license MIT, xem 2026-11-04. Mục đích: so sánh thiết kế (integration/extension/preset/workflow/catalog, mô hình tin cậy cho mã thực thi). Chỉ đọc qua web; không sao chép code, không clone, không chạy script. Chưa dùng làm cơ sở tuyên bố tương thích.
+
+## Probe DeepSeek Harness 2026-11-06 (chỉ đọc)
+
+### deepseek-ai/deepseek-harness
+
+- URL: https://github.com/deepseek-ai/deepseek-harness — nhánh `master`, commit `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` (push cuối 2026-11-04), xem ngày 2026-11-06.
+- License: MIT (GitHub nhận diện). Developer preview; `SAFETY.md` nói rõ chưa audit bảo mật, sandbox/approval không đảm bảo cô lập. Bản cài trên máy có kênh cập nhật `nightly` tại `download.deepseek.com`, publisher ký là Hangzhou DeepSeek (khớp nguồn chính thức, nhưng chưa kiểm chữ ký số).
+- Mục đích: xác minh Harness có nhận MCP server ngoài hay không, để quyết định cầu nối MCP tới sidecar. Đọc qua `gh api` chỉ đọc, không clone, không chạy script. Không sao chép code. Không thấy chỉ thị đáng ngờ.
+- Tệp đã đọc: `docs/subsystems/mcp.md`, `.agents/notes/archived/feature/2026-07-07-mcp-client-plugin.md`, `.agents/notes/implemented/feature/2026-08-31-mcp-manager-plugin.md`, `docs/subsystems/permission-presets.md`, `SAFETY.md`, `apps/desktop/tests/profile-mcp.spec.ts`.

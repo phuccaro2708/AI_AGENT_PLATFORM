@@ -16,7 +16,8 @@ import {
 import { checkAgentSettings, type AgentLaunchSettings } from "./agent-settings.js";
 import { evaluate } from "@agent-studio/policy-engine";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
-import { CodexAdapter } from "@agent-studio/adapter-codex";
+import { CodexAdapter, CodexAppServerAdapter } from "@agent-studio/adapter-codex";
+import type { CodexAppServerOptions } from "@agent-studio/adapter-codex";
 import { AntigravityAdapter } from "@agent-studio/adapter-antigravity";
 import {
   probeClaude,
@@ -42,6 +43,7 @@ import { describeRouteFailure, selectAgent, snapshotAdapters } from "./capabilit
 import { Orchestrator } from "./orchestrator.js";
 import { Scheduler } from "./scheduler.js";
 import { checkProjectRoot, duplicateOf } from "./project-policy.js";
+import { appServerPolicy } from "./codex-app-server-gate.js";
 import { PolicyGate } from "./policy-gate.js";
 import {
   auditNote,
@@ -93,6 +95,13 @@ export interface SidecarOptions {
   policyCheckExtraLaunch?: boolean;
   /** How often a gate waiting for an approval looks at the task. Default 200 ms. */
   policyPollMs?: number;
+  /**
+   * Opt-in: also register the `codex-app-server` agent (P4-1 c), whose approval requests go through the Policy
+   * Engine. OFF in the real process until it has been checked against a real Codex (docs/ASSUMPTIONS.md, c3).
+   * The fields are launch overrides for the embedding code (tests point them at a fake server); when `command`
+   * is set the program itself is not re-checked, as for `extraAdapters`.
+   */
+  codexAppServer?: Pick<CodexAppServerOptions, "command" | "baseArgs" | "env" | "envAllow">;
   /** Parent folder of diagnostics bundles. Default: `diagnostics` next to the database. */
   diagnosticsDir?: string;
   /** Folder and file stem of the sidecar's log file (the native side redirects stderr there). Default: next to the database, `sidecar`. */
@@ -105,6 +114,7 @@ const DEFAULT_COMMANDS: Readonly<Record<string, string>> = {
   claude: "claude",
   codex: "codex",
   agy: "agy",
+  "codex-app-server": "codex",
 };
 
 const ok = (id: number, result: unknown) => ({
@@ -336,6 +346,20 @@ export class SidecarService {
     this.registry.register(this.buildCliAdapter("claude", this.repo.getAgentSettings("claude")));
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
     this.registry.register(this.gate.wrap(new AntigravityAdapter()));
+    if (opts.codexAppServer) {
+      const run = opts.policyEvaluate ?? evaluate;
+      this.registry.register(
+        this.gate.wrap(
+          new CodexAppServerAdapter({
+            ...opts.codexAppServer,
+            id: "codex-app-server",
+            evaluate: async (request, ctx) =>
+              run(appServerPolicy(ctx), request, { taskId: ctx.taskId }),
+          }),
+          { checkLaunch: opts.codexAppServer.command === undefined },
+        ),
+      );
+    }
     for (const a of opts.extraAdapters ?? [])
       this.registry.register(
         this.gate.wrap(a, { checkLaunch: opts.policyCheckExtraLaunch === true }),

@@ -43,6 +43,7 @@ import { describeRouteFailure, selectAgent, snapshotAdapters } from "./capabilit
 import { Orchestrator } from "./orchestrator.js";
 import { Scheduler } from "./scheduler.js";
 import { checkProjectRoot, duplicateOf } from "./project-policy.js";
+import { claudeGateTaskArgs, type ClaudeGateLauncher } from "./claude-permission-gate.js";
 import { appServerPolicy } from "./codex-app-server-gate.js";
 import { PolicyGate } from "./policy-gate.js";
 import {
@@ -102,6 +103,13 @@ export interface SidecarOptions {
    * is set the program itself is not re-checked, as for `extraAdapters`.
    */
   codexAppServer?: Pick<CodexAppServerOptions, "command" | "baseArgs" | "env" | "envAllow">;
+  /**
+   * Opt-in (P4-1 d): launch `claude` with `--permission-prompt-tool` so tool calls it did not settle itself are
+   * judged by the Policy Engine. OFF in the real process: not verified with a real claude run, nor together with
+   * `--safe-mode` (docs/ASSUMPTIONS.md, d). `configDir` receives one MCP config file per task; `launcher` is the
+   * program claude starts as that MCP server (default: this sidecar's own bundle, see `sidecar-main.ts`).
+   */
+  claudePermissionGate?: { configDir: string; launcher?: ClaudeGateLauncher };
   /** Parent folder of diagnostics bundles. Default: `diagnostics` next to the database. */
   diagnosticsDir?: string;
   /** Folder and file stem of the sidecar's log file (the native side redirects stderr there). Default: next to the database, `sidecar`. */
@@ -209,6 +217,14 @@ export class SidecarService {
             envAllow,
           }
         : {};
+    const gateOpt = this.opts.claudePermissionGate;
+    if (provider === "claude" && gateOpt) {
+      const taskArgs = claudeGateTaskArgs({
+        configDir: gateOpt.configDir,
+        launcher: gateOpt.launcher ?? { command: process.execPath, args: [process.argv[1] ?? ""] },
+      });
+      return this.gate.wrap(new ClaudeAdapter({ ...o, taskArgs }));
+    }
     return this.gate.wrap(provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o));
   }
 

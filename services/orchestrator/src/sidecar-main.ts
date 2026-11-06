@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline";
 import { NodeResourceSource } from "@agent-studio/resource-monitor";
 import { createLogger } from "@agent-studio/shared-utils";
+import { runPermissionGate } from "./claude-permission-gate.js";
 import { createEventWriter } from "./event-writer.js";
 import { createSecretRedactor, redactingDestination, takeSecretsFromEnv } from "./secrets.js";
 import { acquireSidecarLock, SidecarLockError } from "./sidecar-lock.js";
@@ -13,6 +14,18 @@ const EXIT_LOCKED = 75;
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? process.argv[i + 1] : undefined;
+}
+
+// Started by `claude --permission-prompt-tool` as its MCP server (P4-1 d, opt-in): no database, no lock, no logs on
+// stdout. Only ever reached when the sidecar was built with `claudePermissionGate`, which the real process is not.
+if (process.argv.includes("--permission-gate")) {
+  try {
+    await runPermissionGate(process.argv, process.stdin, process.stdout);
+    process.exit(0);
+  } catch (err) {
+    process.stderr.write(`permission gate cannot start: ${String(err)}\n`);
+    process.exit(2);
+  }
 }
 
 const dbPath = arg("db");

@@ -29,13 +29,13 @@ ADR-002 keeps an OS sandbox out of 1.0. No prototype was written and nothing was
 - Probe facts that do exist (P4-1 d, see `docs/ASSUMPTIONS.md`): codex `workspace-write` blocks writes outside the working folder (but treats `%TEMP%` as writable); claude `acceptEdits` blocks writes outside the working folder, while `--allowedTools Write` does not. Claude enforces by tool/path rules inside the CLI, not by the OS.
 - **Not achieved:** no OS-level containment of agent processes; agents can read files and use the network as the user. Git worktrees remain branch isolation only.
 
-### Policy gate in the permission loop (P4-1 c/d) — probed, not wired
+### Policy gate in the permission loop (P4-1 c/d) — implemented, OPT-IN, OFF by default
 
-Probe results (claude 2.1.318, codex-cli 0.166.0) are in `docs/ASSUMPTIONS.md`. The gate is NOT connected: the orchestrator does not see individual tool calls before they run. Do not describe the product as having per-command approval.
+Probe results (claude 2.1.318, codex-cli 0.166.0) are in `docs/ASSUMPTIONS.md`. Two gates exist behind the Policy Engine: Codex `app-server` (structured approvals) and Claude `--permission-prompt-tool` (MCP gate). Both are tested only against fake servers/processes, are disabled in the real process (enabled only through `SidecarOptions`) and have NOT been run against the real CLIs. Claude does not route every call through its prompt tool. Do not describe the product as having per-command approval. See `docs/THREAT_MODEL.md` T4.
 
 ### Recovery (P4-8, recovery steps only)
 
-On restart, tasks that were `running`/`waiting_approval` become `needs_reconciliation`; the person chooses resume, retry or abandon (`recovery.inspect` / `recovery.resolve`). Retry or resume of a task whose side effects cannot be verified is refused by the sidecar. Not done: resuming a Peer Review mid-run. Not checked in the real Tauri app.
+On restart, tasks that were `running`/`waiting_approval` become `needs_reconciliation`; the person chooses resume, retry or abandon (`recovery.inspect` / `recovery.resolve`). Retry or resume of a task whose side effects cannot be verified is refused by the sidecar. The Peer Review engine resumes from the database after a person resolves the interrupted task (implementer or reviewer; `sidecar-resume.test.ts`); a custom `maxRounds` is not persisted and an interruption in round 2 or later has no test. Not checked in the real Tauri app.
 
 ### Dependency audit (P4-11) — details in `docs/DEPS_AUDIT.md`
 
@@ -47,5 +47,5 @@ On restart, tasks that were `running`/`waiting_approval` become `needs_reconcili
 ## Not implemented yet (do not assume)
 
 - Policy Engine: `packages/policy-engine` has the pure decision code (path scope, command/network policy, 4 permission levels, grants). Phase 4 wired the pre-run gate at the points the platform controls and a post-run check; the in-loop gate and CLI sandbox-flag mapping are not connected (see above). Not a statement that agents are confined.
-- Per-task Job Object wrapper in the orchestrator; OS sandbox / AppContainer.
+- Per-task Job Object wrapper: `agent-job-wrap` and a whole-tree RAM watchdog are wired into the claude/codex adapters but OFF by default (`jobWrap`, `cliTreeMemoryLimitMb`); the wrapper binary is not in the installer. OS sandbox / AppContainer: not implemented.
 - Git worktrees are branch isolation, **not** a security sandbox. Isolation target for 1.0 is in ADR-002 and is explicitly not an OS-level sandbox.

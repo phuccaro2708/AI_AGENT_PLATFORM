@@ -391,3 +391,9 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Phiên con `ci-read-eae7ec9` không đọc được vì bộ phân loại an toàn tự động báo lỗi tạm; phiên chính đọc lại bằng `gh api graphql` (biến `oid`).
 - `eae7ec9`: Tauri, TypeScript ubuntu và windows, spike xanh; Security đỏ, secret scan 6 phát hiện (chuỗi giả trong test ở commit lịch sử `86ee0e9f`, `596bd258`). Chưa sửa; cần đồng ý sửa `ACCEPTED_HISTORY`.
 - `dc2c188` (chỉ đổi tài liệu): ubuntu xanh, 4 job còn lại đang chạy lúc đọc, chưa có kết quả cuối.
+
+## 2026-11-06: sửa Security đỏ của eae7ec9/dc2c188
+
+- `315914d` `ci: accept 6 reviewed fake-fixture hits from merged p4-tests history`: thêm 6 tuple (commit `86ee0e9f`, `596bd258`; diagnostics.test.ts dòng 53 và 114, manifest.test.ts dòng 95) vào `ACCEPTED_HISTORY` sau khi đọc lại các dòng (chuỗi giả). Người dùng đồng ý.
+- Quét cục bộ (`scripts/secret-scan.py`, venv tạm ngoài repo, detect-secrets 1.5.0, 247 commit, 72 giây): 6 phát hiện lịch sử đã hết; còn 2 phát hiện worktree do đường dẫn `\` trên Windows, không phải lỗi thật.
+- Đã push `9d1f9c9` và `315914d`. CI: `dc2c188` Security đỏ, 4 job còn lại xanh; `315914d` đang chạy, chưa có kết quả cuối.

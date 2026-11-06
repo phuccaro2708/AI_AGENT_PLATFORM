@@ -32,6 +32,7 @@
 
 - Làm lại UI: theme sáng/tối, sidebar kiểu Claude Code (Projects, Search, tab Agent/Multi-agent, "…" ẩn session), trang Settings + biệt danh hiển thị (mặc định "Admin", không có quyền hạn), bố cục 3 cột, Inspector thu gọn (Context/Activity/Tools/Logs), composer "task trước", trạng thái rỗng 3 bước, thẻ lỗi có hành động. Phần lấn sang Phase 5/7 về hình thức; chỉ là giao diện trên backend sẵn có.
 - Mode thứ hai của UI nay là Peer Review thật (Phase 2). Supervisor / Parallel Workers: Phase 9. Nợ Phase 2: engine resume sau restart, UI giải quyết reconciliation, chạy qua app Tauri thật.
+- [ ] ADR-006 (Đề xuất, chờ duyệt, ngoài thứ tự phase ADR-005): một sidecar duy nhất sở hữu DB + cầu nối MCP cho DeepSeek Harness chỉ dùng allowlist. Xem `docs/DECISIONS.md#adr-006`. Chưa làm gì cho tới khi được duyệt.
 - Cố ý không giả lập vì backend chưa có: danh sách file thay đổi, tab Plan/Files, nhánh git, "Diagnose", sửa đường dẫn project, command palette, remote agent, terminal thật (`node-pty` chưa spike, Phase 5). Ô Logs chỉ là khung xem tool_call/tool_result chỉ đọc.
 
 ## Phase 0 — Foundation (HOÀN THÀNH, có hạn chế)

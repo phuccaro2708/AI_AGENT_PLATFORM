@@ -427,3 +427,11 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Thêm `.codex/agents/{explorer,implementer,test-engineer,security-reviewer}.toml`, `.codex/config.toml` (`[agents]`, tối đa 2 luồng), `AGENTS.md` (trỏ về `CLAUDE.md`), `.claude/agents/codex-delegator.md`. Không đụng mã nguồn. Không dùng `.ai-workflow/` và wrapper PowerShell của tài liệu thiết kế (trùng SQLite/scheduler/`adapter-codex`).
 - Đã chạy: tìm khoá `[agents]` trong binary `codex.exe` (có); `codex exec --strict-config --sandbox read-only --ephemeral -m gpt-6.1-sol` hỏi danh sách vai (không lỗi, trả đủ 4 tên; ~31k token). Chi tiết và phần chưa kiểm: `docs/ASSUMPTIONS.md`, mục "Codex subagent".
 - Chưa chạy gate đầy đủ (chỉ thêm file cấu hình/tài liệu), chưa commit, chưa push.
+
+## 2026-11-06 (khuya, /save): đối chiếu tài liệu, sửa test khóa ubuntu
+
+- Hai phiên con chỉ đọc: `eval-multiagent` (đánh giá đề xuất Claude+Codex multi-subagent; kết luận giữ nguyên tắc, bỏ `.ai-workflow/` và wrapper PowerShell) và `inventory-next` (kiểm kê, kế hoạch 6 bước). Phiên `eval-multiagent` sau đó tạo Codex subagent (`938a708`) dù brief ghi chỉ đọc; nội dung ở mục trên.
+- `19c3f6d` `docs: reconcile HANDOFF ...`: sửa nhánh (`3cfcfc4` khớp origin), ghi CI `b1abf87` đỏ; `origin/claude/phase-2-kickoff-8a5732` đo lại 10 riêng / tụt 192.
+- CI đọc bằng `gh run view` (không GraphQL): `b1abf87` Security, TypeScript windows, Tauri, spike xanh, TypeScript ubuntu ĐỎ ở `sidecar-lock.test.ts:71` (`ERR_INVALID_ARG_VALUE`, tên socket trừu tượng có byte NUL làm đối số tiến trình con); 13/14 test khóa và 5/5 test tiến trình qua trên ubuntu. `3cfcfc4` cùng đỏ ở job ubuntu, Security còn chạy lúc đọc.
+- `c914033` `test(sidecar): pass the lock name ... as JSON`: truyền tên bằng `JSON.stringify`/`JSON.parse`. Đã chạy: `vitest run sidecar-lock.test.ts` 14/14, `prettier --check`, `eslint`, `tsc --noEmit` (orchestrator) qua; lệnh node riêng xác nhận tên có NUL đi qua JSON nguyên vẹn. Chưa chạy `pnpm test`/`build` đầy đủ, chưa chạy trên Linux (máy không có WSL).
+- Push `3cfcfc4..c914033` (không force, không PR). CI `c914033` chưa đọc kết quả cuối. `938a708` chưa push.

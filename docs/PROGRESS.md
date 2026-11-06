@@ -411,3 +411,11 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - `56592fa`: commit riêng `CLAUDE.md` theo yêu cầu người dùng (quy tắc `/plan` dùng `AskUserQuestion`, mục gọi Codex chỉ đọc).
 - `git push origin claude/loving-lovelace-32lh71` (không force): `315914d..56592fa`. Chưa đọc kết quả CI của đợt push này.
 - Người dùng duyệt từng phần ADR-006: chỉ khoá single-instance (2d) làm trước; kênh/vai/cầu nối chờ sau Phase 4. Chưa viết mã.
+
+## 2026-11-06 (đêm): A3 khoá single-instance của sidecar (ADR-006 §2d)
+
+- Mã: `services/orchestrator/src/sidecar-lock.ts` (+ `sidecar-lock.test.ts` 14 test, `sidecar-lock.process.test.ts` 5 test với sidecar thật từ bundle esbuild), nối vào `sidecar-main.ts` trước `SidecarService`; biến thể `fatal` thêm vào `SidecarEvent` (`packages/contracts`), UI bỏ qua `fatal` (`apps/desktop/src/taskLog.ts`, `useTaskLog.ts`), Rust ghi nhớ `fatal` để lỗi thành "sidecar exited: <lý do>" (`apps/desktop/src-tauri/src/sidecar.rs`). `scripts/sidecar-bundle.mjs` tách ra từ `build-sidecar.mjs` để test dùng chung bảng alias.
+- Test viết trước (đỏ: 2 test tiến trình hết thời gian 30 s vì chưa có khoá), rồi cài và nối; xanh.
+- Đã chạy: `pnpm lint` (sau khi bỏ import thừa), `pnpm format` (prettier --write 3 file test), `pnpm typecheck` (bắt được 3 chỗ dùng `SidecarEvent` cần xử lý `fatal`: `taskLog.ts`, `useTaskLog.ts`, `sidecar.test.ts`), `pnpm test` (72 file, 695 passed, 6 expected fail, 3 skipped), `pnpm build` (exit 0), `cargo test --locked` (16 passed + các binary khác, 1 ignored), `cargo clippy --all-targets --locked -- -D warnings`, `cargo fmt --check`, `node scripts/build-sidecar.mjs` và `node scripts/sidecar-spike.mjs` (11/11). Chạy lặp `sidecar-lock*.test.ts` 3 lần: 19/19 mỗi lần.
+- Phát hiện đo được: ACL mặc định của pipe Node cho Everyone/Anonymous quyền đọc (xem `ASSUMPTIONS.md`); ADR-006 §2c đã sửa. Socket trừu tượng Linux chưa chạy được cục bộ, chờ CI ubuntu.
+- Chưa push, chưa tạo PR, chưa đọc CI. Chưa kiểm: Linux, macOS, Job Object thật của Tauri, Node 22.

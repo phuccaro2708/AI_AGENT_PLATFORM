@@ -317,3 +317,21 @@ Nguồn: tài liệu `deepseek-ai/deepseek-harness@fcc0ad4` (xem `REFERENCES.md`
 - Tool MCP có hiện thẻ phê duyệt trong Harness hay chạy ngầm ở preset `danger-full-access`.
 - Hành vi khi cầu nối rơi giữa chừng (reconnect, tool call treo).
 - Harness là developer preview, "có thay đổi phá tương thích": cần pin phiên bản.
+
+## Khoá single-instance của sidecar (A3, ADR-006 §2d; 2026-11-06)
+
+Đã kiểm (máy Windows 11, Node 24.18; test trong `sidecar-lock.test.ts` và `sidecar-lock.process.test.ts`):
+
+- Named pipe do Node tạo bị `EADDRINUSE` khi tên đã có người giữ; tiến trình giữ bị `SIGKILL` thì tên được giải phóng ngay (lấy lại sau ~1 ms). Test tiến trình thật: sidecar B thua khoá thoát mã 75, task `running` do A sở hữu giữ nguyên, B không in "sidecar ready".
+- `fs.realpathSync.native` chuẩn hoá junction, tên 8.3 (`C:\PROGRA~1`) và chữ hoa/thường; `fs.realpathSync` JS và `path.resolve` thì không. Vì vậy băm tên khoá lấy từ `.native` của thư mục cha.
+- ACL mặc định của pipe do Node tạo (đo bằng `PipesAclExtensions.GetAccessControl`): `O:<SID chủ>D:(A;;FR;;;WD)(A;;FR;;;AN)(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;<SID chủ>)`, tức Everyone và Anonymous có quyền đọc. **Pipe mặc định không phải biên theo người dùng**; kênh 2c (A2) phải tự đặt DACL hoặc dùng token. Giả định cũ trong ADR-006 ("DACL theo người dùng") được sửa tương ứng.
+
+Chưa kiểm / giới hạn đã chấp nhận:
+
+- Socket trừu tượng trên Linux (tự giải phóng khi `SIGKILL`, `EADDRINUSE`, chạy trong runner ubuntu của GitHub Actions): chưa chạy được cục bộ (WSL2 không khởi động vì chưa bật ảo hoá). Chỉ có tra cứu tài liệu qua Codex (nguồn không đáng tin, đã đối chiếu tài liệu Node v22) và job CI ubuntu sẽ là xác nhận đầu tiên. Nếu job đỏ: lùi về socket file + connect-test. Phạm vi của socket trừu tượng là network namespace; hai tiến trình trong cùng job CI dùng chung namespace.
+- Một tiến trình khác giữ bản sao descriptor của server khoá sẽ kéo dài vòng đời socket trừu tượng; sidecar không truyền descriptor cho tiến trình con (chưa có test riêng).
+- macOS (socket file + connect-test, dọn socket cũ): không có test; hai tiến trình cùng dọn đồng thời có thể cùng giữ khoá.
+- Người dùng Windows khác tạo trước pipe cùng tên (tên suy ra được từ băm) làm sidecar không khởi động được: DoS cục bộ, không đọc/ghi được DB; chưa thử với hai tài khoản. Chấp nhận.
+- Đường dẫn DB khác nhau trỏ cùng tệp qua ổ ánh xạ (`subst`, ổ mạng) hoặc UNC/`\?\` chưa thử; hai đường dẫn đó có thể băm khác nhau và cùng mở một DB.
+- Sidecar treo (vòng lặp sự kiện kẹt) khi Tauri còn sống giữ khoá: sidecar mới thất bại sau 3 giây với `fatal`, không tự giết tiến trình kia; mỗi lời gọi UI sau đó spawn một sidecar mới chờ 3 giây rồi thất bại (backoff phía Tauri để sau).
+- Chưa kiểm dưới Job Object bị đóng bởi Tauri thật (test dùng `kill`); Node 22 (CI) chưa chạy thử cục bộ.

@@ -19,6 +19,7 @@ export function mergeMessages(log: TaskLog, incoming: AgentMessage[]): TaskLog {
 }
 
 export function applyEvent(log: TaskLog, e: SidecarEvent): TaskLog {
+  if (e.event === "fatal") return log; // about the sidecar, not about any task
   return e.event === "task.message" ? mergeMessages(log, [e.message]) : { ...log, state: e.state };
 }
 

@@ -3,7 +3,11 @@ import { NodeResourceSource } from "@agent-studio/resource-monitor";
 import { createLogger } from "@agent-studio/shared-utils";
 import { createEventWriter } from "./event-writer.js";
 import { createSecretRedactor, redactingDestination, takeSecretsFromEnv } from "./secrets.js";
+import { acquireSidecarLock, SidecarLockError } from "./sidecar-lock.js";
 import { SidecarService } from "./sidecar.js";
+
+/** Exit code of a sidecar that lost the single-instance lock (EX_TEMPFAIL). */
+const EXIT_LOCKED = 75;
 
 /** stdout is reserved for the protocol; all logs go to stderr. */
 function arg(name: string): string | undefined {
@@ -30,6 +34,19 @@ const log = createLogger({
   name: "sidecar",
   destination: redactingDestination(createSecretRedactor(secrets), process.stderr),
 });
+// One sidecar per database: a second one would recover the first one's live tasks away (ADR-006 §2d).
+// The lock must be held before SidecarService is constructed, because its constructor runs recovery.
+let lock: Awaited<ReturnType<typeof acquireSidecarLock>>;
+try {
+  lock = await acquireSidecarLock(dbPath);
+} catch (err) {
+  const message = err instanceof Error ? err.message : String(err);
+  log.error({ err: message }, "sidecar cannot start");
+  // Tell the desktop shell why before exiting; exit only after the line is flushed.
+  const line = JSON.stringify({ event: "fatal", message }) + "\n";
+  process.stdout.write(line, () => process.exit(err instanceof SidecarLockError ? EXIT_LOCKED : 1));
+  await new Promise<never>(() => undefined); // never construct the service; the callback above exits
+}
 const service = new SidecarService(
   {
     dbPath,
@@ -47,7 +64,7 @@ function finish(code: number): void {
   if (closing) return;
   closing = true;
   service.close();
-  process.exit(code);
+  void lock.release().finally(() => process.exit(code));
 }
 
 const rl = createInterface({ input: process.stdin });

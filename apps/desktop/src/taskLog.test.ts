@@ -48,6 +48,12 @@ describe("task log", () => {
     expect(hasGap(l)).toBe(false);
     expect(resyncCursor(l)).toBe(4);
   });
+  it("ignores a sidecar-level fatal event: it belongs to no task", () => {
+    const l = applyEvent(emptyLog, push(msg(0)));
+    expect(applyEvent(l, { event: "fatal", message: "another sidecar owns this database" })).toBe(
+      l,
+    );
+  });
   it("a log that does not start at 0 counts as a gap; an empty log resyncs from -1", () => {
     expect(hasGap(mergeMessages(emptyLog, [msg(3)]))).toBe(true);
     expect(resyncCursor(emptyLog)).toBe(-1);

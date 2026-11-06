@@ -361,6 +361,8 @@ export const SidecarEvent = z.discriminatedUnion("event", [
     state: TaskState,
     reason: z.string().optional(),
   }),
+  /** The sidecar cannot run and is about to exit (e.g. another sidecar owns the database). */
+  z.object({ event: z.literal("fatal"), message: z.string() }),
 ]);
 export type SidecarEvent = z.infer<typeof SidecarEvent>;
 

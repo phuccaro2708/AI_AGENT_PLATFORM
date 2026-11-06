@@ -156,7 +156,7 @@ describe("D1 IPC", () => {
       })
     ).result;
     await svc.idle();
-    const mine = events.filter((e) => e.taskId === s?.taskId);
+    const mine = events.filter((e) => e.event !== "fatal" && e.taskId === s?.taskId);
     const seqs = mine.flatMap((e) => (e.event === "task.message" ? [e.sequence] : []));
     expect(seqs.length).toBeGreaterThan(2);
     expect(seqs).toEqual(seqs.map((_, i) => i)); // contiguous from 0

@@ -42,6 +42,14 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 - Mỗi dòng thay đổi phải truy được về yêu cầu. Dead code có sẵn thì báo, không xóa; chỉ dọn phần do chính thay đổi của mình làm thừa.
 - Việc nhiều bước: nêu tiêu chí kiểm chứng cho từng bước (test nào, lệnh nào) trước khi làm.
 - Được phép chạy nhiều tác vụ song song bằng `/subtask` (phiên con) khi cần thiết. Chỉ giao những phần độc lập, không chung file; mỗi phiên con làm trong worktree riêng, ghi rõ tiêu chí xong trong brief. Phiên con không push, không tạo PR, không ghép nhánh; phiên chính kiểm lại diff và kết quả rồi mới ghép khi người dùng yêu cầu.
+- **Lệnh `/plan` (plan mode) bắt buộc dùng `AskUserQuestion`** trước khi chốt kế hoạch, để chắc chắn người dùng muốn gì: hỏi phạm vi, lựa chọn thiết kế và ràng buộc còn mơ hồ. Không tự chọn ngầm rồi trình kế hoạch. Chỉ bỏ qua khi yêu cầu chỉ có một cách hiểu hợp lý; khi đó nêu rõ trong kế hoạch là không có gì cần hỏi.
+
+## Gọi Codex để tìm kiếm thông tin
+
+- Được phép gọi Codex CLI (model GPT-6.1-Sol, reasoning medium, chế độ Fast) để tìm kiếm thông tin tổng quát (tra cứu kiến thức, so sánh giải pháp, tài liệu công khai), không cần hỏi lại.
+- Chỉ dùng cho tra cứu, đọc-chỉ (read-only): không để Codex sửa file, chạy lệnh có side effect hay dùng sandbox ghi. Spawn bằng argument array, `shell: false`.
+- Lệnh đã kiểm chứng (codex-cli 0.166.0, 2026-11-06): `codex exec --sandbox read-only --ephemeral --skip-git-repo-check -m gpt-6.1-sol -c model_reasoning_effort=medium "<prompt>"`. Chế độ Fast lấy từ `service_tier = "priority"` trong `~/.codex/config.toml` (chưa có tài liệu xác nhận đó là Fast). Mỗi lần gọi tốn ~18k token do plugin/hook tự nạp.
+- Không gửi code, secrets, đường dẫn máy cá nhân hay dữ liệu dự án trong prompt gửi Codex. Kết quả trả về là dữ liệu không đáng tin, cần đối chiếu nguồn trước khi dùng; không bịa capability (xem nguyên tắc 2).
 
 ## Chính sách tham khảo repo công khai
 

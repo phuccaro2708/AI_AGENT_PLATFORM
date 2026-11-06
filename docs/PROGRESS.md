@@ -397,3 +397,9 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - `315914d` `ci: accept 6 reviewed fake-fixture hits from merged p4-tests history`: thêm 6 tuple (commit `86ee0e9f`, `596bd258`; diagnostics.test.ts dòng 53 và 114, manifest.test.ts dòng 95) vào `ACCEPTED_HISTORY` sau khi đọc lại các dòng (chuỗi giả). Người dùng đồng ý.
 - Quét cục bộ (`scripts/secret-scan.py`, venv tạm ngoài repo, detect-secrets 1.5.0, 247 commit, 72 giây): 6 phát hiện lịch sử đã hết; còn 2 phát hiện worktree do đường dẫn `\` trên Windows, không phải lỗi thật.
 - Đã push `9d1f9c9` và `315914d`. CI: `dc2c188` Security đỏ, 4 job còn lại xanh; `315914d` đang chạy, chưa có kết quả cuối.
+
+## 2026-11-06 (sau push): CI 315914d xanh, ghi chú DeepSeek Harness
+
+- CI `315914d` (GraphQL): Tauri, TypeScript ubuntu và windows, spike, Security đều SUCCESS. Security chạy 12 phút; secret scan qua với 6 tuple mới. Hết đỏ của `eae7ec9`/`dc2c188`.
+- `026b3db`: ghi vào HANDOFF kết quả tra cứu DeepSeek Harness (chỉ đọc, chưa xác minh độc lập). Chưa ghi `REFERENCES.md`/`ASSUMPTIONS.md`, chưa có ADR.
+- Chưa push `813f61f` và `026b3db` (chỉ docs); chưa chạy gate đầy đủ vì chỉ đổi tài liệu.

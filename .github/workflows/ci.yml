@@ -65,6 +65,8 @@ jobs:
         run: | # pragma: allowlist secret (false positive: package name 'detect-secrets==1.5.0')
           python3 -m pip install detect-secrets==1.5.0
           python3 scripts/secret-scan.py
+      - name: Release-age gate (transitive deps >= 14 days, allowlist scripts/deps-age-allowlist.json)
+        run: node scripts/deps-age-audit.mjs
       - name: cargo audit
         run: |
           cargo install cargo-audit --locked --version 0.22.2

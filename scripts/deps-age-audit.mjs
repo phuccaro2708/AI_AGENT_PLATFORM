@@ -261,10 +261,25 @@ const rows = [];
 if (wantNpm) rows.push(...(await auditNpm()));
 if (wantCargo) rows.push(...(await auditCargo()));
 
+// Accepted exceptions: scripts/deps-age-allowlist.json = [{ "id": "log@0.4.35", "reason": "...", "expires": "YYYY-MM-DD" }].
+// An entry only exempts a too-young package until its expiry date; expired or reason-less entries do not count.
+let allow = [];
+try {
+  allow = JSON.parse(readFileSync(resolve(root, "scripts/deps-age-allowlist.json"), "utf8"));
+} catch {
+  allow = [];
+}
+const allowed = new Set(
+  allow
+    .filter((e) => e.id && e.reason && e.expires && Date.parse(e.expires) > NOW)
+    .map((e) => e.id),
+);
+for (const r of rows) r.allowed = allowed.has(r.id);
+
 const summarize = (eco) => {
   const rs = rows.filter((r) => r.eco === eco);
   const ok = rs.filter((r) => r.ageDays !== null);
-  const young = ok.filter((r) => r.ageDays < DAYS);
+  const young = ok.filter((r) => r.ageDays < DAYS && !r.allowed);
   const unresolved = rs.filter((r) => r.ageDays === null);
   const youngest = [...ok].sort((a, b) => a.ageDays - b.ageDays)[0];
   return {

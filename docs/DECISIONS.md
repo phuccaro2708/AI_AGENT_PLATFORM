@@ -32,7 +32,7 @@
 
 ## ADR-006: Một sidecar duy nhất sở hữu DB; cầu nối MCP cho DeepSeek Harness chỉ dùng allowlist (2026-11-06)
 
-- **Trạng thái:** Đề xuất, chờ người dùng duyệt. KHÔNG triển khai gì trước khi được duyệt. ADR này nằm ngoài thứ tự phase của [ADR-005](#adr-005-thứ-tự-phase-chốt-lại-2026-11-04): không đổi thứ tự phase, không đóng phase nào, và chưa có mục nào trong `docs/ROADMAP.md`.
+- **Trạng thái:** Đề xuất, duyệt từng phần. Người dùng đã duyệt (2026-11-06) chỉ **làm mục 2d, khoá single-instance, trước** và cho phép ngoài thứ tự phase cho riêng mục này; kênh pipe, token, vai `bridge`/`ui` và cầu nối (2c, 2e, 2f) chờ sau Phase 4 và chưa được duyệt. Chủ DB (2a), 2b, việc spawn sớm sidecar và cách xử lý yêu cầu lặp (mục 5) chưa được hỏi, vẫn là đề xuất. Lưu ý khi lập kế hoạch cho 2d: cơ chế khoá đề xuất dùng một pipe chỉ để lắng nghe (chưa có giao thức, token hay vai), nên không kéo theo việc duyệt kênh 2c; việc chọn đúng cơ chế khoá là quyết định của kế hoạch riêng đó. Chưa có mã nào được viết. KHÔNG triển khai phần chưa duyệt. ADR này nằm ngoài thứ tự phase của [ADR-005](#adr-005-thứ-tự-phase-chốt-lại-2026-11-04): không đổi thứ tự phase, không đóng phase nào, và chưa có mục nào trong `docs/ROADMAP.md`.
 - **Phạm vi phiên viết:** chỉ tài liệu. Chưa có mã khoá, kênh hay cầu nối nào. Không tuyên bố "tương thích MCP" cho đến khi qua test (nguyên tắc 9 trong `CLAUDE.md`, ADR-003).
 - **Quy ước nguồn:** khẳng định về mã Agent Workspace có `file:dòng` đã đọc lại ngày 2026-11-06 (số dòng nằm trong phần chữ của link). Khẳng định về Harness đều ghi "theo tài liệu, chưa kiểm" vì chưa chạy thử với bản đã cài (xem `docs/ASSUMPTIONS.md`, mục probe 2026-11-06, và `docs/REFERENCES.md`).
 

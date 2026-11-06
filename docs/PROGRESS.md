@@ -403,3 +403,11 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - CI `315914d` (GraphQL): Tauri, TypeScript ubuntu và windows, spike, Security đều SUCCESS. Security chạy 12 phút; secret scan qua với 6 tuple mới. Hết đỏ của `eae7ec9`/`dc2c188`.
 - `026b3db`: ghi vào HANDOFF kết quả tra cứu DeepSeek Harness (chỉ đọc, chưa xác minh độc lập). Chưa ghi `REFERENCES.md`/`ASSUMPTIONS.md`, chưa có ADR.
 - Chưa push `813f61f` và `026b3db` (chỉ docs); chưa chạy gate đầy đủ vì chỉ đổi tài liệu.
+
+## 2026-11-06 (tối): probe Harness, ADR-006, duyệt từng phần
+
+- `933679d`: ghi probe chỉ đọc DeepSeek Harness vào `REFERENCES.md`/`ASSUMPTIONS.md` (đọc tài liệu qua `gh api`, không clone/chạy script; chưa thử bản Harness đã cài).
+- `97a4590`, `b85bb02`: ADR-006 (đề xuất). Lệnh: `pnpm exec prettier --check docs/DECISIONS.md docs/TODO.md` qua; script đối chiếu 40 tham chiếu `file:dòng`, 0 sai. Chỉ đổi tài liệu, không chạy gate đầy đủ.
+- `56592fa`: commit riêng `CLAUDE.md` theo yêu cầu người dùng (quy tắc `/plan` dùng `AskUserQuestion`, mục gọi Codex chỉ đọc).
+- `git push origin claude/loving-lovelace-32lh71` (không force): `315914d..56592fa`. Chưa đọc kết quả CI của đợt push này.
+- Người dùng duyệt từng phần ADR-006: chỉ khoá single-instance (2d) làm trước; kênh/vai/cầu nối chờ sau Phase 4. Chưa viết mã.

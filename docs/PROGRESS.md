@@ -435,3 +435,10 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - CI đọc bằng `gh run view` (không GraphQL): `b1abf87` Security, TypeScript windows, Tauri, spike xanh, TypeScript ubuntu ĐỎ ở `sidecar-lock.test.ts:71` (`ERR_INVALID_ARG_VALUE`, tên socket trừu tượng có byte NUL làm đối số tiến trình con); 13/14 test khóa và 5/5 test tiến trình qua trên ubuntu. `3cfcfc4` cùng đỏ ở job ubuntu, Security còn chạy lúc đọc.
 - `c914033` `test(sidecar): pass the lock name ... as JSON`: truyền tên bằng `JSON.stringify`/`JSON.parse`. Đã chạy: `vitest run sidecar-lock.test.ts` 14/14, `prettier --check`, `eslint`, `tsc --noEmit` (orchestrator) qua; lệnh node riêng xác nhận tên có NUL đi qua JSON nguyên vẹn. Chưa chạy `pnpm test`/`build` đầy đủ, chưa chạy trên Linux (máy không có WSL).
 - Push `3cfcfc4..c914033` (không force, không PR). CI `c914033` chưa đọc kết quả cuối. `938a708` chưa push.
+
+## 2026-11-06 (khuya): ghép cục bộ P4-1 c (Codex app-server)
+
+- Đối chiếu `claude/p4-1c-codex-approval-57e833`: 3 commit riêng, tụt 2 (docs), `git cherry` cả 3 chưa có. Ghép `git merge --no-ff` (`426c200`), không xung đột, chưa push.
+- Nội dung (phiên con `p4-1c-codex-approval`): `packages/adapter-codex/src/app-server.ts` (+ test, fake server), bóc wrapper `pwsh.exe -Command '…'` đã quan sát rồi mới gọi `evaluate()`, ASSUMPTIONS mục c3.
+- Gate sau ghép (Windows): `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm build` không báo lỗi; `pnpm test` 73 file, 743 qua, 6 expected fail, 3 bỏ qua. `cargo` chưa chạy (không đụng Rust).
+- Chưa kiểm: Codex thật sau khi sửa wrapper (chỉ fixture đã quan sát + server giả); cổng chưa nối vào orchestrator. P4-1 c chưa tính là xong cho Phase 4.

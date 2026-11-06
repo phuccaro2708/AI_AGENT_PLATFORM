@@ -1,9 +1,10 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `eae7ec9`, đã push, khớp origin; CI `191e7b9`, `c0928af`, `1d95056` xanh 5/5; `eae7ec9` và `dc2c188`: 4/5 xanh, **Security ĐỎ**; đã sửa ở `315914d`, CI `315914d` xanh 5/5 (đọc 2026-11-06); hai commit docs `813f61f`, `026b3db` chưa push). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-06 (đêm). Nhánh `claude/loving-lovelace-32lh71` ở `b1abf87`, đã push, khớp origin. CI của đợt push `56592fa` và `b1abf87` CHƯA đọc. CI `315914d` xanh 5/5 (đọc 2026-11-06). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Vị trí
 
+- **Khoá single-instance của sidecar (A3, ADR-006 §2d) đã xong và push** (`1fe2290`, `d5afd87`, `b1abf87`): `services/orchestrator/src/sidecar-lock.ts`, sidecar thua khoá thoát mã 75 kèm sự kiện `fatal`. Gate cục bộ xanh (xem PROGRESS 2026-11-06 đêm). Chưa kiểm: socket trừu tượng Linux (chờ job CI ubuntu), Node 22, Job Object thật, macOS. Phần còn lại của ADR-006 (chủ DB, kênh, token, vai, cầu nối Harness, spawn sớm, yêu cầu lặp) vẫn là đề xuất, chờ sau Phase 4.
 - Nhánh chính `claude/loving-lovelace-32lh71` ở `4595705`, đi trước origin 7 commit (chưa push). Đã chứa Phase 4 mã thuần (`98539d3`), các nhánh phiên con (policy-win-hardening, wire-resource-monitor, flaky-root-cause, probe-permissions, p4-*), `p4-tests-c781ca` (cả `86ee0e9`, ghép cục bộ `87cc0e6`) và `fix-pm-abort-flaky` (`9f5de1a`). Nhánh còn lại trên origin: `fix-pm-abort-flaky-7e3a1f` (xoá được sau khi push) và `phase-2-kickoff-8a5732` (không ghép). Các nhánh đã ghép khác đã xoá 2026-11-05.
 - Bốn nhánh phiên con đã ghép vào nhánh chính (2026-11-05, `f11a353`): `policy-win-hardening` (policy-engine trên Windows: `realpath.native`, UNC/ADS), `wire-resource-monitor` (monitor nối vào `SidecarService`), `flaky-root-cause` (scheduler flaky là lỗi test, đã sửa test), `probe-permissions` (probe quyền thật của `claude`/`codex`, fixture + ASSUMPTIONS). Kiểm đầy đủ trên Windows sau ghép: lint (loại `.claude/**`), prettier, typecheck, build thoát 0; `pnpm test` 55 file, 531 qua, 3 bỏ qua. `cargo` chưa chạy lại (`src-tauri` không đổi).
 - Không còn nhánh phiên con nào chưa ghép ngoài `phase-2-kickoff`. Router có thể chọn `agy` (adapter chỉ qua CLI giả): người dùng đã quyết KHÔNG loại mà thêm nút bật/tắt (`91317e4`, mặc định bật).
@@ -50,8 +51,10 @@ Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `eae
 
 ## Việc tiếp theo (theo thứ tự)
 
+- Đọc CI của `b1abf87` (GraphQL), nhất là job TypeScript ubuntu: test `sidecar-lock.test.ts` xác nhận socket trừu tượng Linux. Nếu đỏ: lùi về socket file + connect-test (xem ASSUMPTIONS, mục khoá single-instance).
+
 0. Phase 4: duyệt hướng P4-1 c/d (xem `docs/ASSUMPTIONS.md`, mục probe 2026-11-05) rồi nối cổng quyền vào orchestrator; nối `agent-job-wrap` vào process-manager + gói cài đặt; engine resume Peer Review (P4-8 b); (recovery, diagnostics, kill đột ngột/Job Object, capabilities đã kiểm trong app Tauri thật 2026-11-05, xem PROGRESS); duyệt 5 bước recovery. Sau đó mới xét `PHASE4_REPORT.md`.
-1. Mọi gói workspace mới phải được thêm vào alias của `scripts/build-sidecar.mjs`. CI `191e7b9` đã xanh 5/5 (đọc bằng GraphQL 2026-11-05).
+1. Mọi gói workspace mới phải được thêm vào bảng alias trong `scripts/sidecar-bundle.mjs` (tách ra từ `build-sidecar.mjs` ngày 2026-11-06). CI `191e7b9` đã xanh 5/5 (đọc bằng GraphQL 2026-11-05).
 2. Xem nút "Auto" + bật/tắt `agy` trong app Tauri thật (NEXT_PLAN Bước 1; mới có unit/sidecar test).
 3. Bước 2B (nối `evaluate()` vào orchestrator): probe `--permission-prompt-tool` (claude) và `app-server` (codex) đã xong (xem ASSUMPTIONS, mục probe 2026-11-05) nhưng cổng của claude không thấy mọi lời gọi; chưa nối mã, chờ người dùng duyệt hướng.
 4. Phase 3 còn lại: `trackedPids`/VRAM/UI/ngưỡng cho resource monitor; chạy `agy` thật (xin phép lượt probe); Ollama hoãn.
@@ -59,17 +62,19 @@ Cập nhật: 2026-11-05 (nhánh chính `claude/loving-lovelace-32lh71` ở `eae
 
 ## Chờ người dùng quyết
 
+- ADR-006 phần chưa duyệt: A1 chủ DB, A7 spawn sớm sidecar, A8 yêu cầu lặp `workflows.start` chưa được hỏi; A2/A4/A5/A6 (kênh, token, vai, allowlist/cầu nối) chờ sau Phase 4.
 - Duyệt hướng P4-1 c/d (claude `--permission-prompt-tool` nhưng cổng không thấy mọi lời gọi; codex `app-server` có approval có cấu trúc, `exec --json` không có) và định nghĩa 5 bước recovery.
 - Duyệt dependency Tailwind/shadcn và Playwright; cho phép lượt probe `agy` thứ 3; duyệt phạm vi grant 7C-2; xác nhận có bỏ `claude/phase-2-kickoff-8a5732` không.
 - Dọn nhánh 2026-11-05: đã xoá 20 nhánh cục bộ và 4 nhánh origin đã ghép, gỡ 7 worktree khỏi git. Còn thư mục rỗng bị Windows giữ (`p4-deps`, `p4-ipc`, `p4-probe`, `p4-rust`) và 5 thư mục worktree cũ không đăng ký trong `.claude/worktrees/`. Sau khi push, xoá được `origin/claude/fix-pm-abort-flaky-7e3a1f`. Duyệt probe tiếp cho Bước 2B; ngưỡng tài nguyên và có hiện trong UI không.
 - Dọn A5 không làm mất dữ liệu người dùng: mục `index/claude.agent-studio` đã xoá là danh sách TÊN secret của provider claude do chính app tạo (`secrets.rs`), nhiều khả năng là tàn dư kiểm 7B; người dùng xác nhận chưa từng nhập secret nào. Không có mục thì Settings hiện danh sách rỗng (NoEntry → rỗng), không lỗi.
 - Nhánh `origin/claude/phase-2-kickoff-8a5732` (10 commit, tụt 169 commit) là bản Phase 2 cũ, nhánh chính đã tiến hoá; khuyến nghị không gộp, chờ người dùng quyết xoá hay giữ. `CLAUDE.md` có mục tự động hoá commit/merge/đối chiếu nhánh (không tự push, không tạo PR).
 
-- Ý tưởng chưa quyết (2026-11-06): đưa cả dự án vào DeepSeek Harness (`dsh`) làm plugin. Chưa có ADR, nằm ngoài thứ tự phase ADR-005. Kết quả tra cứu xem mục "Chưa xác minh" bên dưới; đề xuất một phiên probe chỉ đọc trước khi quyết, người dùng chưa trả lời.
+- DeepSeek Harness làm giao diện cho Agent Workspace: đã probe chỉ đọc (`REFERENCES.md`, `ASSUMPTIONS.md`) và có ADR-006 (đề xuất, duyệt từng phần; chỉ 2d đã làm). Bản Harness đã cài chưa được thử.
 
 ## Chưa xác minh / nợ nhỏ
 
-- DeepSeek Harness (`dsh`, 2026-11-06), CHỈ ĐỌC, chưa có mục nào trong `docs/REFERENCES.md`/`ASSUMPTIONS.md`: repo `deepseek-ai/deepseek-harness`, MIT, developer preview ("có thay đổi phá tương thích"), tag mới nhất `dsh-v0.2.2-rc.1` (2026-11-04). Desktop là Electron (`apps/desktop`), dev bằng `pnpm run dev:desktop`, cần Node 24.9+. Trên máy: thư mục dữ liệu `%APPDATA%\@deepseek-ai\dsh-desktop` (có `desktop\settings.json`, chưa mở) và app ở `%LOCALAPPDATA%\Programs\DeepSeek Harness`. Đã xác nhận: kiến trúc "everything is a plugin" trên Cordis. CHƯA tìm thấy/chưa kiểm: định dạng manifest và vòng đời plugin, mô hình quyền plugin (`SAFETY.md` chỉ nói sandbox/phê duyệt không đảm bảo cô lập), tài liệu Skill và MCP, vị trí/định dạng `settings.json`, việc org `deepseek-ai` là chính thức. Chưa mở: `docs/user/develop/`, `docs/config-catalog.md`, `packages/boot/plugin-manager/README.md`. Nguồn là báo cáo subagent đọc GitHub, chưa kiểm độc lập.
+- DeepSeek Harness: dữ kiện nằm ở `docs/REFERENCES.md` và `docs/ASSUMPTIONS.md` (probe 2026-11-06, "theo tài liệu, chưa kiểm" trên bản cài). Chưa kiểm: `mcp-manager` trong bản nightly đã cài, cách thêm MCP server, thẻ phê duyệt cho tool MCP, hành vi khi cầu nối rơi.
+- Pipe mặc định của Node cho Everyone/Anonymous quyền đọc (đo 2026-11-06): kênh A2 sau này phải tự đặt DACL hoặc dùng token.
 
 - Test 8.3 đã chạy và qua trên CI Windows (2026-11-05); trên máy này vẫn có thể bị bỏ qua nếu volume tắt tên 8.3. Ghi chú cũ: `canonicalize` đã dùng `realpath.native` trên Windows (ghép từ `policy-win-hardening`), nhưng test 8.3 bị bỏ qua trên máy này nên việc sửa 8.3 chưa được chứng minh bằng test chạy thật. Commit `wire-resource-monitor` có bước rà soát bảo mật tự động không hoàn tất (không đọc được phản hồi mô hình): chưa có kết luận bảo mật.
 - `cargo clippy --all-targets -D warnings` qua và `cargo test` 12 qua, 0 lỗi, 1 ignored (2026-11-05, Windows, `--locked`; phiên con đọc, `src-tauri` không đổi).

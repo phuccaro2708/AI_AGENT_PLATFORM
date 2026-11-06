@@ -419,3 +419,5 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Đã chạy: `pnpm lint` (sau khi bỏ import thừa), `pnpm format` (prettier --write 3 file test), `pnpm typecheck` (bắt được 3 chỗ dùng `SidecarEvent` cần xử lý `fatal`: `taskLog.ts`, `useTaskLog.ts`, `sidecar.test.ts`), `pnpm test` (72 file, 695 passed, 6 expected fail, 3 skipped), `pnpm build` (exit 0), `cargo test --locked` (16 passed + các binary khác, 1 ignored), `cargo clippy --all-targets --locked -- -D warnings`, `cargo fmt --check`, `node scripts/build-sidecar.mjs` và `node scripts/sidecar-spike.mjs` (11/11). Chạy lặp `sidecar-lock*.test.ts` 3 lần: 19/19 mỗi lần.
 - Phát hiện đo được: ACL mặc định của pipe Node cho Everyone/Anonymous quyền đọc (xem `ASSUMPTIONS.md`); ADR-006 §2c đã sửa. Socket trừu tượng Linux chưa chạy được cục bộ, chờ CI ubuntu.
 - Chưa push, chưa tạo PR, chưa đọc CI. Chưa kiểm: Linux, macOS, Job Object thật của Tauri, Node 22.
+
+- Push `c2856af..b1abf87` lên `origin/claude/loving-lovelace-32lh71` (không force, không PR). Chưa đọc CI của đợt push này. Cập nhật `docs/HANDOFF.md` theo trạng thái mới.

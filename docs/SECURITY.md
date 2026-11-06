@@ -42,7 +42,7 @@ On restart, tasks that were `running`/`waiting_approval` become `needs_reconcili
 - `pnpm audit`: 0 high/critical, 2 moderate, both dev-only and ACCEPTED: nested `esbuild` via `drizzle-kit` (dev server issue, never run in the product) and `minimatch` via `eslint` (DoS; the patch 11.0.1 is not yet 14 days old on 2026-11-05 and eslint pins the older range). Upgrade when a patch is at least 14 days old and compatible.
 - `cargo audit`: 0 vulnerabilities, 2 warnings ACCEPTED: `proc-macro-error` (unmaintained) and `glib 0.18` (unsound) enter only through Tauri's GTK3 stack on Linux; neither is in the Windows build graph (`cargo tree --target x86_64-pc-windows-msvc`). Revisit if a Linux build ships.
 - GitHub Actions in `ci.yml` are pinned to full commit SHAs. Not yet verified on a real runner at the time of writing.
-- Direct dependencies: exact pins, none younger than 14 days. Not checked: age of transitive dependencies. `serde`/`serde_json` are `"1"` in `Cargo.toml` (locked by `Cargo.lock`).
+- Direct dependencies: exact pins, none younger than 14 days. Transitive dependencies (checked 2026-11-06 with `scripts/deps-age-audit.mjs`, see `DEPS_AUDIT.md` §5): npm 315 locked packages, 0 younger than 14 days; Cargo 423 locked crates, 13 younger than 14 days (youngest `log` 0.4.35, 6.9 days; mostly `tauri`/`reqwest`/`idna` chains), left unchanged pending a decision. Cargo has no `minimumReleaseAge` equivalent, so the 14-day rule is not enforced for crates. `serde`/`serde_json` are `"1"` in `Cargo.toml` (locked by `Cargo.lock`).
 
 ## Not implemented yet (do not assume)
 

@@ -72,8 +72,10 @@ describe("acquireSidecarLock", () => {
       process.execPath,
       [
         "-e",
-        "require('net').createServer().listen(process.argv[1], () => { console.log('held'); setInterval(() => {}, 1000); })",
-        sidecarLockName(db),
+        // The name is JSON-encoded because Linux uses an abstract socket name that starts with a NUL
+        // byte, which can neither be an argv entry nor an environment value.
+        "require('net').createServer().listen(JSON.parse(process.argv[1]), () => { console.log('held'); setInterval(() => {}, 1000); })",
+        JSON.stringify(sidecarLockName(db)),
       ],
       { stdio: ["ignore", "pipe", "inherit"], shell: false },
     );

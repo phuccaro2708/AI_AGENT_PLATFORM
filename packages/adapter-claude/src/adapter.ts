@@ -6,6 +6,7 @@ import {
   extendManifest,
   resolveExecutable,
   startProcess,
+  type JobWrapOptions,
   type RunningProcess,
   type SpawnManifest,
 } from "@agent-studio/process-manager";
@@ -69,6 +70,8 @@ export interface ClaudeAdapterOptions {
   env?: Record<string, string | undefined>;
   /** Variable names (besides the manifest's) that the host declares on purpose: stored settings, secrets. */
   envAllow?: readonly string[];
+  /** Run the CLI inside `agent-job-wrap` (P4-4 (b)): kill-on-close tree and per-process memory cap. Off by default. */
+  jobWrap?: JobWrapOptions;
 }
 
 /**
@@ -160,6 +163,7 @@ export class ClaudeAdapter implements AgentAdapter {
       command: this.opts.command ?? "claude",
       args: this.buildArgs(task),
       manifest: this.manifest,
+      ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
       cwd: task.cwd,
       ...(this.opts.env ? { env: this.opts.env } : {}),
       stdin: task.prompt,

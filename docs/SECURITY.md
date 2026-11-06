@@ -18,7 +18,7 @@
 
 - Sidecar: runs inside a Windows Job Object with `KILL_ON_JOB_CLOSE` (ADR-004), so its process tree dies with the app. Optional per-process memory cap via `AGENT_STUDIO_SIDECAR_MEM_LIMIT_MB` (unset = no cap).
 - Per task: `agent-job-wrap` (`src-tauri/src/bin/`) wraps one CLI in its own Job Object (argv array, no shell, `--mem-limit-mb`, `--timeout-secs`). Tested on Windows: killing the wrapper kills child and grandchild; timeout kills the tree (exit 124); missing program exits 125; `&`/`;` in arguments reach the program verbatim.
-- Limits: the memory cap is per process, not for the whole tree (`JOB_OBJECT_LIMIT_JOB_MEMORY` did not enforce in tests; cause unknown). A job grants no file, network or registry restriction: the process keeps the user's full rights. **The orchestrator does not call `agent-job-wrap` yet** and the binary is not in the installer, so per-task limits are NOT active in the product. Not checked: abrupt kill of the app on a real machine, Ctrl+C through the wrapper.
+- Limits: the memory cap is per process, not for the whole tree (`JOB_OBJECT_LIMIT_JOB_MEMORY` did not enforce in tests; cause unknown). A job grants no file, network or registry restriction: the process keeps the user's full rights. The orchestrator can now start `claude`/`codex` through `agent-job-wrap` (opt-in `jobWrap` option, tested with the real binary and with fake CLIs; see ASSUMPTIONS, Phase 4), but it is OFF in the real process and the binary is not in the installer, so per-task limits are NOT active in the product. Not checked: abrupt kill of the app on a real machine, Ctrl+C through the wrapper.
 
 ### AppContainer / Windows Sandbox (P4-5) — documentation only, nothing built
 

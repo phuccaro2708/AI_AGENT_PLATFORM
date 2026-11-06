@@ -7,6 +7,7 @@ import {
   BASE_ENV_ALLOWLIST,
   extendManifest,
   type SpawnManifest,
+  type JobWrapOptions,
   type RunningProcess,
 } from "@agent-studio/process-manager";
 import { createCodexParser } from "./parse.js";
@@ -47,6 +48,8 @@ export interface CodexAdapterOptions {
   env?: Record<string, string | undefined>;
   /** Variable names (besides the manifest's) that the host declares on purpose: stored settings, secrets. */
   envAllow?: readonly string[];
+  /** Run the CLI inside `agent-job-wrap` (P4-4 (b)): kill-on-close tree and per-process memory cap. Off by default. */
+  jobWrap?: JobWrapOptions;
 }
 
 /**
@@ -141,6 +144,7 @@ export class CodexAdapter implements AgentAdapter {
       command: this.opts.command ?? "codex",
       args: this.buildArgs(task),
       manifest: this.manifest,
+      ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
       cwd: task.cwd,
       ...(this.opts.env ? { env: this.opts.env } : {}),
       stdin: task.prompt,

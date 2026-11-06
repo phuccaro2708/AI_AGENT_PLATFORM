@@ -35,6 +35,7 @@ import {
 import { exportDiagnostics, verifyDiagnostics } from "@agent-studio/diagnostics";
 import { createLogger, type Logger } from "@agent-studio/shared-utils";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
+import type { JobWrapOptions } from "@agent-studio/process-manager";
 import { dirname, join } from "node:path";
 import { ApprovalService } from "./approvals.js";
 import { ArtifactRegistry } from "./artifacts.js";
@@ -110,6 +111,12 @@ export interface SidecarOptions {
    * program claude starts as that MCP server (default: this sidecar's own bundle, see `sidecar-main.ts`).
    */
   claudePermissionGate?: { configDir: string; launcher?: ClaudeGateLauncher };
+  /**
+   * Opt-in (P4-4 (b)): start the `claude` and `codex` CLIs inside `agent-job-wrap` (Windows Job Object, kill on
+   * close, per-process memory cap). OFF in the real process: the binary is not in the installer yet and no real
+   * CLI run through it was checked (docs/ASSUMPTIONS.md). Not applied to `codex-app-server` or Antigravity.
+   */
+  jobWrap?: JobWrapOptions;
   /** Parent folder of diagnostics bundles. Default: `diagnostics` next to the database. */
   diagnosticsDir?: string;
   /** Folder and file stem of the sidecar's log file (the native side redirects stderr there). Default: next to the database, `sidecar`. */
@@ -209,14 +216,16 @@ export class SidecarService {
     // Variables the user (stored settings) or the native side (secrets) named on purpose may reach the child;
     // the rest of this process's environment is cut down by the adapter's own manifest (P4-3).
     const envAllow = [...Object.keys(s?.env ?? {}), ...Object.keys(secret)];
-    const o =
-      s || Object.keys(secret).length > 0
+    const o = {
+      ...(s || Object.keys(secret).length > 0
         ? {
             ...(s ? { command: s.command, extraArgs: s.args } : {}),
             env: this.childEnv(provider, s?.env ?? {}),
             envAllow,
           }
-        : {};
+        : {}),
+      ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
+    };
     const gateOpt = this.opts.claudePermissionGate;
     if (provider === "claude" && gateOpt) {
       const taskArgs = claudeGateTaskArgs({

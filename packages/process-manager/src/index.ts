@@ -1,5 +1,11 @@
-export { runProcess, startProcess } from "./process.js";
-export type { RunOptions, RunOutcome, RunResult, RunningProcess } from "./process.js";
+export { jobWrapArgs, runProcess, startProcess } from "./process.js";
+export type {
+  JobWrapOptions,
+  RunOptions,
+  RunOutcome,
+  RunResult,
+  RunningProcess,
+} from "./process.js";
 export {
   ExecutableNotFoundError,
   UnsupportedShimError,

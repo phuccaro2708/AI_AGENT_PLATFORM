@@ -1,11 +1,29 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { killTree } from "./kill-tree.js";
 import { assertExecutableAllowed, filterEnv, type SpawnManifest } from "./manifest.js";
 import { UnsupportedShimError, resolveExecutable, unwrapNpmShim } from "./resolve.js";
 
+/**
+ * P4-4 (b): run the child inside `agent-job-wrap` (a Windows Job Object with kill-on-close). The wrapper is
+ * started as `<path> [--mem-limit-mb N] [--timeout-secs N] -- <resolved program> <args…>`; the manifest check
+ * and executable resolution still apply to the CLI, not to the wrapper. Lifetime and per-process memory only; not a sandbox.
+ */
+export interface JobWrapOptions {
+  /** Absolute path of the `agent-job-wrap` binary. A relative or missing path is a `spawn_error` (fail closed). */
+  path: string;
+  /** `--mem-limit-mb`: commit cap of EACH process in the job (not the tree total). Positive integer. */
+  memLimitMb?: number;
+  /** `--timeout-secs`: the wrapper kills the tree and exits 124 after this long. Positive integer. */
+  timeoutSecs?: number;
+}
+
 export interface RunOptions {
   command: string;
+  /** Run the resolved program through `agent-job-wrap` (see `JobWrapOptions`). */
+  jobWrap?: JobWrapOptions;
   args?: readonly string[];
   cwd?: string;
   /** Full environment for the child. Defaults to the parent's; with a `manifest` only declared names get through. */
@@ -45,6 +63,24 @@ export interface RunningProcess {
   pid: number | undefined;
   done: Promise<RunResult>;
   cancel(): Promise<void>;
+}
+
+/** Validates the wrapper settings and returns its leading flags. Throws, so the caller reports `spawn_error`. */
+export function jobWrapArgs(w: JobWrapOptions): string[] {
+  if (!isAbsolute(w.path) || !existsSync(w.path)) {
+    throw new Error("agent-job-wrap: path must be an existing absolute path");
+  }
+  const flags: string[] = [];
+  for (const [flag, n] of [
+    ["--mem-limit-mb", w.memLimitMb],
+    ["--timeout-secs", w.timeoutSecs],
+  ] as const) {
+    if (n === undefined) continue;
+    if (!Number.isInteger(n) || n <= 0)
+      throw new Error(`agent-job-wrap: ${flag} must be a positive integer`);
+    flags.push(flag, String(n));
+  }
+  return flags;
 }
 
 /**
@@ -97,8 +133,19 @@ export function startProcess(opts: RunOptions): RunningProcess {
     return failed("spawn_error", err instanceof Error ? err.message : String(err));
   }
 
+  let spawnFile = file;
+  let spawnArgs: string[] = [...prefix, ...(opts.args ?? [])];
+  if (opts.jobWrap) {
+    try {
+      spawnArgs = [...jobWrapArgs(opts.jobWrap), "--", file, ...spawnArgs];
+      spawnFile = opts.jobWrap.path;
+    } catch (err) {
+      return failed("spawn_error", err instanceof Error ? err.message : String(err));
+    }
+  }
+
   const posix = process.platform !== "win32";
-  const child = spawn(file, [...prefix, ...(opts.args ?? [])], {
+  const child = spawn(spawnFile, spawnArgs, {
     shell: false,
     windowsHide: true,
     detached: posix, // own process group so the whole tree can be signalled

@@ -442,3 +442,9 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Nội dung (phiên con `p4-1c-codex-approval`): `packages/adapter-codex/src/app-server.ts` (+ test, fake server), bóc wrapper `pwsh.exe -Command '…'` đã quan sát rồi mới gọi `evaluate()`, ASSUMPTIONS mục c3.
 - Gate sau ghép (Windows): `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm build` không báo lỗi; `pnpm test` 73 file, 743 qua, 6 expected fail, 3 bỏ qua. `cargo` chưa chạy (không đụng Rust).
 - Chưa kiểm: Codex thật sau khi sửa wrapper (chỉ fixture đã quan sát + server giả); cổng chưa nối vào orchestrator. P4-1 c chưa tính là xong cho Phase 4.
+
+## 2026-11-06 (khuya, /save lần 2): đồng bộ HANDOFF sau push
+
+- Đối chiếu docs với git/CI: nhánh `9db9c7c` khớp origin (đã push `c914033..9db9c7c`); CI `c914033` xanh (`gh run list`), nghĩa là lỗi ubuntu của khóa single-instance nằm ở test helper; CI `9db9c7c` còn chạy, chưa đọc kết quả cuối. `938a708` đã push.
+- Sửa `docs/HANDOFF.md`: header, dòng CI, dòng Codex subagent, bước Phase 4 (P4-1 c đã có adapter, chưa nối orchestrator). Mục PROGRESS "Codex subagent" (ghi "chưa commit, chưa push") là lời cũ của phiên khác, giữ nguyên; trạng thái đúng nằm ở HANDOFF.
+- Chưa làm: nhánh cục bộ `claude/p4-1c-codex-approval-57e833` đã nằm trọn trong nhánh chính, xoá được khi người dùng đồng ý dọn; TODO.md/ROADMAP.md chưa cập nhật P4-1 c (cổng chưa nối orchestrator nên chưa tick). Chỉ đổi tài liệu, không chạy gate đầy đủ.

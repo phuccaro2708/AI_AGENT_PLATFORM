@@ -263,7 +263,7 @@ if (wantCargo) rows.push(...(await auditCargo()));
 
 // Accepted exceptions: scripts/deps-age-allowlist.json = [{ "id": "log@0.4.35", "reason": "...", "expires": "YYYY-MM-DD" }].
 // An entry only exempts a too-young package until its expiry date; expired or reason-less entries do not count.
-let allow = [];
+let allow;
 try {
   allow = JSON.parse(readFileSync(resolve(root, "scripts/deps-age-allowlist.json"), "utf8"));
 } catch {

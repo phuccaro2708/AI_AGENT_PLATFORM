@@ -456,3 +456,18 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Đã chạy: venv ngoài repo (`%TEMP%\secscan-venv`), `pip install detect-secrets==1.5.0`, `python scripts/secret-scan.py` → "scanned worktree + 270 commits; findings: 2 (accepted fixture hits: 568)". 2 phát hiện còn lại (`docs\reports\phase0-windows\spike-report.json:28`, `packages\git-worktrees\src\git-worktrees.test.ts:42`) chỉ do đường dẫn `\` trên Windows không khớp `ACCEPTED_ANYWHERE`; không phải lỗi thật. Chưa chạy trên Linux/CI.
 - `prettier --check` và `eslint` không áp dụng được: prettier "No parser could be inferred" cho `.toml` và `.py`, eslint báo file bị bỏ qua (cảnh báo, 0 lỗi). Không có kiểm tra định dạng thực sự cho 2 file này.
 - Commit `e4095f0` (chỉ 2 file), chưa push, chưa tạo PR; CI chưa chạy lại.
+
+## 2026-11-06 (worktree `p4-close-prep`): chuẩn bị đóng Phase 4, mục 5–10 (chưa đóng phase)
+
+Nhánh `worktree-p4-close-prep`, 7 commit (`8a708fc` … `bd913c5`), chưa push, không PR, không viết `PHASE4_REPORT.md`.
+
+- 5 (P4-1 c) `8a708fc`: agent `codex-app-server` đăng ký opt-in sau PolicyGate; test với server giả (`sidecar-codex-app-server.test.ts`). Codex thật: NOT_RUN (chưa được cho phép).
+- 6 (P4-1 d) `355116a`, `92a1b5c`: cổng MCP `--permission-prompt-tool` của Claude, từ quan sát thật; test `permission-prompt.test.ts`, `claude-permission-gate.test.ts`. Phần chưa kiểm vào ASSUMPTIONS (`--safe-mode`, `updatedInput`, timeout). Chạy với Claude thật cho cổng: NOT_RUN.
+- 7 (P4-4 b) `3f2474d`: `jobWrap` cho adapter claude/codex qua `startProcess`; test `job-wrap.test.ts` (binary thật trên Windows nếu có `target/debug`), `sidecar-job-wrap.test.ts`. Tắt mặc định; binary chưa vào installer.
+- 8 (P4-4 b) `03c0e40`: watchdog RAM cho cả cây (`treeMemoryLimitMb`, outcome `memory_limit`); test `tree-memory.test.ts` (đo cây thật trên Windows). Là thăm dò, không phải trần cứng; nhánh POSIX chưa chạy.
+- 9 (P4-8 b) `68a594e`: engine Peer Review đã có resume; bổ sung 4 test reviewer bị ngắt (`sidecar-resume.test.ts`, 8 test qua). Còn hở: `maxRounds` không lưu, vòng ≥ 2 chưa test.
+- 10 `bd913c5`: `docs/THREAT_MODEL.md` (20 mối đe doạ, có cột trạng thái) và làm mới 3 chỗ lỗi thời trong `docs/SECURITY.md`.
+- Sự cố cần nói rõ: trong lúc viết test mục 7 có một bài test mặc định đã chạy `claude` thật ngoài ý định; bài test đó đã bị gỡ. Không phát hiện ghi file/dữ liệu ngoài dự kiến, nhưng đây là lần chạy CLI thật chưa được phép.
+- Gate đầy đủ (kết quả thật): `pnpm lint` exit 0; `pnpm format` exit 0; `pnpm typecheck` exit 0; `pnpm test` exit 0 (81 file, 787 qua, 6 expected fail, 3 bỏ qua); `pnpm build` exit 0. `src-tauri` không đụng nên không chạy cargo.
+- `python scripts/secret-scan.py` (venv `%TEMP%\secscan-venv`): "scanned worktree + 279 commits; findings: 2 (accepted fixture hits: 586)": đúng 2 phát hiện đường dẫn `\` Windows đã biết, không có phát hiện mới.
+- Còn thiếu để đóng Phase 4: chạy cổng Claude/Codex với CLI thật (cần người dùng cho phép), quyết định bật mặc định, installer chứa `agent-job-wrap`, soak 100 workflow, test bảo mật còn lại, tuổi gói transitive, probe hook git (T19), dòng bảng ROADMAP P4-8 (b), và người dùng duyệt THREAT_MODEL.

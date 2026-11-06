@@ -4,6 +4,7 @@ import { isAbsolute } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { killTree } from "./kill-tree.js";
 import { assertExecutableAllowed, filterEnv, type SpawnManifest } from "./manifest.js";
+import { sampleTreeBytes, type TreeMemorySampler } from "./tree-memory.js";
 import { UnsupportedShimError, resolveExecutable, unwrapNpmShim } from "./resolve.js";
 
 /**
@@ -24,6 +25,14 @@ export interface RunOptions {
   command: string;
   /** Run the resolved program through `agent-job-wrap` (see `JobWrapOptions`). */
   jobWrap?: JobWrapOptions;
+  /**
+   * Kill the whole process tree (outcome `memory_limit`) when its resident memory exceeds this many MB.
+   * Sampled every `memoryPollMs` (default 1000), so it is a watchdog and not a hard cap. Positive integer.
+   */
+  treeMemoryLimitMb?: number;
+  memoryPollMs?: number;
+  /** Replaces the real sampler (tests). */
+  memorySampler?: TreeMemorySampler;
   args?: readonly string[];
   cwd?: string;
   /** Full environment for the child. Defaults to the parent's; with a `manifest` only declared names get through. */
@@ -45,7 +54,7 @@ export interface RunOptions {
   stdioCloseGraceMs?: number;
 }
 
-export type RunOutcome = "exited" | "timeout" | "cancelled" | "spawn_error";
+export type RunOutcome = "exited" | "timeout" | "cancelled" | "spawn_error" | "memory_limit";
 
 export interface RunResult {
   outcome: RunOutcome;
@@ -57,6 +66,8 @@ export interface RunResult {
   stdoutTruncated: boolean;
   stderrTruncated: boolean;
   error?: string;
+  /** Why the run was ended by the host (`memory_limit`: measured size and limit). */
+  detail?: string;
 }
 
 export interface RunningProcess {
@@ -64,6 +75,8 @@ export interface RunningProcess {
   done: Promise<RunResult>;
   cancel(): Promise<void>;
 }
+
+const MAX_SAMPLE_FAILURES = 5;
 
 /** Validates the wrapper settings and returns its leading flags. Throws, so the caller reports `spawn_error`. */
 export function jobWrapArgs(w: JobWrapOptions): string[] {
@@ -133,6 +146,11 @@ export function startProcess(opts: RunOptions): RunningProcess {
     return failed("spawn_error", err instanceof Error ? err.message : String(err));
   }
 
+  const mem = opts.treeMemoryLimitMb;
+  if (mem !== undefined && (!Number.isInteger(mem) || mem <= 0)) {
+    return failed("spawn_error", "treeMemoryLimitMb must be a positive integer");
+  }
+
   let spawnFile = file;
   let spawnArgs: string[] = [...prefix, ...(opts.args ?? [])];
   if (opts.jobWrap) {
@@ -196,12 +214,47 @@ export function startProcess(opts: RunOptions): RunningProcess {
   const onAbort = () => void terminate("cancelled");
   opts.signal?.addEventListener("abort", onAbort, { once: true });
 
+  // P4-4 (b): RAM of the whole tree. Polling, so a fast allocator can overshoot before it is killed.
+  let detail: string | undefined;
+  let stopWatch: (() => void) | undefined;
+  if (opts.treeMemoryLimitMb !== undefined && child.pid !== undefined) {
+    const limit = opts.treeMemoryLimitMb * 1024 * 1024;
+    const sample = opts.memorySampler ?? sampleTreeBytes;
+    const rootPid = child.pid;
+    let busy = false;
+    let failures = 0;
+    const tick = async (): Promise<void> => {
+      if (busy || killing) return;
+      busy = true;
+      try {
+        const bytes = await sample(rootPid);
+        failures = 0;
+        if (bytes > limit) {
+          detail = `process tree uses ${Math.round(bytes / 1048576)} MB, limit ${opts.treeMemoryLimitMb} MB`;
+          void terminate("memory_limit");
+        }
+      } catch {
+        // Cannot measure: after MAX_SAMPLE_FAILURES in a row the limit is treated as exceeded (fail closed).
+        if (++failures >= MAX_SAMPLE_FAILURES) {
+          detail = "cannot measure the memory of the process tree";
+          void terminate("memory_limit");
+        }
+      } finally {
+        busy = false;
+      }
+    };
+    const interval = setInterval(() => void tick(), opts.memoryPollMs ?? 1000);
+    interval.unref();
+    stopWatch = () => clearInterval(interval);
+  }
+
   const done = new Promise<RunResult>((resolve) => {
     let settled = false;
     const finish = (exitCode: number | null, signal: NodeJS.Signals | null, error?: string) => {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
+      stopWatch?.();
       opts.signal?.removeEventListener("abort", onAbort);
       const tailOut = outDec.end();
       const tailErr = errDec.end();
@@ -217,6 +270,7 @@ export function startProcess(opts: RunOptions): RunningProcess {
         stdoutTruncated: outTrunc,
         stderrTruncated: errTrunc,
         ...(error === undefined ? {} : { error }),
+        ...(detail === undefined ? {} : { detail }),
       });
     };
     child.on("error", (e) => finish(null, null, e.message));

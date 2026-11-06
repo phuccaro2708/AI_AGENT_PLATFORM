@@ -117,6 +117,11 @@ export interface SidecarOptions {
    * CLI run through it was checked (docs/ASSUMPTIONS.md). Not applied to `codex-app-server` or Antigravity.
    */
   jobWrap?: JobWrapOptions;
+  /**
+   * Opt-in (P4-4 (b)): kill the `claude`/`codex` process tree when its total resident memory passes this many MB
+   * (host-side polling watchdog; the Job Object caps are per process). OFF in the real process.
+   */
+  cliTreeMemoryLimitMb?: number;
   /** Parent folder of diagnostics bundles. Default: `diagnostics` next to the database. */
   diagnosticsDir?: string;
   /** Folder and file stem of the sidecar's log file (the native side redirects stderr there). Default: next to the database, `sidecar`. */
@@ -225,6 +230,9 @@ export class SidecarService {
           }
         : {}),
       ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
+      ...(this.opts.cliTreeMemoryLimitMb === undefined
+        ? {}
+        : { treeMemoryLimitMb: this.opts.cliTreeMemoryLimitMb }),
     };
     const gateOpt = this.opts.claudePermissionGate;
     if (provider === "claude" && gateOpt) {

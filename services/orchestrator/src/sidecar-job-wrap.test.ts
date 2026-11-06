@@ -64,6 +64,16 @@ async function messagesOf(agentId: string): Promise<string> {
   return JSON.stringify(out);
 }
 
+describe("cliTreeMemoryLimitMb in the orchestrator", () => {
+  it.each(["claude", "codex"])(
+    "%s: the option reaches the spawn (an invalid value stops the run and names it)",
+    async (agentId) => {
+      open({ cliTreeMemoryLimitMb: 0 });
+      expect(await messagesOf(agentId)).toContain("treeMemoryLimitMb");
+    },
+  );
+});
+
 describe("jobWrap in the orchestrator", () => {
   it.each(["claude", "codex"])(
     "%s: an unusable wrapper path stops the run and names the wrapper",

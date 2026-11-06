@@ -50,6 +50,8 @@ export interface CodexAdapterOptions {
   envAllow?: readonly string[];
   /** Run the CLI inside `agent-job-wrap` (P4-4 (b)): kill-on-close tree and per-process memory cap. Off by default. */
   jobWrap?: JobWrapOptions;
+  /** Kill the CLI's whole process tree when its resident memory passes this many MB (P4-4 (b)). Off by default. */
+  treeMemoryLimitMb?: number;
 }
 
 /**
@@ -145,6 +147,9 @@ export class CodexAdapter implements AgentAdapter {
       args: this.buildArgs(task),
       manifest: this.manifest,
       ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
+      ...(this.opts.treeMemoryLimitMb === undefined
+        ? {}
+        : { treeMemoryLimitMb: this.opts.treeMemoryLimitMb }),
       cwd: task.cwd,
       ...(this.opts.env ? { env: this.opts.env } : {}),
       stdin: task.prompt,
@@ -176,6 +181,11 @@ export class CodexAdapter implements AgentAdapter {
         yield final;
       } else if (result.outcome === "spawn_error") {
         yield { type: "error", message: `could not start codex: ${result.error ?? "unknown"}` };
+      } else if (result.outcome === "memory_limit") {
+        yield {
+          type: "error",
+          message: `codex stopped: ${result.detail ?? "memory limit exceeded"}`,
+        };
       } else if (result.outcome === "cancelled") {
         yield { type: "error", message: "cancelled" };
       } else {

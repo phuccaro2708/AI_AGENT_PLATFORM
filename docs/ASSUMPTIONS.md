@@ -370,3 +370,29 @@ Nguồn ý tưởng: tài liệu thiết kế do người dùng cung cấp (chư
 - QUAN SÁT (Trung bình): `codex exec --strict-config --sandbox read-only --ephemeral` chạy trong repo với `.codex/config.toml` (`[agents]`) và 4 file `.codex/agents/*.toml`: không báo lỗi cấu hình; model trả lời liệt kê đúng bốn tên vai (`explorer`, `implementer`, `test-engineer`, `security-reviewer`). Đây là lời model, chưa phải bằng chứng cứng về cách nạp.
 - CHƯA kiểm: khoá `sandbox_mode` và `model` trong file vai có được áp dụng hay bị bỏ qua (`--strict-config` có thể không kiểm file vai); vai `implementer`/`test-engineer` thật sự chạy ở `workspace-write`; số luồng song song thực tế; spawn subagent trong một task thật; `--output-schema` và `--worktree` của `codex exec` (chỉ thấy trong `--help`).
 - Hệ quả: coi các vai là cấu hình đề xuất. Cách gọi từ Claude đi qua `.claude/agents/codex-delegator.md` bằng `codex exec` với cờ sandbox tường minh, không dựa vào `sandbox_mode` trong file vai.
+
+## git-worktrees: hook và cấu hình thực thi từ repo (T19, probe 2026-11-06, Windows 11, git 2.55.0.windows.3)
+
+Cách thử: repo tạm ngoài repo dự án; sau commit đầu, `.git/config` được gắn `core.hooksPath` (hook `post-checkout`, `post-index-change`, `reference-transaction`, `pre-commit`), `core.fsmonitor`, `diff.external`, `diff.evil.textconv`, `filter.evil.smudge/clean` (+ `.gitattributes` `*.txt filter=evil diff=evil`). Mỗi payload chỉ ghi một dòng vào file đánh dấu trong thư mục tạm. Chạy chính các hàm của `GitWorktrees`.
+
+Lệnh git mà package gọi (đọc từ mã): `rev-parse --verify`, `worktree add/list/remove/prune`, `status`, `diff HEAD`, `diff --no-index`, `branch -d/-D`, `merge-tree --write-tree`. Package không gọi `commit`/`merge`/`checkout`.
+
+Trước khi sửa (QUAN SÁT, Cao):
+
+- `create`: filter smudge, fsmonitor, hook `post-checkout`, `post-index-change`, `reference-transaction`.
+- `status`: fsmonitor, hook `post-index-change`.
+- `diff`: `diff.external` (lệnh `--no-index` thiếu `--no-ext-diff`), textconv, filter clean/smudge, fsmonitor, `post-index-change`.
+- `remove --force --delete-branch`: hook `reference-transaction`.
+- `list`, `checkMerge`, `prune`: không có gì chạy.
+- Đối chứng: `git status` thường trong chính repo đó cũng chạy fsmonitor và hook, nên test thật sự đo được.
+
+Sau khi sửa (QUAN SÁT, Cao, cùng bộ probe và test `hostile-config.test.ts`): `-c core.hooksPath=NUL -c core.fsmonitor=false` trước mọi lệnh, `--no-textconv --no-ext-diff` cho `diff`: không còn hook, fsmonitor, textconv, external diff nào chạy. Filter driver KHÔNG tắt được theo tên chung, nên `create`/`status`/`diff` đọc `git config --show-scope --get-regexp` và ném `UntrustedGitConfigError` nếu cấu hình ở phạm vi repo (không phải system/global) có `filter.<tên>.smudge|clean|process` mà `<tên>` không nằm trong `allowFilters` (mặc định rỗng). Với `allowFilters: ["evil"]` probe thấy filter smudge/clean vẫn chạy, tức người dùng chọn tin driver nào thì driver đó chạy.
+
+Chưa kiểm / giới hạn:
+
+- Không chạy trên Linux/macOS: `/dev/null` cho `core.hooksPath` chưa thử (chỉ `NUL` trên Windows đã thấy có tác dụng).
+- Không thử `include.path` (đã đọc qua `--get-regexp` nên có thể được tính nhưng chưa có test), `extensions.worktreeConfig`, `core.attributesFile`, `info/attributes`.
+- Chưa dùng `GIT_CONFIG_NOSYSTEM`, `GIT_CONFIG_GLOBAL`: không có bằng chứng cần thiết, nên không thêm.
+- Git LFS: `allowFilters` chưa nối vào cài đặt project; repo dùng LFS sẽ bị từ chối cho đến khi cấu hình `allowFilters: ["lfs"]`.
+- Git do chính CLI agent gọi trong worktree không đi qua package này nên không được bảo vệ.
+- Repo clone từ remote không mang theo `.git/config` hay hook; vector thực tế là thư mục repo cục bộ có sẵn (giải nén, sao chép từ nguồn lạ).

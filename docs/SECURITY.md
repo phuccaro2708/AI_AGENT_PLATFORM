@@ -44,6 +44,11 @@ On restart, tasks that were `running`/`waiting_approval` become `needs_reconcili
 - GitHub Actions in `ci.yml` are pinned to full commit SHAs. Not yet verified on a real runner at the time of writing.
 - Direct dependencies: exact pins, none younger than 14 days. Not checked: age of transitive dependencies. `serde`/`serde_json` are `"1"` in `Cargo.toml` (locked by `Cargo.lock`).
 
+### Git config from the repo (T19, 2026-11-06) — mitigated for `git-worktrees` only
+
+- Probed with git 2.55.0.windows.3: a repo's own `.git/config` made `git-worktrees` run hooks, `core.fsmonitor`, `diff.*.textconv`, `diff.external` and filter drivers. Every git call from the package now carries `-c core.hooksPath=NUL -c core.fsmonitor=false` (`/dev/null` off Windows); both `diff` calls add `--no-textconv --no-ext-diff`; repo-defined `filter.*` drivers are refused unless listed in `allowFilters` (`UntrustedGitConfigError`). Regression test: `packages/git-worktrees/src/hostile-config.test.ts`.
+- **Not covered:** git commands the CLI agents run themselves inside a worktree, Linux/macOS (not run), `include.path` and `extensions.worktreeConfig`. A worktree is still not a sandbox.
+
 ## Not implemented yet (do not assume)
 
 - Policy Engine: `packages/policy-engine` has the pure decision code (path scope, command/network policy, 4 permission levels, grants). Phase 4 wired the pre-run gate at the points the platform controls and a post-run check; the in-loop gate and CLI sandbox-flag mapping are not connected (see above). Not a statement that agents are confined.

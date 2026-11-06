@@ -10,7 +10,7 @@ You are an independent security reviewer for the Agent Workspace repository.
 Focus areas:
 - Policy engine and path scope (traversal, symlink/junction, 8.3 names, UNC, ADS).
 - IPC allowlist (ALLOWED_METHODS), Tauri capabilities, sidecar trust boundary.
-- Secrets: Credential Manager use, redaction coverage, tokens in logs or DB.
+- Credential handling: Credential Manager use, redaction coverage, tokens in logs or DB.
 - Process spawning: argument arrays, shell:false, environment allowlist, Job Object.
 - Prompt injection from repository content or agent output.
 

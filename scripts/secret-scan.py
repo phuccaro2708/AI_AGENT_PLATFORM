@@ -150,6 +150,14 @@ ACCEPTED_HISTORY = {
     ("596bd258", "packages/diagnostics/src/diagnostics.test.ts", "Secret Keyword", 53),
     ("596bd258", "packages/diagnostics/src/diagnostics.test.ts", "Secret Keyword", 114),
     ("596bd258", "packages/process-manager/src/manifest.test.ts", "Secret Keyword", 95),
+    # Codex security-reviewer role prompt: line 13 began with the focus-area heading "Secrets:", which
+    # the keyword detector flags; no value is present. Reworded afterwards; these five snapshots
+    # (already committed, immutable) still carry the old wording. Reviewed by hand.
+    ("938a7081", ".codex/agents/security-reviewer.toml", "Secret Keyword", 13),
+    ("c99c93e7", ".codex/agents/security-reviewer.toml", "Secret Keyword", 13),
+    ("426c200f", ".codex/agents/security-reviewer.toml", "Secret Keyword", 13),
+    ("9db9c7c7", ".codex/agents/security-reviewer.toml", "Secret Keyword", 13),
+    ("56cbc94e", ".codex/agents/security-reviewer.toml", "Secret Keyword", 13),
 }
 
 # Reviewed by hand, valid at any commit: exact (file, type, line). Line 28 of the Phase 0 spike

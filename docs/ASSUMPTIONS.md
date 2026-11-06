@@ -370,3 +370,25 @@ Nguồn ý tưởng: tài liệu thiết kế do người dùng cung cấp (chư
 - QUAN SÁT (Trung bình): `codex exec --strict-config --sandbox read-only --ephemeral` chạy trong repo với `.codex/config.toml` (`[agents]`) và 4 file `.codex/agents/*.toml`: không báo lỗi cấu hình; model trả lời liệt kê đúng bốn tên vai (`explorer`, `implementer`, `test-engineer`, `security-reviewer`). Đây là lời model, chưa phải bằng chứng cứng về cách nạp.
 - CHƯA kiểm: khoá `sandbox_mode` và `model` trong file vai có được áp dụng hay bị bỏ qua (`--strict-config` có thể không kiểm file vai); vai `implementer`/`test-engineer` thật sự chạy ở `workspace-write`; số luồng song song thực tế; spawn subagent trong một task thật; `--output-schema` và `--worktree` của `codex exec` (chỉ thấy trong `--help`).
 - Hệ quả: coi các vai là cấu hình đề xuất. Cách gọi từ Claude đi qua `.claude/agents/codex-delegator.md` bằng `codex exec` với cờ sandbox tường minh, không dựa vào `sandbox_mode` trong file vai.
+
+### d3. Hai cổng quyền chạy với CLI THẬT (2026-11-06, codex-cli 0.166.0, claude 2.1.318, Windows 11; PARTIAL)
+
+Mã lặp lại được: `services/orchestrator/src/real-cli-gates.test.ts` (bỏ qua nếu không đặt `AGENT_STUDIO_REAL_CLI_GATES=1|codex|claude`). Repo rỗng trong `%TEMP%`, prompt nhỏ không chứa mã dự án.
+
+**Codex thật qua `CodexAppServerAdapter` (4/4 test của phần codex qua; `AGENT_STUDIO_REAL_CLI_GATES=codex`):**
+
+- `read-only`, policy sản xuất: `item/commandExecution/requestApproval` với `command` = `"…\pwsh.exe" -Command 'Get-ChildItem -Name'` → bóc wrapper → engine `deny` (`level_forbids`) → `decline`; model báo lệnh bị từ chối, không có gì chạy.
+- **Phát hiện:** khi lệnh đơn giản, Codex gửi `-Command Get-ChildItem` KHÔNG có nháy đơn → không khớp regex bóc wrapper → bị `decline` mà không hỏi engine (`asked` rỗng), kể cả khi luật cho phép `Get-ChildItem`. Nhánh `accept` cho lệnh vẫn CHƯA quan sát thật. Cần mở rộng dạng wrapper (có test) trước khi allowlist có ích.
+- `availableDecisions` thật: `accept`, `acceptWithExecpolicyAmendment`, `cancel` (không có `decline`, ta vẫn gửi `decline` và Codex chấp nhận, báo "rejected by user").
+- `read-only` + ghi file: `fileChange/requestApproval` → `fs.write` bị `level_forbids` → `decline`; file không tạo.
+- `workspace-write` + ghi trong repo: có `fileChange/requestApproval` (`grantRoot:null`) → `in_workspace` → `accept` → `hello.txt` được tạo, không có gì ngoài repo.
+- Lưu ý: bước `--version` của test báo "ENOENT" cho `codex` (shim `.cmd`), không ảnh hưởng kết quả; phiên bản lấy từ `codex --version` thủ công.
+
+**Claude thật (stub MCP điều khiển được, chạy bằng script tạm; test TS tương ứng CHƯA chạy):**
+
+- `--safe-mode`: MCP gate không được nạp ("tool … not found"), Write lỗi, không ghi file (fail-closed). `ClaudeAdapter` mặc định `safeMode:true` nên cổng vô dụng nếu không đặt `safeMode:false` (+ `--setting-sources local`).
+- `updatedInput` khác `input` ĐƯỢC ÁP DỤNG, kể cả trỏ ra ngoài cwd (đã ghi file ngoài repo). Gate phải luôn trả `input` nguyên vẹn (code hiện tại đúng).
+- Trả text không phải quyết định, hoặc gate chết: lỗi, không ghi (fail-closed). `allow` không `updatedInput`: dùng input gốc.
+- Timeout: gate chậm 20 s thì claude đợi; gate không trả lời thì claude đợi ≥150 s, không timeout → host phải tự đặt hạn.
+- Không qua gate: Write trong cwd ở `acceptEdits`, `--allowedTools=Write`, Read trong cwd, `git status`, plan mode (ghi `~/.claude/plans`, ngoài repo). Có qua gate: Write mặc định, Edit (luôn deny vì `requestFor` không phủ), Bash có redirect, Write ngoài cwd (nếu gate allow thì file ngoài được ghi).
+- **Chưa kiểm:** gate THẬT (`claudeGateTaskArgs` + bundle sidecar) với claude thật; `THREAT_MODEL.md` T4 và `SECURITY.md` chưa cập nhật. Khuyến nghị tạm: giữ TẮT mặc định (gate không thấy mọi lời gọi, không có timeout, `--safe-mode` vô hiệu hoá nó, wrapper Codex chưa phủ dạng thật).

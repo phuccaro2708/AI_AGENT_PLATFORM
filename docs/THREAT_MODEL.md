@@ -1,4 +1,4 @@
-# THREAT_MODEL — Agent Workspace (Phase 4, bản nháp ngày 2026-11-06)
+# THREAT_MODEL — Agent Workspace (Phase 4, ngày 2026-11-06, người dùng đã duyệt nội dung)
 
 Mục tiêu: nêu rõ cái gì cần bảo vệ, kẻ nào/nguồn nào không đáng tin, ranh giới tin cậy nằm ở đâu, và với từng mối đe doạ thì CÓ gì (kèm test/nguồn), CÒN HỞ gì. Không phải tuyên bố an toàn. Tài liệu này dựa trên `docs/SECURITY.md`, `docs/ASSUMPTIONS.md`, `docs/DEPS_AUDIT.md`, ADR-002 và các test được nêu tên; điều gì không có bằng chứng thì ghi "chưa kiểm".
 
@@ -93,4 +93,4 @@ Cột "Trạng thái": **CÓ** = có kiểm soát và test; **MỘT PHẦN** = c
 
 ## 7. Cách giữ tài liệu này đúng
 
-Mỗi dòng trong bảng phải trỏ được tới test hoặc tài liệu có thật. Khi một kiểm soát đổi trạng thái (ví dụ bật mặc định một cổng), cập nhật cột "Trạng thái" cùng commit, và không ghi CÓ nếu chưa có test chạy qua. Tài liệu này là bản nháp của tác giả code, chưa được người dùng duyệt; chưa phải báo cáo đóng Phase 4.
+Mỗi dòng trong bảng phải trỏ được tới test hoặc tài liệu có thật. Khi một kiểm soát đổi trạng thái (ví dụ bật mặc định một cổng), cập nhật cột "Trạng thái" cùng commit, và không ghi CÓ nếu chưa có test chạy qua. Người dùng đã duyệt nội dung tài liệu này ngày 2026-11-06 (xác nhận trong chat, phiên đóng-chuẩn bị Phase 4; bản duyệt là bản tại thời điểm đó, các dòng đổi sau đó vẫn phải khớp bằng chứng). Đây chưa phải báo cáo đóng Phase 4.

@@ -112,6 +112,7 @@ export async function runPermissionGate(
   const policy = decodePolicy(at >= 0 ? (argv[at + 1] ?? "") : "");
   const server = createPermissionPromptServer({
     toolName: GATE_TOOL_NAME,
+    defaultDir: policy.workspaceRoot,
     evaluate: async (request) => {
       const d = await evaluate(policy, request);
       return { effect: d.effect, reason: d.reason };

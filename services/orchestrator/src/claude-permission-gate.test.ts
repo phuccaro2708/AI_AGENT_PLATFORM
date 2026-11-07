@@ -167,6 +167,94 @@ describe("runPermissionGate (the MCP server claude would start)", () => {
     expect(replies.map(behavior)).toEqual(["deny"]);
   });
 
+  it("Edit: allowed in the folder like Write; denied outside, in .git, on read-only and on a wrong shape", async () => {
+    const cwd = tmp();
+    const outside = join(tmp(), "evil.txt");
+    const e = (file_path: unknown, extra: Record<string, unknown> = {}) => ({
+      file_path,
+      old_string: "a",
+      new_string: "b",
+      ...extra,
+    });
+    const replies = await converse(cwd, [
+      call(1, "Edit", e(join(cwd, "ok.txt"))),
+      call(2, "Edit", e(join(cwd, "ok.txt"), { replace_all: true })),
+      call(3, "Edit", e(outside)),
+      call(4, "Edit", e(join(cwd, ".git", "config"))),
+      call(5, "Edit", e("relative.txt")),
+      call(6, "Edit", { file_path: join(cwd, "ok.txt") }), // no strings
+      call(7, "Edit", e(join(cwd, "ok.txt"), { replace_all: "yes" })),
+      call(8, "Edit", e(42)),
+      call(9, "Edit", "not an object"),
+    ]);
+    expect(replies.map(behavior)).toEqual([
+      "allow",
+      "allow",
+      "deny",
+      "deny",
+      "deny",
+      "deny",
+      "deny",
+      "deny",
+      "deny",
+    ]);
+    const ro = await converse(cwd, [call(1, "Edit", e(join(cwd, "ok.txt")))], "read-only");
+    expect(ro.map(behavior)).toEqual(["deny"]);
+  });
+
+  it.each(["Glob", "Grep"])(
+    "%s: read policy; allowed in the folder (also without path), denied outside, with escaping globs and on a wrong shape",
+    async (tool) => {
+      const cwd = tmp();
+      mkdirSync(join(cwd, "sub"));
+      const outside = tmp();
+      const pat = { pattern: tool === "Glob" ? "**/*.txt" : "SEED" };
+      // Grep's file filter is `glob`; Glob's own pattern is the glob, so its escape is tried via `pattern`.
+      const escape = (g: string) =>
+        tool === "Glob" ? { pattern: g, path: cwd } : { ...pat, glob: g, path: cwd };
+      const replies = await converse(cwd, [
+        call(1, tool, { ...pat, path: join(cwd, "sub") }),
+        call(2, tool, pat), // no path → the task folder
+        call(3, tool, { ...pat, path: cwd }),
+        call(4, tool, { ...pat, path: outside }),
+        call(5, tool, { ...pat, path: join(cwd, "..") }),
+        call(6, tool, { ...pat, path: "relative" }),
+        call(7, tool, { ...pat, path: 7 }),
+        call(8, tool, { ...pat, path: "" }),
+        call(9, tool, escape("../**/*.txt")),
+        call(10, tool, escape("sub/../../x")),
+        call(11, tool, escape(join(outside, "*.txt"))),
+        call(12, tool, escape("/etc/*")),
+        call(13, tool, escape("C:\\Users\\*")),
+        call(14, tool, escape("~/*")),
+        call(15, tool, {}),
+        call(16, tool, { pattern: 5 }),
+        call(17, tool, { pattern: "" }),
+        call(18, tool, "not an object"),
+      ]);
+      expect(replies.map(behavior)).toEqual([
+        "allow",
+        "allow",
+        "allow",
+        ...Array<string>(15).fill("deny"),
+      ]);
+    },
+  );
+
+  it("Grep: a non-string glob is denied; read-only policy still allows Glob/Grep (reads)", async () => {
+    const cwd = tmp();
+    const replies = await converse(
+      cwd,
+      [
+        call(1, "Grep", { pattern: "x", path: cwd, glob: ["*.ts"] }),
+        call(2, "Grep", { pattern: "x", path: cwd, glob: "*.ts" }),
+        call(3, "Glob", { pattern: "*.ts", path: cwd }),
+      ],
+      "read-only",
+    );
+    expect(replies.map(behavior)).toEqual(["deny", "allow", "allow"]);
+  });
+
   it("refuses to start on a bad policy", async () => {
     await expect(
       runPermissionGate(["--policy", "###"], new PassThrough(), new PassThrough()),

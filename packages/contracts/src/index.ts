@@ -206,6 +206,7 @@ export const SidecarRequest = z.discriminatedUnion("method", [
         "recovery.resolve",
         "tasks.resolveReconciliation",
         "agents.setSettings",
+        "agents.probe",
       ]),
       params: z.unknown(),
     }),

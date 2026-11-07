@@ -137,6 +137,23 @@ describe("confirm.describe", () => {
     expect(reset.result!.title).toContain("Reset");
   });
 
+  it("describes a probe as RUNNING the program, with env NAMES but never values", async () => {
+    const r = await describeCall("agents.probe", {
+      provider: "claude",
+      settings: { command: "C:\\tools\\evil.exe", args: [], env: { MY_VAR: "hunter2" } },
+    });
+    expect(r.error).toBeUndefined();
+    expect(r.result!.message).toContain("evil.exe");
+    expect(r.result!.message).toContain("RUN");
+    expect(r.result!.message).toContain("MY_VAR");
+    expect(r.result!.message).not.toContain("hunter2");
+    const long = await describeCall("agents.probe", {
+      provider: "claude",
+      settings: { command: "C:\\" + "a".repeat(400), args: [], env: {} },
+    });
+    expect(long.error?.message).toContain("too long to confirm");
+  });
+
   it("shortens free text only with an explicit marker, and refuses to shorten what picks the program", async () => {
     sql(
       "update approvals set request_json=? where id='a1'",
@@ -173,6 +190,7 @@ describe("the shell's list of confirmed methods", () => {
     const block = /const CONFIRMED_METHODS: &\[&str\] = &\[([\s\S]*?)\];/.exec(libRs)?.[1] ?? "";
     const confirmed = [...block.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
     expect(confirmed.sort()).toEqual([
+      "agents.probe",
       "agents.setSettings",
       "approvals.resolve",
       "recovery.resolve",

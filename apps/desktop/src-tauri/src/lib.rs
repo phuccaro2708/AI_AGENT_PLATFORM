@@ -115,12 +115,15 @@ fn is_allowed(method: &str) -> bool {
 /// confirmed in a native dialog the shell opens, showing text the *sidecar* writes from its own
 /// database; only on "Allow" does the shell forward the call. All of these are also in
 /// `ALLOWED_METHODS`: being callable by the UI and being confirmed outside it are separate checks.
-/// `agents.setSettings` is here because it chooses the executable the sidecar later launches.
+/// `agents.setSettings` is here because it chooses the executable the sidecar later launches;
+/// `agents.probe` is here because it already RUNS a webview-chosen executable (`--version`/`--help`),
+/// with the provider's secrets in its environment, before anything is saved.
 const CONFIRMED_METHODS: &[&str] = &[
     "approvals.resolve",
     "recovery.resolve",
     "tasks.resolveReconciliation",
     "agents.setSettings",
+    "agents.probe",
 ];
 
 /// Internal read-only request the shell sends the sidecar to get the dialog text. Not in
@@ -508,6 +511,7 @@ mod tests {
             "recovery.resolve",
             "tasks.resolveReconciliation",
             "agents.setSettings",
+            "agents.probe",
         ] {
             assert!(needs_confirmation(m) && is_allowed(m), "{m:?}");
         }

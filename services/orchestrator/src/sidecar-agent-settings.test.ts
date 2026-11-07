@@ -97,6 +97,25 @@ describe("agent launch settings (7B)", () => {
     expect(seen[0]?.env?.["HTTPS_PROXY"]).toBe("http://p:1");
   });
 
+  it("agents.detect probes the stored command/env, not the program found on PATH", async () => {
+    const seen: (string | undefined)[] = [];
+    const probes = {
+      claude: async (o?: { executable?: string }) => {
+        seen.push(o?.executable);
+        return probeOk("claude");
+      },
+      codex: async () => probeOk("codex"),
+    };
+    svc = new SidecarService({ dbPath: join(dir, "s.db"), probes }, log());
+    await call(svc, "agents.setSettings", {
+      provider: "claude",
+      settings: { command: process.execPath, args: [], env: {} },
+    });
+    seen.length = 0;
+    await call(svc, "agents.detect", { providers: ["claude"] });
+    expect(seen).toEqual([process.execPath]);
+  });
+
   it("does not accept a program that is not the CLI (version prints, no known options)", async () => {
     svc = open((p) => ({ ...probeOk(p), capabilities: { print: true, outputStreamJson: false } }));
     const r = await call(svc, "agents.setSettings", {

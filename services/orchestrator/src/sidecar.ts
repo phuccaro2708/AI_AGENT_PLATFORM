@@ -621,6 +621,18 @@ export class SidecarService {
             "\nTasks for this agent will launch this program.",
         };
       }
+      case "agents.probe": {
+        const { provider, settings } = req.params;
+        const envNames = Object.keys(settings.env);
+        return {
+          title: `Run this program to probe the ${provider} agent?`,
+          message:
+            `Provider: ${provider}\nProgram: ${whole("The program", settings.command, 400)}\n` +
+            `Arguments: ${whole("The arguments", JSON.stringify(settings.args), 600)}\n` +
+            `Environment variables set: ${envNames.length === 0 ? "none" : whole("The environment variable names", envNames.join(", "), 300)}\n` +
+            `\nThe program will be RUN now (version/help check) with the ${provider} secrets in its environment.`,
+        };
+      }
       default:
         throw new Error(`No confirmation is defined for ${req.method}`);
     }
@@ -714,16 +726,9 @@ export class SidecarService {
           const wanted = req.params.providers ?? ["claude", "codex"];
           const results = [];
           for (const p of wanted) {
-            const r = await this.probes[p]();
-            this.repo.saveAgentProbe({
-              provider: r.provider,
-              status: r.status,
-              ...(r.path !== undefined ? { path: r.path } : {}),
-              ...(r.version !== undefined ? { version: r.version } : {}),
-              capabilities: r.capabilities,
-              ...(r.error !== undefined ? { error: r.error } : {}),
-              probedAt: r.probedAt,
-            });
+            // Same probe as the one that will launch tasks: stored command/env when set, else PATH.
+            const r = await this.probeStored(p);
+            this.saveProbe(r);
             results.push(r);
           }
           return ok(req.id, { results });

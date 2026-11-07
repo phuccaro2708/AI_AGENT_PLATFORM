@@ -567,3 +567,8 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - Mã: `sidecar.ts` định tuyến `codex` → `CodexAppServerAdapter` khi cổng Codex bật (ADR-008); app-server có `treeMemoryLimitMb`/`memoryPollMs`/`memorySampler` (fail closed sau 5 lần lấy mẫu lỗi). Test: `app-server.test.ts` (3 ca watchdog), `sidecar-permission-gates.test.ts` (`codex` khai báo `approval`; `codexAppServer:false` thì không), `real-cli-gates.test.ts` mode `codex-wrapped`.
 - Đã chạy (người dùng cho phép codex thật, repo tạm): `AGENT_STUDIO_REAL_CLI_GATES=codex-wrapped … vitest run services/orchestrator/src/real-cli-gates.test.ts` → 4 passed, 27 skipped, 70,7 s. Chi tiết ASSUMPTIONS d13.
 - NOT_RUN: watchdog RSS với codex thật; kill app Tauri thật; cổng Claude thật khi bị treo; ba tiêu chí nghiệm thu Phase 4 (ROADMAP) vẫn chưa tick; `docs/PHASE4_REPORT.md` chủ ý chưa viết.
+
+## 2026-11-07: /save
+
+- Đối chiếu docs với git: HANDOFF cập nhật head `4de2832`, 86 commit hơn nhánh chính, kết quả gate mới; TODO P4-1 (c)/(d) thêm dòng đính chính (cổng nay bật mặc định). Không đụng ROADMAP (ba tiêu chí nghiệm thu Phase 4 vẫn chưa tick, không có bằng chứng mới để tick).
+- Chưa chạy lại gate sau commit docs này (chỉ docs đổi).

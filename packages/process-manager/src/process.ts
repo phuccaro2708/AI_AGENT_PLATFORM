@@ -9,7 +9,7 @@ import { UnsupportedShimError, resolveExecutable, unwrapNpmShim } from "./resolv
 
 /**
  * P4-4 (b): run the child inside `agent-job-wrap` (a Windows Job Object with kill-on-close). The wrapper is
- * started as `<path> [--mem-limit-mb N] [--timeout-secs N] -- <resolved program> <args…>`; the manifest check
+ * started as `<path> [--mem-limit-mb N] [--job-mem-limit-mb N] [--timeout-secs N] -- <resolved program> <args…>`; the manifest check
  * and executable resolution still apply to the CLI, not to the wrapper. Lifetime and per-process memory only; not a sandbox.
  */
 export interface JobWrapOptions {
@@ -17,6 +17,12 @@ export interface JobWrapOptions {
   path: string;
   /** `--mem-limit-mb`: commit cap of EACH process in the job (not the tree total). Positive integer. */
   memLimitMb?: number;
+  /**
+   * `--job-mem-limit-mb`: cap on the SUM of committed memory of the whole process tree
+   * (`JOB_OBJECT_LIMIT_JOB_MEMORY`). The allocation that would pass the total fails; Windows does
+   * not kill the process itself. Positive integer.
+   */
+  jobMemLimitMb?: number;
   /** `--timeout-secs`: the wrapper kills the tree and exits 124 after this long. Positive integer. */
   timeoutSecs?: number;
 }
@@ -86,6 +92,7 @@ export function jobWrapArgs(w: JobWrapOptions): string[] {
   const flags: string[] = [];
   for (const [flag, n] of [
     ["--mem-limit-mb", w.memLimitMb],
+    ["--job-mem-limit-mb", w.jobMemLimitMb],
     ["--timeout-secs", w.timeoutSecs],
   ] as const) {
     if (n === undefined) continue;

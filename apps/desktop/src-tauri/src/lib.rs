@@ -5,7 +5,7 @@ mod sidecar;
 use serde::Serialize;
 use serde_json::{json, Value};
 use sidecar::Sidecar;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{Emitter, Manager, RunEvent};
@@ -38,6 +38,28 @@ fn sidecar_dir() -> Result<PathBuf, String> {
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     Ok(exe.parent().ok_or("exe has no parent")?.join("sidecar"))
+}
+
+/// Absolute path of the `agent-job-wrap` binary the installer places next to the app exe
+/// (`AGENT_STUDIO_JOB_WRAP_BIN` overrides it for development). `None` when it is not there, so a
+/// missing file never blocks the sidecar from starting. Pure location lookup: whether the sidecar
+/// uses it is a separate opt-in (ADR-002: the wrapper is not a sandbox).
+fn job_wrap_path() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok();
+    resolve_job_wrap(
+        std::env::var("AGENT_STUDIO_JOB_WRAP_BIN").ok().as_deref(),
+        exe.as_deref(),
+    )
+}
+
+fn resolve_job_wrap(override_path: Option<&str>, exe: Option<&Path>) -> Option<PathBuf> {
+    let candidate = match override_path.filter(|p| !p.is_empty()) {
+        Some(p) => PathBuf::from(p),
+        None => exe?
+            .parent()?
+            .join(if cfg!(windows) { "agent-job-wrap.exe" } else { "agent-job-wrap" }),
+    };
+    (candidate.is_absolute() && candidate.is_file()).then_some(candidate)
 }
 
 fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -109,6 +131,7 @@ fn ensure_sidecar(app: &tauri::AppHandle, state: &SidecarState) -> Result<Arc<Si
         &db,
         &log,
         secrets::env_for_sidecar(),
+        job_wrap_path().as_deref(),
         move |ev| {
             let _ = handle.emit(SIDECAR_EVENT, ev);
         },
@@ -337,6 +360,25 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn job_wrap_resolves_next_to_exe_and_only_when_present() {
+        let dir = std::env::temp_dir().join(format!("as-jw-resolve-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("agent-studio.exe");
+        assert_eq!(resolve_job_wrap(None, Some(&exe)), None, "missing file");
+        let name = if cfg!(windows) { "agent-job-wrap.exe" } else { "agent-job-wrap" };
+        std::fs::write(dir.join(name), b"x").unwrap();
+        let found = resolve_job_wrap(None, Some(&exe)).expect("sibling");
+        assert!(found.is_absolute() && found.ends_with(name));
+        // An override wins; a relative or missing override is refused (no silent fallback).
+        assert_eq!(resolve_job_wrap(Some("rel/agent-job-wrap"), Some(&exe)), None);
+        assert_eq!(resolve_job_wrap(Some(dir.join("nope").to_str().unwrap()), Some(&exe)), None);
+        let own = dir.join(name);
+        assert_eq!(resolve_job_wrap(own.to_str(), None), Some(own));
+        assert_eq!(resolve_job_wrap(None, None), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn only_ui_methods_are_allowed() {

@@ -93,6 +93,14 @@ jobs:
           SPIKE_REPORT: ${{ runner.temp }}\spike-report.json
       - name: Build Tauri app (no installer)
         run: pnpm --filter @agent-studio/desktop tauri build --no-bundle
+      - name: agent-job-wrap sits next to the app exe (P4-4 (b) packaging)
+        shell: pwsh
+        run: |
+          $dir = Split-Path (Resolve-Path "apps/desktop/src-tauri/target/release/agent-studio.exe").Path
+          $w = Join-Path $dir "agent-job-wrap.exe"
+          if (-not (Test-Path $w)) { throw "agent-job-wrap.exe missing next to agent-studio.exe" }
+          & $w -- cmd /c echo wrapped-ok
+          if ($LASTEXITCODE -ne 0) { throw "agent-job-wrap smoke exited $LASTEXITCODE" }
       - name: Launch the real app in selftest mode
         shell: pwsh
         run: |

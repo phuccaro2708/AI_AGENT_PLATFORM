@@ -112,14 +112,16 @@ export interface SidecarOptions {
    */
   claudePermissionGate?: { configDir: string; launcher?: ClaudeGateLauncher };
   /**
-   * Opt-in (P4-4 (b)): start the `claude` and `codex` CLIs inside `agent-job-wrap` (Windows Job Object, kill on
-   * close, per-process memory cap). OFF in the real process: the binary is not in the installer yet and no real
-   * CLI run through it was checked (docs/ASSUMPTIONS.md). Not applied to `codex-app-server` or Antigravity.
+   * P4-4 (b): start the `claude` and `codex` CLIs inside `agent-job-wrap` (Windows Job Object, kill on close).
+   * Unset here = off. `sidecar-main` sets it by default when the installed binary is found (`job-wrap-config.ts`;
+   * `AGENT_STUDIO_JOB_WRAP=0` turns it off; missing binary = warning and no wrap). Not applied to
+   * `codex-app-server` or Antigravity.
    */
   jobWrap?: JobWrapOptions;
   /**
    * Opt-in (P4-4 (b)): kill the `claude`/`codex` process tree when its total resident memory passes this many MB
-   * (host-side polling watchdog; the Job Object caps are per process). OFF in the real process.
+   * (host-side polling watchdog; the Job Object caps are per process). OFF by default (it only polls); set here,
+   * or via `AGENT_STUDIO_CLI_TREE_MEM_MB=<positive MB>` in `sidecar-main`, to opt in.
    */
   cliTreeMemoryLimitMb?: number;
   /** Parent folder of diagnostics bundles. Default: `diagnostics` next to the database. */

@@ -597,3 +597,13 @@ Mã: `services/orchestrator/src/real-cli-gates.test.ts`, chế độ `AGENT_STUD
 - `killTree` trả `ok | already_dead | failed`; "failed" được kiểm lại sau kill. Ca OS từ chối kill thật chưa tái hiện.
 - `AGENT_STUDIO_CLI_TREE_MEM_MB` dùng cùng trần 16 TiB như `AGENT_STUDIO_JOB_MEM_LIMIT_MB`.
 - **`codex-app-server` qua `agent-job-wrap` (2026-11-07):** `CodexAppServerOptions.jobWrap` + sidecar truyền `jobWrap` như với `claude`/`codex`. Đã kiểm: đường dẫn wrapper sai thì task thất bại đóng (không chạy server); với wrapper THẬT (`agent-job-wrap.exe` debug, `jobMemLimitMb: 4096`) và app-server GIẢ, đường JSON-RPC qua stdio vẫn chạy đủ `initialize → initialized → thread/start → turn/start` và tur hoàn tất (test tự bỏ qua nếu chưa build wrapper). NOT_RUN: codex THẬT qua wrapper ở chế độ app-server, kill cây khi app-server thật đang chạy tur, và ảnh hưởng của trần commit lên codex thật.
+
+### d13. `codex` định tuyến sang app-server và codex THẬT qua `agent-job-wrap` (2026-11-07, codex-cli 0.166.0, Windows 11; mỗi ô một lần chạy, Trung bình; repo tạm ngoài repo này)
+
+Mã: ADR-008. `codex` = `CodexAppServerAdapter` khi cổng bật; RSS watchdog `treeMemoryLimitMb` cho app-server (opt-in, test với bộ lấy mẫu giả). Đo bằng `AGENT_STUDIO_REAL_CLI_GATES=codex-wrapped` (`real-cli-gates.test.ts`, 4 test, 70,7 s), wrapper THẬT (`agent-job-wrap.exe` debug):
+
+- **Cho phép:** `echo gate-ok` ở `workspace-write` đi qua wrapper; cổng nhận `requestApproval`, policy test trả `allow`, lệnh chạy `exitCode 0`, task hoàn tất; không file ngoài repo; số tiến trình codex trước/sau: 5 → 5.
+- **Từ chối (policy production):** `Get-ChildItem -File` → `deny (level_forbids)`, codex báo `declined`, task hoàn tất, không retry.
+- **Cổng không trả lời:** `approvalTimeoutMs` 4000 ms → decline, không có accept, task kết thúc.
+- **Mất kết nối giữa chừng:** giết tiến trình tap khi đang chờ duyệt → `error` có `needsReconciliation: true` ("lost after turn/start; side effects unverified"); không còn tiến trình codex (5 → 5).
+- **KHÔNG đo:** watchdog RSS và trần commit với codex thật; kill app Tauri thật có codex bên trong; cổng Claude với claude thật bị treo; codex bản khác 0.166.0; mô hình có thể tự chọn lệnh khác nhau giữa các lần (mỗi ô một lần).

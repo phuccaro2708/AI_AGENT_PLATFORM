@@ -561,3 +561,9 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 
 - Mã: `CodexAppServerOptions.jobWrap` (app-server.ts) và sidecar truyền `jobWrap`. Trước đó chỉ `claude`/`codex` qua wrapper. Test: đường dẫn sai → lỗi đóng; wrapper thật + app-server giả → handshake và tur hoàn tất; sidecar truyền đúng option (6 ca trong file cấu hình).
 - NOT_RUN: codex thật qua wrapper (cần người dùng cho phép), watchdog RAM RSS cho app-server.
+
+## 2026-11-07: `codex` sang app-server, watchdog RSS, codex thật qua wrapper
+
+- Mã: `sidecar.ts` định tuyến `codex` → `CodexAppServerAdapter` khi cổng Codex bật (ADR-008); app-server có `treeMemoryLimitMb`/`memoryPollMs`/`memorySampler` (fail closed sau 5 lần lấy mẫu lỗi). Test: `app-server.test.ts` (3 ca watchdog), `sidecar-permission-gates.test.ts` (`codex` khai báo `approval`; `codexAppServer:false` thì không), `real-cli-gates.test.ts` mode `codex-wrapped`.
+- Đã chạy (người dùng cho phép codex thật, repo tạm): `AGENT_STUDIO_REAL_CLI_GATES=codex-wrapped … vitest run services/orchestrator/src/real-cli-gates.test.ts` → 4 passed, 27 skipped, 70,7 s. Chi tiết ASSUMPTIONS d13.
+- NOT_RUN: watchdog RSS với codex thật; kill app Tauri thật; cổng Claude thật khi bị treo; ba tiêu chí nghiệm thu Phase 4 (ROADMAP) vẫn chưa tick; `docs/PHASE4_REPORT.md` chủ ý chưa viết.

@@ -11,7 +11,7 @@ Căn cứ: `docs/ROADMAP.md` (mục Phase 4, "Còn thiếu để đóng"), `docs
 
 ### Đã xong (không còn trong danh sách làm)
 
-- P4-1 c: cổng Codex `app-server` nối vào orchestrator, BẬT mặc định từ Q3 (agent thêm `codex-app-server`); kiểm với server giả và Codex thật (ASSUMPTIONS d6).
+- P4-1 c: cổng Codex `app-server` nối vào orchestrator, BẬT mặc định từ Q3 (`codex` chạy bằng app-server khi cổng bật, ADR-008; `codex-app-server` vẫn đăng ký); kiểm với server giả và Codex thật (ASSUMPTIONS d6).
 - P4-1 d: cổng Claude `--permission-prompt-tool` (kể cả `askEveryTool`, phủ Edit/Glob/Grep bằng stub), BẬT mặc định từ Q3; hướng (a) của Q1 đã chọn, giới hạn "cổng không thấy mọi lời gọi" đã ghi.
 - `agent-job-wrap` nối vào process-manager, BẬT mặc định khi tìm thấy binary; watchdog RAM cả cây; trần cứng `--job-mem-limit-mb` đã đo (R4); kiểm với claude/codex thật (d9): Ctrl+C, CTRL_BREAK, kill wrapper, mã thoát 32 bit.
 - P4-8 (b): engine resume Peer Review, có test cả khi reviewer bị ngắt.

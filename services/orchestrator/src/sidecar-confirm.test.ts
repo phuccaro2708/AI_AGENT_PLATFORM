@@ -137,7 +137,7 @@ describe("confirm.describe", () => {
     expect(reset.result!.title).toContain("Reset");
   });
 
-  it("keeps the dialog body short whatever is stored", async () => {
+  it("shortens free text only with an explicit marker, and refuses to shorten what picks the program", async () => {
     sql(
       "update approvals set request_json=? where id='a1'",
       JSON.stringify({ blob: "A".repeat(100_000) }),
@@ -148,6 +148,19 @@ describe("confirm.describe", () => {
       note: "n".repeat(2000),
     });
     expect(r.result!.message.length).toBeLessThan(2000);
+    expect(r.result!.message).toContain("NOT shown");
+    for (const settings of [
+      { command: "C:\\" + "a".repeat(400), args: [], env: {} },
+      { command: "claude", args: ["x".repeat(400), "y".repeat(400)], env: {} },
+      {
+        command: "claude",
+        args: [],
+        env: { ["A".repeat(120)]: "1", ["B".repeat(120)]: "1", ["C".repeat(120)]: "1" },
+      },
+    ]) {
+      const t = await describeCall("agents.setSettings", { provider: "claude", settings });
+      expect(t.error?.message).toContain("too long to confirm");
+    }
   });
 });
 

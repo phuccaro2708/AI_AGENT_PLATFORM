@@ -551,8 +551,16 @@ export class SidecarService {
   private async describeForConfirmation(
     req: SidecarRequest,
   ): Promise<{ title: string; message: string }> {
-    const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, n)}\u2026` : t);
+    // Free text may be shortened, but never silently: the dialog says how much is not shown.
+    const clip = (t: string, n: number) =>
+      t.length > n ? `${t.slice(0, n)} [\u2026 ${t.length - n} more characters NOT shown]` : t;
     const text = (t: string, n: number) => clip(this.redactor.text(t), n);
+    // For what decides WHICH program runs, a shortened view could hide the dangerous part: refuse instead.
+    const whole = (what: string, t: string, n: number) => {
+      if (t.length > n)
+        throw new Error(`${what} is too long to confirm safely (over ${n} characters)`);
+      return this.redactor.text(t);
+    };
     switch (req.method) {
       case "approvals.resolve": {
         const a = this.repo.getApproval(req.params.approvalId);
@@ -607,9 +615,9 @@ export class SidecarService {
         return {
           title: `Change the program the ${provider} agent runs?`,
           message:
-            `Provider: ${provider}\nProgram: ${text(settings.command, 400)}\n` +
-            `Arguments: ${text(JSON.stringify(settings.args), 600)}\n` +
-            `Environment variables set: ${envNames.length === 0 ? "none" : text(envNames.join(", "), 300)}\n` +
+            `Provider: ${provider}\nProgram: ${whole("The program", settings.command, 400)}\n` +
+            `Arguments: ${whole("The arguments", JSON.stringify(settings.args), 600)}\n` +
+            `Environment variables set: ${envNames.length === 0 ? "none" : whole("The environment variable names", envNames.join(", "), 300)}\n` +
             "\nTasks for this agent will launch this program.",
         };
       }

@@ -131,17 +131,12 @@ fn needs_confirmation(method: &str) -> bool {
     CONFIRMED_METHODS.contains(&method)
 }
 
-/// Longest dialog body the shell will show; the sidecar already shortens its text, this is the
-/// shell's own bound so a misbehaving sidecar cannot produce an unusable dialog.
+/// Longest dialog text the shell will show. The sidecar keeps its text well under this.
 const MAX_DIALOG_CHARS: usize = 2000;
 
-fn clip(text: &str) -> String {
-    if text.chars().count() <= MAX_DIALOG_CHARS {
-        return text.to_string();
-    }
-    let mut out: String = text.chars().take(MAX_DIALOG_CHARS).collect();
-    out.push('\u{2026}');
-    out
+/// The shell never shortens what the person confirms: text over the bound is refused (fail closed).
+fn within_limit(text: &str) -> bool {
+    text.chars().count() <= MAX_DIALOG_CHARS
 }
 
 /// The confirmation flow, with the three side effects injected so it can be tested without a
@@ -159,7 +154,10 @@ fn confirmed_call(
     let (Some(title), Some(message)) = (title, message) else {
         return Err("the sidecar gave no text to confirm; nothing was done".into());
     };
-    if !confirm(&clip(title), &clip(message)) {
+    if !within_limit(title) || !within_limit(message) {
+        return Err("the text to confirm is too long to show safely; nothing was done".into());
+    }
+    if !confirm(title, message) {
         return Err("declined in the confirmation dialog; nothing was done".into());
     }
     forward()
@@ -593,12 +591,24 @@ mod tests {
     }
 
     #[test]
-    fn dialog_text_is_bounded() {
-        let long = "x".repeat(MAX_DIALOG_CHARS + 50);
-        let c = clip(&long);
-        assert_eq!(c.chars().count(), MAX_DIALOG_CHARS + 1);
-        assert!(c.ends_with('\u{2026}'));
-        assert_eq!(clip("short"), "short");
+    fn over_long_text_is_refused_not_clipped() {
+        let long = "x".repeat(MAX_DIALOG_CHARS + 1);
+        let mut asked = false;
+        let mut forwarded = false;
+        let r = confirmed_call(
+            || Ok(json!({ "title": "t", "message": long })),
+            |_, _| {
+                asked = true;
+                true
+            },
+            || {
+                forwarded = true;
+                Ok(json!({}))
+            },
+        );
+        assert!(r.unwrap_err().contains("too long"));
+        assert!(!asked && !forwarded);
+        assert!(within_limit(&"x".repeat(MAX_DIALOG_CHARS)));
     }
 
     #[test]

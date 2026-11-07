@@ -501,3 +501,11 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - `apps/desktop/src-tauri`: `cargo clippy --all-targets -- -D warnings` sạch; `cargo test --locked` 24 qua, 0 lỗi, 1 ignored.
 - UI: adapter `stub` bị ẩn khi `import.meta.env.DEV` là false (`visibleAdapters.ts`, 3 test Vitest). Giả định: ẩn ở mọi màn hình, chỉ id `stub`.
 - Gate: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build` qua; test 74 file, 746 qua, 6 expected fail, 3 bỏ qua. Chưa push, chưa tạo PR.
+
+## 2026-11-07: ghép 4 nhánh còn lại vào `worktree-p4-close-prep`
+
+- Ghép bằng `git merge --no-ff`: `angry-wilson-ecdc68` (số liệu từng workflow cho soak CLI thật), `charming-lamarr-22ee9a` (`agent-job-wrap` giữ mã thoát 32 bit, kết quả chạy với claude/codex thật), `interesting-mccarthy-ffb9c5` (cổng Claude phủ Edit/Glob/Grep, chặn glob tổng hợp `..`), `jolly-chaplygin-2c4166` (ẩn adapter `stub` ngoài dev, thay chờ cố định trong test). Worktree của cả 4 đã sạch trước khi ghép; 5 nhánh `p4-*` đã được ghép từ trước.
+- Xung đột chỉ ở docs: `ROADMAP.md` và `THREAT_MODEL.md` (2 lần), `PROGRESS.md` (1 lần). Giải tay: giữ bản mới hơn của từng hàng (T4 và mục (1) ROADMAP từ `interesting-mccarthy`; T15 và mục (2) ROADMAP từ `charming-lamarr`; `installer thật BLOCKED (thiếu NSIS/WiX)`; bỏ câu "soak thiếu số liệu từng workflow" vì đã có số liệu); `PROGRESS.md` giữ cả hai phía. Không có xung đột mã.
+- Gate sau khi ghép (kết quả thật): `pnpm lint` 0; `pnpm format` 0; `pnpm typecheck` 0; `pnpm test` 0 (88 file qua + 2 bỏ qua, 847 test qua, 6 expected fail, 28 bỏ qua); `pnpm build` 0; `cargo clippy --all-targets -- -D warnings` 0; `cargo test --locked` 24 + 2 + 9 qua, 1 ignored.
+- `python scripts/secret-scan.py`: "findings: 2 (accepted fixture hits: 701)", vẫn đúng 2 phát hiện đường dẫn `\` Windows đã biết.
+- Không chạy: CI thật; `cargo fmt --check` riêng; build installer (BLOCKED, thiếu NSIS/WiX). Chưa push, chưa tạo PR.

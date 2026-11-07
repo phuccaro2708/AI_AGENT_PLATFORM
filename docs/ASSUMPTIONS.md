@@ -405,7 +405,7 @@ Mã lặp lại được: `services/orchestrator/src/real-cli-gates.test.ts` (b�
 **Codex thật qua `CodexAppServerAdapter` (4/4 test của phần codex qua; `AGENT_STUDIO_REAL_CLI_GATES=codex`):**
 
 - `read-only`, policy sản xuất: `item/commandExecution/requestApproval` với `command` = `"…\pwsh.exe" -Command 'Get-ChildItem -Name'` → bóc wrapper → engine `deny` (`level_forbids`) → `decline`; model báo lệnh bị từ chối, không có gì chạy.
-- **Phát hiện:** khi lệnh đơn giản, Codex gửi `-Command Get-ChildItem` KHÔNG có nháy đơn → không khớp regex bóc wrapper → bị `decline` mà không hỏi engine (`asked` rỗng), kể cả khi luật cho phép `Get-ChildItem`. Nhánh `accept` cho lệnh vẫn CHƯA quan sát thật. Cần mở rộng dạng wrapper (có test) trước khi allowlist có ích.
+- **Phát hiện:** khi lệnh đơn giản, Codex gửi `-Command Get-ChildItem` KHÔNG có nháy đơn → không khớp regex bóc wrapper → bị `decline` mà không hỏi engine (`asked` rỗng), kể cả khi luật cho phép `Get-ChildItem`. Nhánh `accept` cho lệnh lúc đó CHƯA quan sát thật (đã quan sát và sửa wrapper ở d6).
 - `availableDecisions` thật: `accept`, `acceptWithExecpolicyAmendment`, `cancel` (không có `decline`, ta vẫn gửi `decline` và Codex chấp nhận, báo "rejected by user").
 - `read-only` + ghi file: `fileChange/requestApproval` → `fs.write` bị `level_forbids` → `decline`; file không tạo.
 - `workspace-write` + ghi trong repo: có `fileChange/requestApproval` (`grantRoot:null`) → `in_workspace` → `accept` → `hello.txt` được tạo, không có gì ngoài repo.
@@ -479,3 +479,35 @@ Mã lặp lại được: `tests/soak/sidecar-soak-real-cli.test.ts` (bỏ qua n
 - Sửa tối thiểu, fail-closed: `services/orchestrator/src/worktree-hash.ts` `digestInsideWorktree`: đường dẫn thật (`realpath.native`) phải nằm trong thư mục gốc thật của worktree, nếu không file KHÔNG được đọc. `verify` → `missing`; engine → workflow `failed`, không đăng ký artifact, không có vòng review; snapshot của gate dùng dấu băm của nội dung link nên đổi link vẫn thấy.
 - Đã chạy trên Windows: symlink file (máy này tạo được) và junction. Test symlink file tự thoát sớm nếu máy không tạo được symlink (nghĩa là CHƯA chạy ở đó).
 - **Còn hở:** TOCTOU (link bị thay giữa lúc kiểm và lúc đọc); hard link trỏ ra ngoài không phát hiện được bằng realpath; chưa kiểm mount point ngoài junction; `git diff --no-index` trong `ArtifactRegistry.diff` chưa có test riêng về symlink.
+- **Cấu hình đã thêm (opt-in, TẮT mặc định):** `claudeGateTaskArgs({ askEveryTool: true })` thêm `--settings {"permissions":{"ask":[...6 tool]}}`. Sidecar chưa truyền cờ này; lúc đó chưa có lần chạy `ClaudeAdapter` + gate THẬT với cờ này (chỉ stub MCP; đã chạy ở d6). Chỉ có hiệu lực nếu claude cũng bị giới hạn `--tools` và không dùng `--safe-mode`. Chính sách ghi/đọc do Policy Engine quyết, không phải sandbox OS.
+
+### d6. `askEveryTool` với cổng THẬT, và nhánh `accept` lệnh của Codex (2026-11-06, claude 2.1.318, codex-cli 0.166.0, Windows 11; Cao cho phần đã đo, mỗi ô một lần chạy)
+
+Mã: `services/orchestrator/src/real-cli-gates.test.ts` (Claude: `AGENT_STUDIO_REAL_CLI_GATES=claude-askall`; Codex: `=codex`, hai test "task 5"/"task 5b"), tap `test/real-cli/claude-gate-tap.mjs`. Repo rỗng trong `%TEMP%`, prompt nhỏ không chứa mã dự án, `--model haiku --max-budget-usd 0.3`. Cả hai cổng vẫn TẮT mặc định; không đổi cấu hình CLI toàn cục.
+
+**Việc 4 — claude thật + cổng thật (bundle sidecar chạy qua tap ghi log), `ClaudeAdapter` với `safeMode:false`, `--setting-sources local`, `--tools Write,Edit,Read,Glob,Grep,Bash`, `claudeGateTaskArgs({ askEveryTool: true })`, không đặt `permissions` (chế độ mặc định), policy = `appServerPolicy` (workspace-write, không lệnh nào được phép):**
+
+| Lời gọi (prompt A / B)    | Tới cổng | Phán quyết của cổng thật                                           | Kết quả thực tế       |
+| ------------------------- | -------- | ------------------------------------------------------------------ | --------------------- |
+| Write `w.txt` trong cwd   | có       | `allow`                                                            | file được tạo         |
+| Read `seed.txt` trong cwd | có       | `allow`                                                            | đọc được              |
+| Bash `echo probe-ok`      | có       | `deny` ("No allow rule matches")                                   | không chạy            |
+| Bash `git status`         | có       | `deny` (như trên)                                                  | không chạy            |
+| Read rồi Edit `seed.txt`  | cả hai   | Read `allow`; Edit `deny` ("tool Edit is not covered by the gate") | `seed.txt` giữ nguyên |
+| Glob `*.txt`              | có       | `deny` ("not covered by the gate")                                 | không chạy            |
+| Grep `SEED`               | có       | `deny` ("not covered by the gate")                                 | không chạy            |
+
+- 6/6 tool được thử đều tới cổng; mọi `tool_use` của claude có đúng một `tools/call` tương ứng (đối chiếu nhật ký tap với luồng `tool_call`). Cổng khởi động 1 lần mỗi lần chạy.
+- Phân biệt: "tới cổng và bị từ chối" (Edit, Glob, Grep vì `requestFor` không phủ; `echo`, `git status` vì allow list rỗng) khác "tới cổng và được phép" (Write/Read trong cwd). Phủ đủ dòng gọi KHÔNG đồng nghĩa mọi tool dùng được; không mở rộng `requestFor` ở bước này.
+- `updatedInput`: mọi phản hồi `allow` thật có `updatedInput` trùng từng byte (so JSON) với `input` của yêu cầu — cổng không sửa input. (Việc claude áp dụng `updatedInput` khác `input` đã đo ở d3.)
+- Thời gian: cổng thật trả lời trong 1–3 ms mỗi lượt (đo từ mốc thời gian của tap); cả lượt chạy ~9–12 s. Cổng thật KHÔNG có hạn thời gian nào; hạn duy nhất phía host là `AbortSignal` của adapter. Hành vi "cổng treo" chỉ đo bằng stub ở d3 (claude đợi ≥150 s), không dựng lại với cổng thật.
+- Chưa đo: tool ngoài sáu tool trên, `--safe-mode` (d3: MCP gate không nạp), `permissions: "workspace-write"` (adapter thêm `--tools` riêng và `acceptEdits`, trùng cờ `--tools`), bản claude khác, nền khác Windows. Sidecar chưa truyền `askEveryTool`.
+
+**Việc 5 — Codex app-server, lệnh qua `CodexAppServerAdapter` + `appServerPolicy` cộng allow list thử nghiệm (policy sản xuất không cho lệnh nào):**
+
+- `read-only` luôn `deny` lệnh dù allow list có gì (`engine.ts` `decideCommand`, `level_forbids`), nên test "allow list" ở d3 (read-only) không thể cho thấy `accept`. Nhánh `accept` phải thử ở `workspace-write`.
+- `workspace-write`, allow `echo`: yêu cầu `item/commandExecution/requestApproval` có `command` = `"<…>\pwsh.exe" -Command 'echo gate-ok'` (có nháy đơn khi lệnh gồm nhiều từ). Adapter bóc wrapper → engine `allow` (`rule_allow`) → `accept` → lệnh chạy (exit 0, đầu ra `gate-ok`). Nhánh `accept` lệnh THẬT: đã quan sát.
+- Cùng yêu cầu còn có `commandActions: [{type:"unknown", command:"echo gate-ok"}]` (văn bản bên trong đã bóc sẵn, kiểu `unknown`), `proposedExecpolicyAmendment: ["echo","gate-ok"]`, `availableDecisions: accept | acceptWithExecpolicyAmendment | cancel`. Không dùng `commandActions` để quyết định (mới thấy một kiểu `unknown`, các kiểu khác chưa quan sát).
+- `workspace-write`, lệnh một từ `Get-ChildItem`: `command` = `"<…>\pwsh.exe" -Command Get-ChildItem` KHÔNG nháy (xác nhận lại d3). Trước khi sửa: bị `decline` mà không hỏi engine (`asked` rỗng). Sau khi sửa: engine được hỏi (`Get-ChildItem`, `allow`) → `accept` → chạy exit 0.
+- **Sửa mã** (`packages/adapter-codex/src/app-server.ts`, `unwrapPowerShellCommand`): ngoài dạng `-Command '<inner>'`, nhận thêm đúng dạng đã thấy `-Command <MỘT token [A-Za-z0-9_.-]+>` không nháy. Vẫn phải qua `splitPlainCommand`, danh sách `POWERSHELL_EXEC` và Policy Engine. Từ chối (có test): nhiều từ không nháy, `;`, `$`, xuống dòng, nháy đôi, `-NoProfile` trước `-Command`, `iex`/`Invoke-Expression` không nháy, host khác `pwsh.exe`. Policy sản xuất vẫn không cho lệnh nào, nên hành vi mặc định không đổi (mọi lệnh bị `decline`).
+- Chưa đo: dạng wrapper khi lệnh một từ có ký tự ngoài `[A-Za-z0-9_.-]` (đang bị từ chối, an toàn), `powershell.exe`/`cmd.exe`/shell khác, nền khác Windows, `acceptWithExecpolicyAmendment` (không dùng).

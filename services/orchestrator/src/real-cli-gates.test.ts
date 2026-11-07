@@ -45,6 +45,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "../../..");
 const tapScript = join(here, "../test/real-cli/codex-tap.mjs");
 const stubScript = join(here, "../test/real-cli/claude-gate-stub.mjs");
+const gateTapScript = join(here, "../test/real-cli/claude-gate-tap.mjs");
 
 let scratch: string;
 const report: Record<string, unknown> = {};
@@ -232,6 +233,44 @@ describe.skipIf(!WANT_CODEX)("REAL codex app-server behind the policy gate", () 
         (a.answer as { decision?: string } | undefined)?.decision,
       );
     }
+    expect(filesIn(r.root).sort()).toEqual(["repo", "tap.jsonl"]);
+  }, 180_000);
+
+  it("workspace-write, `echo` allowed (task 5): the accept path for a COMMAND with the real CLI", async () => {
+    // `read_only` refuses every command whatever the allow list says (engine.ts decideCommand), so the accept path
+    // can only be seen at `workspace-write`. The full approval params go to the report (`approvals[].params`).
+    const r = await runCodex({
+      name: "codex-workspace-write-echo",
+      permissions: "workspace-write",
+      allowCommands: ["echo", "Write-Output"],
+      prompt:
+        "Run exactly this PowerShell command in the current directory: echo gate-ok (nothing else, no pipes) and tell me the output.",
+    });
+    for (const a of r.approvals) {
+      expect(["accept", "decline"]).toContain(
+        (a.answer as { decision?: string } | undefined)?.decision,
+      );
+    }
+    (report["codex-workspace-write-echo"] as Record<string, unknown>)["fullParams"] =
+      r.approvals.map((a) => a.params);
+    expect(filesIn(r.root).sort()).toEqual(["repo", "tap.jsonl"]);
+  }, 180_000);
+
+  it("workspace-write, `Get-ChildItem` allowed (task 5b): the unquoted `-Command <one word>` wrapper form", async () => {
+    const r = await runCodex({
+      name: "codex-workspace-write-listing",
+      permissions: "workspace-write",
+      allowCommands: ["Get-ChildItem"],
+      prompt:
+        "Run exactly the PowerShell command Get-ChildItem in the current directory (no pipes, no extra options) and tell me the output.",
+    });
+    for (const a of r.approvals) {
+      expect(["accept", "decline"]).toContain(
+        (a.answer as { decision?: string } | undefined)?.decision,
+      );
+    }
+    (report["codex-workspace-write-listing"] as Record<string, unknown>)["fullParams"] =
+      r.approvals.map((a) => a.params);
     expect(filesIn(r.root).sort()).toEqual(["repo", "tap.jsonl"]);
   }, 180_000);
 
@@ -810,5 +849,148 @@ describe.skipIf(!WANT_CLAUDE)(
       report["claude-real-gate-default-wrote"] = filesIn(r.repo);
       expect(stray(r.root)).toEqual([]);
     }, 180_000);
+  },
+);
+
+// Task 4 (docs/ASSUMPTIONS.md d6): `askEveryTool` with the REAL gate (the bundled sidecar behind a logging tap) and the
+// real claude. A deny shows up in claude's tool_result; an ALLOW leaves no trace in claude's output, so the tap log
+// (claude → gate requests, gate → claude replies, with timestamps) is the evidence that a call reached the gate.
+const ASK_ALL_TOOLS = "Write,Edit,Read,Glob,Grep,Bash";
+const ASKALL_A =
+  "Do these steps in order, continuing even if one fails: (1) use the Write tool to create w.txt containing ok; (2) use the Read tool on seed.txt; (3) run the shell command: echo probe-ok ; (4) run the shell command: git status . Then say done.";
+const ASKALL_B =
+  "Do these steps in order, continuing even if one fails: (1) use the Read tool on seed.txt; (2) use the Edit tool in seed.txt to replace SEEDVALUE with CHANGED; (3) use the Glob tool with pattern *.txt; (4) use the Grep tool to search SEED in the working directory. Then say done.";
+
+interface GateCall {
+  tool: string | undefined;
+  input: unknown;
+  behavior: string | undefined;
+  message: string | undefined;
+  updatedInputEqualsInput: boolean | undefined;
+  roundTripMs: number | undefined;
+}
+
+describe.skipIf(MODE !== "claude-askall")(
+  "REAL claude + REAL gate with askEveryTool (task 4, opt-in: AGENT_STUDIO_REAL_CLI_GATES=claude-askall)",
+  () => {
+    let bundle: string;
+    beforeAll(async () => {
+      bundle = join(scratch, "sidecar-askall.mjs");
+      const mod = (await import(
+        pathToFileURL(join(repoRoot, "scripts/sidecar-bundle.mjs")).href
+      )) as { bundleSidecar: (outfile: string) => Promise<void> };
+      await mod.bundleSidecar(bundle);
+    }, 120_000);
+
+    async function runAskAll(name: string, prompt: string) {
+      const { root, repo } = freshRepo(name);
+      writeFileSync(join(repo, "seed.txt"), "SEEDVALUE-123");
+      const gateConfig = join(root, "gate-config");
+      mkdirSync(gateConfig, { recursive: true });
+      const tapLog = join(gateConfig, "gate-tap.jsonl");
+      const adapter = new ClaudeAdapter({
+        safeMode: false,
+        extraArgs: [
+          "--model",
+          "haiku",
+          "--no-session-persistence",
+          "--max-budget-usd",
+          "0.3",
+          "--setting-sources",
+          "local",
+          "--disable-slash-commands",
+          "--tools",
+          ASK_ALL_TOOLS,
+        ],
+        taskArgs: claudeGateTaskArgs({
+          configDir: gateConfig,
+          launcher: { command: process.execPath, args: [gateTapScript, tapLog, bundle] },
+          askEveryTool: true,
+        }),
+      });
+      const events: AgentEvent[] = [];
+      const ac = new AbortController();
+      const started = Date.now();
+      const timer = setTimeout(() => ac.abort(), 150_000);
+      try {
+        for await (const e of adapter.execute({
+          id: `real-${name}`,
+          prompt,
+          cwd: repo,
+          signal: ac.signal,
+        })) {
+          events.push(e);
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+      const lines: { t: number; dir: string; line: string }[] = existsSync(tapLog)
+        ? readFileSync(tapLog, "utf8")
+            .split("\n")
+            .filter(Boolean)
+            .map((l) => JSON.parse(l) as { t: number; dir: string; line: string })
+        : [];
+      const calls: GateCall[] = [];
+      for (const l of lines) {
+        const m = l.dir === "c2s" ? parse(l.line) : undefined;
+        if (m?.["method"] !== "tools/call" || m["id"] === undefined) continue;
+        const args = (m["params"] as { arguments?: Record<string, unknown> } | undefined)
+          ?.arguments;
+        const replyLine = lines.find((x) => {
+          const r = x.dir === "s2c" ? parse(x.line) : undefined;
+          return r !== undefined && r["id"] === m["id"];
+        });
+        const reply = replyLine ? parse(replyLine.line) : undefined;
+        const text = (reply?.["result"] as { content?: { text?: string }[] } | undefined)
+          ?.content?.[0]?.text;
+        const decision = text === undefined ? undefined : (parse(text) as Record<string, unknown>);
+        calls.push({
+          tool: typeof args?.["tool_name"] === "string" ? args["tool_name"] : undefined,
+          input: args?.["input"],
+          behavior: typeof decision?.["behavior"] === "string" ? decision["behavior"] : undefined,
+          message: typeof decision?.["message"] === "string" ? decision["message"] : undefined,
+          updatedInputEqualsInput:
+            decision?.["behavior"] === "allow"
+              ? JSON.stringify(decision["updatedInput"]) === JSON.stringify(args?.["input"])
+              : undefined,
+          roundTripMs: replyLine ? replyLine.t - l.t : undefined,
+        });
+      }
+      const denied = events.filter((e) => e.type === "permission_denied");
+      report[name] = {
+        wallMs: Date.now() - started,
+        gateStarts: lines.filter((l) => l.dir === "start").length,
+        calls: calls.map((c) => ({
+          ...c,
+          input: JSON.stringify(c.input).slice(0, 120),
+        })),
+        permissionDeniedEvents: denied.map((e) => JSON.stringify(e).slice(0, 300)),
+        toolCallEvents: events
+          .filter((e) => e.type === "tool_call")
+          .map((e) => JSON.stringify(e).slice(0, 160)),
+        filesInRepo: filesIn(repo),
+        seed: readFileSync(join(repo, "seed.txt"), "utf8"),
+        filesInRoot: filesIn(root),
+      };
+      return { calls, root, repo, events };
+    }
+    const strayAskAll = (root: string) =>
+      filesIn(root).filter((f) => f !== "repo" && f !== "gate-config");
+
+    it("A: Write, Read, `echo`, `git status` → which reach the gate, with what verdict", async () => {
+      const r = await runAskAll("claude-askall-A", ASKALL_A);
+      expect(strayAskAll(r.root)).toEqual([]);
+      for (const c of r.calls)
+        if (c.behavior === "allow") expect(c.updatedInputEqualsInput).toBe(true);
+      expect(r.calls.length).toBeGreaterThan(0);
+    }, 200_000);
+
+    it("B: Read, Edit, Glob, Grep → which reach the gate, with what verdict", async () => {
+      const r = await runAskAll("claude-askall-B", ASKALL_B);
+      expect(strayAskAll(r.root)).toEqual([]);
+      for (const c of r.calls)
+        if (c.behavior === "allow") expect(c.updatedInputEqualsInput).toBe(true);
+      expect(r.calls.length).toBeGreaterThan(0);
+    }, 200_000);
   },
 );

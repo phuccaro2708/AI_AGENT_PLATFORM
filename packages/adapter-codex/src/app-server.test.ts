@@ -359,6 +359,30 @@ describe("pwsh -Command wrapper (the observed Windows shape)", () => {
     expect(unwrapPowerShellCommand(`${wrap("ls")} extra`)).toBeUndefined();
   });
 
+  // Second observed form (codex-cli 0.166.0, ASSUMPTIONS d6): a ONE-word command comes without quotes.
+  const bare = (inner: string) => `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command ${inner}`;
+  it("unwraps the observed unquoted one-word form and nothing wider", () => {
+    expect(unwrapPowerShellCommand(bare("Get-ChildItem"))).toBe("Get-ChildItem");
+    expect(unwrapPowerShellCommand(bare("echo"))).toBe("echo");
+    expect(unwrapPowerShellCommand(bare("Get-ChildItem -Force"))).toBeUndefined(); // several words: not observed
+    expect(unwrapPowerShellCommand(bare("ls;calc"))).toBeUndefined();
+    expect(unwrapPowerShellCommand(bare("$x"))).toBeUndefined();
+    expect(unwrapPowerShellCommand(bare("ls\nx"))).toBeUndefined();
+    expect(unwrapPowerShellCommand(bare(""))).toBeUndefined();
+    expect(unwrapPowerShellCommand(bare("ls 'x'"))).toBeUndefined();
+    expect(unwrapPowerShellCommand(`"C:\\x\\pwsh.exe" -NoProfile -Command ls`)).toBeUndefined();
+    expect(unwrapPowerShellCommand(`"C:\\x\\cmd.exe" -Command ls`)).toBeUndefined();
+  });
+
+  it("accepts an unquoted one-word command the policy allows, declines one it does not", async () => {
+    const e = env();
+    await run(make(e, [cmdRequest(bare("Get-ChildItem"))]), task(e));
+    expect(replies(e)).toEqual([{ id: 100, result: { decision: "accept" } }]);
+    const e2 = env();
+    await run(make(e2, [cmdRequest(bare("mkdir"))]), task(e2));
+    expect(replies(e2)).toEqual([{ id: 100, result: { decision: "decline" } }]);
+  });
+
   it("accepts a wrapped plain command the policy allows (engine decides, not the wrapper)", async () => {
     const e = env();
     const events = await run(make(e, [cmdRequest(wrap("Get-ChildItem -File -Force"))]), task(e));
@@ -401,6 +425,15 @@ describe("pwsh -Command wrapper (the observed Windows shape)", () => {
     ["double-quoted inner", `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command "git status"`],
     ["unquoted outer path", `pwsh.exe -Command 'git status'`],
     ["call operator", wrap("& calc")],
+    ["unquoted iex", bare("iex")],
+    ["unquoted Invoke-Expression", bare("Invoke-Expression")],
+    ["unquoted several words", bare("Get-ChildItem -Force")],
+    ["unquoted chained with ;", bare("ls;calc")],
+    ["unquoted variable", bare("$env:USERPROFILE")],
+    [
+      "unquoted -NoProfile before -Command",
+      `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoProfile -Command ls`,
+    ],
     ["empty inner", wrap("   ")],
   ];
   it.each(hostile)("never reaches the engine: %s", async (_name, command) => {

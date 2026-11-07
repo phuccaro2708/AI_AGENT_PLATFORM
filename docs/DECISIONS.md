@@ -143,3 +143,10 @@ Gate chung: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm bui
 - Tool MCP có hiện thẻ phê duyệt trong Harness hay chạy ngầm tuỳ preset (`workspace-write` + `ask` là mặc định theo tài liệu).
 - Hành vi khi cầu nối rơi giữa chừng (reconnect, tool call treo, `probe` đóng kết nối).
 - Chưa kiểm trong repo này: ACL mặc định của named pipe do Node tạo; tên pipe được giải phóng khi tiến trình chết trên Windows thật; cách tiến trình Node đọc credential store.
+
+## ADR-007: Bật mặc định hai cổng quyền và trần RAM cả cây (Q3, 2026-11-07)
+
+- **Bối cảnh:** hai cổng quyền (Codex `app-server`, Claude `--permission-prompt-tool` với `askEveryTool`) đã có bằng chứng chạy CLI thật (ASSUMPTIONS d3, d6, d9) nhưng mặc định TẮT; `jobMemLimitMb` đo được (R4) nhưng chưa nối vào cấu hình.
+- **Quyết định (người dùng chọn):** đặt mặc định BẬT cả hai cổng và nối `jobMemLimitMb`. Codex: người dùng chọn đăng ký thêm agent `codex-app-server` mặc định, KHÔNG chuyển `codex` (exec) sang app-server. Ràng buộc: fail-closed (thiếu launcher/`--safe-mode` đã lưu thì từ chối task), có công tắc tắt (`AGENT_STUDIO_CLAUDE_GATE`, `AGENT_STUDIO_CODEX_GATE`, `AGENT_STUDIO_JOB_MEM_LIMIT_MB`; `SidecarOptions` `false`), không tuyên bố sandbox hay "duyệt từng lệnh".
+- **Đánh đổi:** cổng Claude chỉ phủ sáu tool và cần `--safe-mode` tắt (thay bằng `--setting-sources local`); task Codex chọn `codex` vẫn không qua cổng; trần RAM 8192 MB rộng vì chưa có số liệu commit thật; tác dụng phụ: `agents.list` có thêm `codex-app-server`.
+- **Xem lại nếu:** kiểm lại bằng CLI thật cho thấy mặc định mới làm hỏng task hợp lệ, `.claude/settings.local.json` nới được quyền, hoặc muốn ép task Codex đi qua cổng (khi đó mất `agent-job-wrap` cho Codex).

@@ -517,3 +517,13 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - Q1 đã chọn hướng (a) (allowlist là lớp chính, cổng là lớp phụ). Q2 (duyệt 5 bước recovery) vẫn chờ người dùng.
 - Tình trạng nhánh: `worktree-p4-close-prep` ở `acfcaa0`, hơn nhánh chính `claude/loving-lovelace-32lh71` (`080adce`) 67 commit; chưa ghép vào nhánh chính, chưa push, chưa tạo PR, CI chưa chạy trên phần này.
 - Lần chạy gate đầy đủ gần nhất là ở mục "ghép 4 nhánh" ngay trên (trước `e8d7f2f`/`acfcaa0`); hai commit sau chỉ đổi docs nên không chạy lại gate, chỉ chạy Prettier trên file docs đã đổi.
+
+## 2026-11-07 (C1/Q3): bật mặc định hai cổng quyền, nối `jobMemLimitMb`
+
+- Mã (2 commit): `d0b7f60` cổng Claude (`--permission-prompt-tool` + `askEveryTool` + `--setting-sources local`, `safeMode:false`, fail-closed khi thiếu launcher, từ chối nếu args đã lưu có `--safe-mode`) và đăng ký thêm agent `codex-app-server` (không đổi hướng `codex`); công tắc tắt: `claudePermissionGate:false` / `codexAppServer:false` trong `SidecarOptions`, env `AGENT_STUDIO_CLAUDE_GATE=0|off|false`, `AGENT_STUDIO_CODEX_GATE=0|off|false` (giá trị lạ vẫn BẬT). `3417fa0` `DEFAULT_JOB_MEM_LIMIT_MB = 8192` (đo commit, không phải RSS; cấp phát vượt thì THẤT BẠI chứ không bị kill), tắt bằng `AGENT_STUDIO_JOB_MEM_LIMIT_MB=0|off|false`.
+- Test mới (agent giả, không chạy CLI thật): `permission-gates-config.test.ts`, `sidecar-permission-gates.test.ts` (11), `job-wrap-config.test.ts` cập nhật. Đã sửa 2 test cũ cho khớp (`agents.list` có `codex-app-server`; ca "không đăng ký" dùng `codexAppServer:false`).
+- Gate (kết quả thật): `pnpm lint` 0; `pnpm format` 0; `pnpm typecheck` 0; `pnpm test` 0 (90 file qua + 2 bỏ qua, 867 test qua, 6 expected fail, 28 bỏ qua); `pnpm build` 0. Không đụng `src-tauri` nên không chạy cargo.
+- Một lần chạy `pnpm test` song song với eslint/tsc có 1 test orchestrator đỏ, chưa xác định được test nào; chạy lại sạch 3 lần đều xanh. KHÔNG tái hiện được, chưa rõ nguyên nhân.
+- `python scripts/secret-scan.py` (venv `detect-secrets==1.5.0` ngoài repo): "scanned worktree + 342 commits; findings: 2 (accepted fixture hits: 715)", đúng 2 phát hiện đường dẫn `\` Windows đã biết.
+- NOT_RUN: kiểm lại với claude/codex thật (chưa được người dùng cho phép trong chat). Rủi ro mở: `--setting-sources local` vẫn đọc `.claude/settings.local.json` trong thư mục task nên có thể nới quyền (hooks, `defaultMode`); đã ghi ở THREAT_MODEL T4, SECURITY, ASSUMPTIONS d10. Giới hạn khác: `codex` thường không có cổng; `codex-app-server` không qua job wrap/RAM cap; cổng không có giới hạn thời gian; task có `permissions` + cổng (`workspace-write`) chưa kiểm; công cụ ngoài 6 tool không được phủ.
+- Chưa push, chưa tạo PR, chưa tuyên bố đóng Phase 4.

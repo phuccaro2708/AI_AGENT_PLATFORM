@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -281,6 +281,25 @@ describe("post-run check (P4-1b)", () => {
     const { result } = await runTask("w", "read-only");
     expect(result.finalState).toBe("needs_reconciliation");
     expect(result.reason).toContain("a.txt");
+  });
+
+  it("a link to a file outside the folder created during a workspace-write run is flagged, not followed", async () => {
+    const outside = join(dir, "outside-secret.txt");
+    writeFileSync(outside, "outside-secret");
+    let linked = true;
+    const a = new Scripted("w", (t) => {
+      try {
+        symlinkSync(outside, join(t.cwd, "leak.txt"), "file");
+      } catch {
+        linked = false; // no symlink privilege on this machine
+      }
+      return [];
+    });
+    open(a);
+    const { result } = await runTask("w", "workspace-write");
+    if (!linked) return;
+    expect(result.finalState).toBe("needs_reconciliation");
+    expect(result.reason).toContain("leak.txt");
   });
 
   it("a workspace-write task may change files in its folder", async () => {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
@@ -60,6 +60,37 @@ describe("ArtifactRegistry.verify", () => {
 
   it("fails for a task without a worktree", () => {
     expect(() => reg.verify("task_none")).toThrow(/no worktree/);
+  });
+});
+
+describe("ArtifactRegistry.verify and links that leave the worktree", () => {
+  it("never hashes a file reached through a symlink that points outside the worktree", () => {
+    writeFileSync(join(dir, "secret.txt"), "outside-secret");
+    try {
+      symlinkSync(join(dir, "secret.txt"), join(wtPath, "leak.txt"), "file");
+    } catch {
+      return; // no symlink privilege on this machine: not run (see docs/ASSUMPTIONS.md d8)
+    }
+    // Registered with the hash of the OUTSIDE file, as an unfixed snapshot would have done.
+    repo.registerArtifact(task, "leak.txt", sha("outside-secret"));
+    const [c] = reg.verify(task);
+    expect(c?.status).toBe("missing");
+    expect(c?.actualSha256).toBeUndefined();
+  });
+
+  it("never reads through a directory junction/link that points outside the worktree", () => {
+    mkdirSync(join(dir, "outdir"));
+    writeFileSync(join(dir, "outdir", "s.txt"), "outside-secret");
+    symlinkSync(join(dir, "outdir"), join(wtPath, "jn"), "junction"); // needs no privilege on Windows
+    repo.registerArtifact(task, "jn/s.txt", sha("outside-secret"));
+    expect(reg.verify(task)[0]?.status).toBe("missing");
+  });
+
+  it("still verifies a regular file in a real subdirectory", () => {
+    mkdirSync(join(wtPath, "sub"));
+    writeFileSync(join(wtPath, "sub", "f.txt"), "in");
+    repo.registerArtifact(task, "sub/f.txt", sha("in"));
+    expect(reg.verify(task)[0]?.status).toBe("ok");
   });
 });
 

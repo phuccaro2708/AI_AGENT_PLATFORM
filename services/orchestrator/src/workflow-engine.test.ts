@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -184,6 +192,32 @@ describe("PeerReviewEngine", () => {
     expect(
       notes.some((n) => n.source === "verified" && /read-only reviewer/i.test(n.content)),
     ).toBe(true);
+  });
+
+  it("fails closed when the implementer leaves a symlink to a file outside the worktree", async () => {
+    const outside = join(dir, "outside-secret.txt");
+    writeFileSync(outside, "outside-secret");
+    let linked = true;
+    setup(
+      (task) => {
+        try {
+          symlinkSync(outside, join(task.cwd, "leak.txt"), "file");
+        } catch {
+          linked = false; // no symlink privilege: this test cannot run here
+        }
+        return [{ type: "completed" }];
+      },
+      () => verdict("approve"),
+    );
+    engine.start({ workflowId: wf, goal: "g" });
+    await drive();
+    if (!linked) return;
+    expect(repo.getWorkflowState(wf)).toBe("failed");
+    expect(rev.tasks).toHaveLength(0); // never reviewed
+    const implId = repo.listWorktrees(wf)[0]!.taskId;
+    expect(repo.listArtifacts(implId)).toEqual([]); // the outside file is not registered/hashed as an artifact
+    const notes = repo.listContextItems(wf, ["decision"]);
+    expect(notes.some((n) => /outside the worktree/i.test(n.content))).toBe(true);
   });
 
   it("fails when the reviewer gives no valid verdict", async () => {

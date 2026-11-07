@@ -456,3 +456,10 @@ Kiểm (lúc xong 7B; hiện là 358 test): lint, typecheck, 357 test, build, pr
 - Đã chạy: venv ngoài repo (`%TEMP%\secscan-venv`), `pip install detect-secrets==1.5.0`, `python scripts/secret-scan.py` → "scanned worktree + 270 commits; findings: 2 (accepted fixture hits: 568)". 2 phát hiện còn lại (`docs\reports\phase0-windows\spike-report.json:28`, `packages\git-worktrees\src\git-worktrees.test.ts:42`) chỉ do đường dẫn `\` trên Windows không khớp `ACCEPTED_ANYWHERE`; không phải lỗi thật. Chưa chạy trên Linux/CI.
 - `prettier --check` và `eslint` không áp dụng được: prettier "No parser could be inferred" cho `.toml` và `.py`, eslint báo file bị bỏ qua (cảnh báo, 0 lỗi). Không có kiểm tra định dạng thực sự cho 2 file này.
 - Commit `e4095f0` (chỉ 2 file), chưa push, chưa tạo PR; CI chưa chạy lại.
+
+## 2026-11-07: dọn nợ nhỏ (test flaky, Rust gate, ẩn adapter stub)
+
+- Test flaky: `scheduler.test.ts` đã dùng chờ điều kiện có giới hạn từ trước và `git-worktrees.test.ts` không có chờ cố định, nên không sửa. Đã thay chờ cố định ở `sidecar-resume.test.ts` (chờ `needs_reconciliation` rồi mới kiểm không chạy lại) và `process-manager.test.ts` "cancels via AbortSignal" (abort sau khi có `pid`, không sau 200 ms). Không nới timeout nào. Chạy lặp bằng vòng lặp `pnpm exec vitest run <file>`: 20/20 qua cho mỗi file trong 4 file; hai file đã sửa chạy lại 20/20 sau khi sửa. Trước khi sửa, các file này cũng qua 20/20 (không tái hiện được lỗi hiếm), nên chưa chứng minh được nguyên nhân gốc.
+- `apps/desktop/src-tauri`: `cargo clippy --all-targets -- -D warnings` sạch; `cargo test --locked` 24 qua, 0 lỗi, 1 ignored.
+- UI: adapter `stub` bị ẩn khi `import.meta.env.DEV` là false (`visibleAdapters.ts`, 3 test Vitest). Giả định: ẩn ở mọi màn hình, chỉ id `stub`.
+- Gate: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build` qua; test 74 file, 746 qua, 6 expected fail, 3 bỏ qua. Chưa push, chưa tạo PR.

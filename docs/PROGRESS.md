@@ -487,3 +487,10 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - `python scripts/secret-scan.py`: ban đầu có phát hiện từ key giả trong `sidecar-confirm.test.ts` (worktree và 3 commit lịch sử); đã thêm pragma và 3 tuple lịch sử đã rà. Sau gộp việc 4–7: `scanned worktree + 320 commits; findings: 2`, đúng 2 phát hiện đường dẫn Windows đã biết, không có phát hiện mới (script thoát mã 1 vì còn 2 phát hiện này).
 - `node scripts/deps-age-audit.mjs` (chạy một mình): exit 0; npm 315 gói, Cargo 423 crate tra đủ, 0 gói dưới 14 ngày sau allowlist. Một lần chạy trước đó bị HTTP 429 (exit 2) vì hai audit chạy song song; kết quả đó bị bỏ.
 - Chưa làm / NOT_RUN: hộp thoại native trong app Tauri thật; installer thật và `agent-job-wrap` với `claude`/`codex` thật, Ctrl+C qua wrapper, kill đột ngột app; quyết định bật mặc định hai cổng và nối `askEveryTool`/`jobMemLimitMb`; Low IL gọi model thật; soak thật có số liệu từng workflow; quét tổng quát bằng Codex (đang chạy, chưa có kết quả); push, PR, đọc CI thật.
+
+## 2026-11-06 — P4 việc 8: `agent-job-wrap` với claude/codex thật, Ctrl+C, kill đột ngột, mã thoát 32 bit
+
+- Chi tiết và bảng kết quả: `docs/ASSUMPTIONS.md` d9. Build: `pnpm tauri build --no-bundle` (release) qua, `agent-job-wrap.exe` cạnh `agent-studio.exe`; installer BLOCKED (thiếu NSIS/WiX, tải về cần người dùng cho phép).
+- Với claude 2.1.318 và codex 0.166.0 thật (prompt nhỏ, thư mục tạm ngoài repo): chạy qua wrapper exit 0; Ctrl+C, CTRL_BREAK nhóm, kill wrapper, kill wrapper ngoài (thay app) đều không để lại tiến trình con cháu.
+- Sửa mã: `agent-job-wrap` giữ nguyên mã thoát 32 bit (`std::process::exit(i32)`, trước đây `& 0xff` làm 256 thành 0); test `exit_codes_are_not_truncated_to_eight_bits`.
+- Chưa kiểm: kill app Tauri thật khi CLI thật chạy bên trong; Ctrl+C qua sidecar Node thật.

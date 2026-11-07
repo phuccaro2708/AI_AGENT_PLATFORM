@@ -85,7 +85,7 @@ Cột "Trạng thái": **CÓ** = có kiểm soát và test; **MỘT PHẦN** = c
 ## 6. Việc cần làm để thu hẹp (không nằm trong lần này)
 
 - T19: đã probe và sửa (xem ASSUMPTIONS.md, mục "git-worktrees: hook và cấu hình thực thi từ repo"); còn nối `allowFilters` vào cài đặt project nếu cần Git LFS, và chạy lại trên Linux/macOS.
-- Chạy lại cổng Claude/Codex với CLI thật khi người dùng cho phép (T4): kiểm cấu hình mặc định mới, Edit/Glob/Grep, `workspace-write` + cổng, và ảnh hưởng của `.claude/settings.local.json`. (Quyết định bật mặc định đã chốt: Q3, ADR-007.)
+- Chạy lại cổng Claude/Codex với CLI thật khi người dùng cho phép (T4): kiểm cấu hình mặc định mới, Edit/Glob/Grep, `workspace-write` + cổng, và ảnh hưởng của `.claude/settings.local.json`. (Quyết định bật mặc định đã chốt: Q3, ADR-007.) Review ngoài 2026-11-07 (ASSUMPTIONS d14): `env.NODE_OPTIONS` và `apiKeyHelper` trong `.claude/settings.local.json` chạy mã ngoài cổng dù `disableAllHooks`; nay task bị từ chối nếu tệp đó có khóa ngoài `$schema`/`model`/`permissions`, chưa đo lại bằng claude thật.
 - `jobWrap` đã bật mặc định, watchdog `treeMemoryLimitMb` giữ TẮT (quyết định của người dùng); còn lại: build installer thật (BLOCKED: cần tải NSIS/WiX). Đã kiểm với claude/codex thật: chạy, Ctrl+C, kill wrapper, kill lồng (ASSUMPTIONS d9) (T15, T16).
 - Lưu `maxRounds` và thêm test vòng ≥ 2 (T14).
 - Xác nhận allowlist 13 crate transitive (T11) hoặc hạ bản; quyết định cách xử lý 2 moderate dev-only khi bản vá đủ 14 ngày.

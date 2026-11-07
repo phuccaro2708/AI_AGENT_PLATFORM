@@ -572,3 +572,8 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 
 - Đối chiếu docs với git: HANDOFF cập nhật head `4de2832`, 86 commit hơn nhánh chính, kết quả gate mới; TODO P4-1 (c)/(d) thêm dòng đính chính (cổng nay bật mặc định). Không đụng ROADMAP (ba tiêu chí nghiệm thu Phase 4 vẫn chưa tick, không có bằng chứng mới để tick).
 - Chưa chạy lại gate sau commit docs này (chỉ docs đổi).
+
+## 2026-11-07: review ngoài — settings.local.json chạy mã ngoài cổng
+
+- Review ngoài (snapshot `f0f2a10`) báo `env.NODE_OPTIONS` và `apiKeyHelper` trong `.claude/settings.local.json` chạy mã dù `disableAllHooks`. Chưa tự tái hiện với claude thật. Đã thêm `assertSafeLocalSettings` (chỉ cho `$schema`/`model`/`permissions`, còn lại từ chối task), 5 test mới trong `sidecar-permission-gates.test.ts` (18/18 qua). ASSUMPTIONS d14, SECURITY và THREAT_MODEL T4 cập nhật.
+- NOT_RUN: đo lại bằng claude thật sau biện pháp; thư mục cha/gốc git; verdict an toàn toàn bộ vẫn FAIL cho tới khi có lượt đo đó.

@@ -44,8 +44,50 @@ Lưu ý: `dtolnay/rust-toolchain` không có tag phiên bản; "stable" là nhá
 - npm: 23 gói trực tiếp (mọi `package.json`), **không có `^`/`~`/`*`/dải** (chỉ `engines.node >=22`). Gói mới nhất: eslint 10.13.0 (20 ngày), vitest 5.0.5 / react 19.3.1 / react-dom / @tauri-apps/api 2.12.4 / @tauri-apps/cli 2.12.3 (21 ngày). **Không gói nào < 14 ngày.**
 - Cargo (ghim `=`): tauri 2.12.5 và tauri-build 2.7.4 (2026-10-21, 15 ngày), tauri-plugin-dialog 2.8.3 (2026-10-14), keyring-core 1.0.1 (2026-10-13), windows-native-keyring-store 1.1.0 (2026-05-24), windows-sys 0.61.2 (2025-10-06). **Không crate trực tiếp nào < 14 ngày.**
 - **Không ghim chính xác trong Cargo.toml:** `serde = "1"`, `serde_json = "1"`. Bị khoá bởi `Cargo.lock` (serde 1.0.229 — 2026-07-18; serde_json 1.0.154 — 2026-10-11, cả hai ≥ 2 tuần) nên bản dựng `--locked` là xác định. KHÔNG sửa vì lane RUST có thể đang sửa `Cargo.toml`; gợi ý đổi thành `=1.0.229` / `=1.0.154` khi gộp.
-- Chưa kiểm tuổi từng crate/gói **transitive** (hàng trăm); chỉ kiểm trực tiếp. Có thể kiểm bằng `Cargo.lock`/`pnpm-lock.yaml` nếu cần.
+- Tuổi gói **transitive**: đã kiểm ở mục 5 (2026-11-06).
 
 ## 4. Kiểm chứng
 
 `pnpm install --frozen-lockfile` 0; `prettier --check .github/workflows/ci.yml` 0; `pnpm typecheck` 0; `pnpm test` 0 (67 file, 662 pass, 6 expected fail, 3 skipped); `pnpm build` 0. Không đụng `Cargo.toml`/`Cargo.lock`/`pnpm-lock.yaml`/`package.json` nên không chạy `cargo test`. Workflow chưa chạy trên GitHub thật (không push): CHƯA xác minh các SHA chạy được trên runner.
+
+## 5. Tuổi gói transitive (2026-11-06)
+
+Công cụ: `node scripts/deps-age-audit.mjs [--npm] [--cargo] [--days 14] [--json file]` (không dependency mới; chỉ GET metadata công khai từ `registry.npmjs.org` và `crates.io/api`; npm 4 request song song, crates.io 1 request/giây kèm User-Agent; không cài, không chạy script của gói). Mã thoát: 0 đủ tuổi, 1 có gói trẻ hơn ngưỡng, 2 có gói không tra được. Thời điểm tham chiếu 2026-11-06T18:10Z, ngưỡng 14 ngày. Số liệu dưới đây là kết quả chạy thật.
+
+| Hệ sinh thái                                                | Số gói khoá                     | Tra được | Không tra được | < 14 ngày | Gói trẻ nhất                      |
+| ----------------------------------------------------------- | ------------------------------- | -------- | -------------- | --------- | --------------------------------- |
+| npm (`pnpm-lock.yaml`, mục `packages`)                      | 315 (23 trực tiếp)              | 315      | 0              | **0**     | eslint 10.13.0 (21,2 ngày)        |
+| Cargo (`apps/desktop/src-tauri/Cargo.lock`, nguồn registry) | 423 (8 cạnh từ crate workspace) | 423      | 0              | **13**    | log 0.4.35 (6,9 ngày, 2026-10-30) |
+
+Mỗi phiên bản npm khác nhau của cùng một gói được đếm riêng. Ngày publish là `time[version]` của npm hoặc `created_at` của phiên bản trên crates.io.
+
+### 13 crate transitive < 14 ngày (Cargo.lock KHÔNG bị sửa)
+
+| Crate                              | Publish (UTC) | Tuổi (ngày) | Đường phụ thuộc kéo vào                                                   |
+| ---------------------------------- | ------------- | ----------- | ------------------------------------------------------------------------- |
+| brotli 9.1.1                       | 2026-10-27    | 10,6        | agent-studio > tauri 2.12.5 > tauri-utils 2.10.2 > brotli                 |
+| brotli-decompressor 6.2.0          | 2026-10-25    | 12,4        | ... > tauri-utils > brotli 9.1.1 > brotli-decompressor                    |
+| erased-serde 0.4.11                | 2026-10-25    | 12,6        | ... > tauri-utils > serde-untagged 0.1.9 > erased-serde                   |
+| js-sys 0.3.107                     | 2026-10-30    | 7,5         | agent-studio > tauri > reqwest 0.13.5 > js-sys                            |
+| log 0.4.35                         | 2026-10-30    | 6,9         | agent-studio > keyring-core 1.0.1 > log (cũng được nhiều crate khác dùng) |
+| utf8_iter 1.1.0                    | 2026-10-29    | 8,0         | agent-studio > tauri > url 2.5.8 > idna 1.1.0 > utf8_iter                 |
+| utf_types 1.0.0                    | 2026-10-29    | 8,0         | ... > idna 1.1.0 > utf8_iter 1.1.0 > utf_types                            |
+| wasm-bindgen 0.2.130               | 2026-10-30    | 7,5         | agent-studio > tauri > reqwest 0.13.5 > wasm-bindgen                      |
+| wasm-bindgen-futures 0.4.80        | 2026-10-30    | 7,5         | ... > reqwest > wasm-bindgen-futures                                      |
+| wasm-bindgen-macro 0.2.130         | 2026-10-30    | 7,5         | ... > reqwest > wasm-bindgen > wasm-bindgen-macro                         |
+| wasm-bindgen-macro-support 0.2.130 | 2026-10-30    | 7,5         | ... > wasm-bindgen-macro > wasm-bindgen-macro-support                     |
+| wasm-bindgen-shared 0.2.130        | 2026-10-30    | 7,5         | ... > reqwest > wasm-bindgen > wasm-bindgen-shared                        |
+| web-sys 0.3.107                    | 2026-10-30    | 7,5         | agent-studio > tauri > reqwest 0.13.5 > web-sys                           |
+
+Đường là đường ngắn nhất tìm được (BFS) từ crate workspace; đây không phải mọi đường. Lưu ý:
+
+- `cargo tree --locked --offline -i <crate> --target x86_64-pc-windows-msvc` (2026-11-06): `js-sys`, `web-sys`, `wasm-bindgen`/`-futures`/`-macro`/`-macro-support`/`-shared` (7 crate) **không** nằm trong đồ thị build Windows (chỉ target wasm của `reqwest`); `brotli`, `brotli-decompressor`, `erased-serde`, `log`, `utf8_iter`, `utf_types` (6 crate) **có** được biên dịch (qua `tauri-utils`/`tauri-codegen`, `html5ever`, `icu_collections`/`idna`). Chuỗi kéo vào đầy đủ lấy bằng lệnh trên.
+- Chưa đối chiếu với chính sách: Cargo không có tương đương `minimumReleaseAge` của pnpm, nên ngưỡng 14 ngày với crate transitive hiện chưa được cưỡng chế. `Cargo.lock` + `--locked` chỉ đảm bảo xác định, không đảm bảo tuổi.
+- Việc phải làm khi người dùng quyết định (KHÔNG làm tự động): (a) chấp nhận có ghi nhận (các crate đã có trên crates.io ≥ 6,9 ngày, không có advisory tại `cargo audit` ngày 2026-11-05), hoặc (b) hạ các crate này về bản cũ hơn bằng `cargo update -p <crate> --precise <ver>` rồi chạy lại `cargo test --locked`, hoặc (c) đợi đủ 14 ngày (muộn nhất 2026-11-13 cho `log`) rồi chạy lại script. Chạy lại script sau mỗi lần đổi lockfile.
+- Giới hạn: kiểm tuổi không phải kiểm an toàn; script không kiểm yanked, chữ ký hay nội dung. Metadata registry là dữ liệu không đáng tin tuyệt đối (ngày do registry ghi, chưa xác minh độc lập).
+
+### Chặn bằng CI (2026-11-06)
+
+Job `security` trong `.github/workflows/ci.yml` chạy `node scripts/deps-age-audit.mjs`; thoát khác 0 nếu có gói < 14 ngày hoặc không tra được. Ngoại lệ đã chấp nhận ghi trong `scripts/deps-age-allowlist.json` (mảng `{id, reason, expires}`; thiếu lý do hoặc quá hạn thì không có hiệu lực). File này hiện CHƯA tồn tại: 13 crate ở trên chưa được chấp nhận, nên job sẽ đỏ cho đến khi người dùng quyết định (thêm ngoại lệ có hạn hoặc hạ bản). **CI NOT_RUN**: chưa chạy trên runner thật; script chỉ đã chạy ở local. Gate cục bộ: thêm `node scripts/deps-age-audit.mjs` (cần mạng, cargo mất ~7 phút do giới hạn 1 request/giây).
+
+Đề xuất `scripts/deps-age-allowlist.json` (CHƯA tạo; chờ người dùng quyết): 13 mục `{"id":"<crate>@<ver>","reason":"transitive qua tauri/reqwest/keyring-core, không advisory, lockfile khoá; chờ đủ 14 ngày","expires":"2026-11-14"}`. Hạn 2026-11-14 vì crate trẻ nhất (`log`, publish 2026-10-30) đủ 14 ngày vào 2026-11-13, sau đó bước CI tự xanh và mục hết hạn không còn hiệu lực.

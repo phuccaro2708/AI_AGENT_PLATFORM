@@ -87,16 +87,17 @@ export function splitPlainCommand(
 /**
  * The ONE wrapper seen from the real CLI on Windows (docs/ASSUMPTIONS.md c2/c3):
  * `"<path>\pwsh.exe" -Command '<inner>'` — double-quoted executable path, exactly `-Command`, one single-quoted
- * argument and nothing after it. Any other shape (other flags, `-EncodedCommand`, double-quoted inner, `''`
+ * argument and nothing after it. Second observed form (codex-cli 0.166.0, ASSUMPTIONS d6): a command that is ONE word
+ * comes WITHOUT quotes (`-Command Get-ChildItem`); only `[A-Za-z0-9_.-]+` is taken in that form. Any other shape (other flags, `-EncodedCommand`, double-quoted inner, `''`
  * escapes, another host) returns `undefined` and is declined. This only strips the wrapper; the inner text still has to
  * pass `splitPlainCommand` and the Policy Engine, and nothing is ever evaluated or re-joined into a shell string.
  */
-const PWSH_WRAPPER = /^"([^"]*)" -Command '([^']*)'$/;
+const PWSH_WRAPPER = /^"([^"]*)" -Command (?:'([^']*)'|([A-Za-z0-9_.-]+))$/;
 export function unwrapPowerShellCommand(command: string): string | undefined {
   const m = PWSH_WRAPPER.exec(command);
   if (!m) return undefined;
   const host = (m[1] ?? "").split(/[\\/]/).pop()?.toLowerCase();
-  const inner = (m[2] ?? "").trim();
+  const inner = (m[2] ?? m[3] ?? "").trim();
   return host === "pwsh.exe" && inner !== "" ? inner : undefined;
 }
 

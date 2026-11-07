@@ -442,6 +442,26 @@ Công cụ: script PowerShell + P/Invoke tạm (ngoài repo, không dependency):
 
 **Kết luận tạm (PARTIAL):** cơ chế Low IL có thật và chặn ghi ra ngoài vùng đã gán nhãn mà không cần admin; CLI khởi động và ghi cấu hình được trong vùng low. Nhưng (1) không chặn ĐỌC file người dùng (credential, SSH key, mã nguồn khác) và không chặn mạng, nên T20 không được giảm; (2) chưa chứng minh được luồng đăng nhập/gọi model, nên chưa có cơ sở viết opt-in trong `packages/process-manager`. Không đổi mã chạy, không đổi ADR-002. Đề xuất: cảnh báo UI "agent chạy với quyền người dùng, đọc được mọi file và mạng"; làm nốt phần BLOCKED rồi mới quyết hiện thực opt-in.
 
+### d7. Hoàn tất probe Low IL: đăng nhập/gọi model, con cháu tiến trình (R6, 2026-11-06, claude 2.1.318, codex-cli 0.166.0, Windows 11 10.0.26200; PARTIAL — đăng nhập và gọi model thật vẫn BLOCKED)
+
+Công cụ: giống d5 (script PowerShell + P/Invoke tạm ngoài repo, `DuplicateTokenEx` + `SetTokenInformation(TokenIntegrityLevel, S-1-16-4096)` + `CreateProcessAsUserW`, không admin). Vùng thử `%TEMP%
+6probe\low` (`repo` git rỗng, `cfg`, `tmp`, `codexhome`) gán nhãn `icacls ... /setintegritylevel "(OI)(CI)L"`; `med\` cùng cấp giữ Medium. Biến môi trường `TEMP`, `TMP`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` trỏ vào vùng low (không đụng cấu hình toàn cục). Prompt chỉ là "Reply with exactly: OK".
+
+**Quan sát được (thật):**
+
+- Lặp lại d5: `whoami /groups` ở tiến trình con có `Low Mandatory Level S-1-16-4096`; ghi vào `low	mp` thành công, ghi vào `med\` → `Access is denied`; đọc `med\m.txt` vẫn được.
+- Metadata của file credential thật của người dùng (`dir /a`, KHÔNG đọc nội dung) thấy được từ Low IL: file không bị che khỏi tiến trình Low. Đây chỉ là khả năng thấy file; không đọc nội dung vì không cần và để khỏi chạm secret.
+- Con cháu tiến trình ở Low IL trong vùng low: `git commit --allow-empty` trong repo low thành công (`git log` có commit), `node -e writeFileSync` trong cwd low thành công.
+- `claude -p ... --model haiku --output-format json` ở Low IL với `CLAUDE_CONFIG_DIR` rỗng trong vùng low: exit 1, `result:"Not logged in · Please run /login"`, `terminal_reason:"api_error"`, 0 token, chạy 0,4 s, không lỗi quyền ghi.
+- `codex exec --sandbox read-only --ephemeral --skip-git-repo-check` ở Low IL với `CODEX_HOME` rỗng trong vùng low: khởi động, tạo `state_5.sqlite`, `logs_2.sqlite`, `queue_1.sqlite`, `skills/`, `tmp/` trong `codexhome` (ghi trong vùng low OK); tới `api.openai.com` và nhận `401 Unauthorized: Missing bearer or basic authentication` (mạng ra ngoài hoạt động, xác thực thiếu như dự kiến); WebSocket báo `invalid peer certificate: UnknownIssuer` rồi rơi về HTTPS. Nguyên nhân `UnknownIssuer` chưa xác định (có thể do kho chứng chỉ/proxy của máy, chưa thử ở Medium để đối chứng), không suy diễn.
+
+**BLOCKED (không kiểm chứng được, không lách):**
+
+- Đăng nhập thật, gọi model thật (một prompt nhỏ) và làm mới token của `claude`/`codex` ở Low IL. Lý do: sao chép `.credentials.json`/`auth.json` vào thư mục tạm bị bộ phân loại quyền của phiên từ chối lần thứ hai ("Credential Materialization"), dù nhiệm vụ cho phép dùng bản sao cấu hình. Dùng `CLAUDE_CONFIG_DIR` trỏ vào thư mục thật sẽ ghi vào cấu hình toàn cục, trái phạm vi được phép, nên không làm. Cần người dùng: (a) tự chạy `claude /login` / `codex login` một lần trong thư mục cấu hình tạm đã gán nhãn low rồi báo lại, hoặc (b) tự copy credential vào vùng low rồi cho chạy lại bước gọi model. Script launcher nằm ngoài repo (scratchpad của phiên) nên chưa lưu vào repo.
+- Con cháu tiến trình nặng (shell do CLI sinh khi gọi tool, hook toàn cục, npm/pnpm cache, `.git` dự án thật) và tích hợp Job Object của `agent-job-wrap` vẫn chưa thử.
+
+**Kết luận (PARTIAL, không đổi mã chạy):** không có tiêu chí QUA vì chưa quan sát gọi model; không hiện thực opt-in trong `packages/process-manager` (không có bằng chứng để viết test hồi quy cho luồng đăng nhập). Bằng chứng mới củng cố d5: Low IL cho CLI khởi động, ghi trạng thái trong vùng low, chạy git/node con, nhưng không chặn đọc và không chặn mạng, nên T20 không giảm và T3 chỉ giảm phần ghi. ADR-002 không đổi. Cảnh báo UI cần có: "Agent chạy với quyền của bạn: đọc được file của bạn và truy cập mạng; Low IL (chưa bật) chỉ chặn ghi ra ngoài vùng được gán nhãn."
+
 ### d4. Buộc MỌI lời gọi tool của Claude đi qua cổng (R2, 2026-11-06, claude 2.1.318, Windows 11; Cao cho phần đã đo, một lần chạy mỗi ô)
 
 Mã: `real-cli-gates.test.ts`, nhóm "stricter permission combos" (bỏ qua nếu không đặt `AGENT_STUDIO_REAL_CLI_GATES=claude-strict`; không nằm trong `1` vì tốn nhiều lượt). Repo rỗng trong `%TEMP%`, stub cổng luôn **từ chối**, `--model haiku --max-budget-usd 0.3`, prompt nhỏ không chứa mã dự án. Hai prompt mỗi tổ hợp: A = Write, Read, `echo probe-ok`, `git status`; B = Edit, Glob, Grep. "Qua cổng" = stub nhận `tools/call`. Mô hình chọn lời gọi nên mỗi ô chỉ là một lần quan sát.

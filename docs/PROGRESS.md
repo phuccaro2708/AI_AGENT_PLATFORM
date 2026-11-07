@@ -509,3 +509,11 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - Gate sau khi ghép (kết quả thật): `pnpm lint` 0; `pnpm format` 0; `pnpm typecheck` 0; `pnpm test` 0 (88 file qua + 2 bỏ qua, 847 test qua, 6 expected fail, 28 bỏ qua); `pnpm build` 0; `cargo clippy --all-targets -- -D warnings` 0; `cargo test --locked` 24 + 2 + 9 qua, 1 ignored.
 - `python scripts/secret-scan.py`: "findings: 2 (accepted fixture hits: 701)", vẫn đúng 2 phát hiện đường dẫn `\` Windows đã biết.
 - Không chạy: CI thật; `cargo fmt --check` riêng; build installer (BLOCKED, thiếu NSIS/WiX). Chưa push, chưa tạo PR.
+
+## 2026-11-07 (cuối ngày): cập nhật NEXT_PLAN, ghi quyết định Q3, đồng bộ HANDOFF
+
+- `e8d7f2f` (nhánh `claude/ke-hoach-viec-chua-lam-b2d59b`): viết lại mục "Chặng gần" của `docs/NEXT_PLAN.md` theo trạng thái thật (danh sách đã xong, bảng C0–C13 có tiêu chí, Q1–Q3). Ghép vào `worktree-p4-close-prep` bằng `62692a7`.
+- `acfcaa0`: ghi quyết định Q3 của người dùng (2026-11-07): ĐẶT MẶC ĐỊNH BẬT hai cổng quyền (Codex `app-server`, Claude `--permission-prompt-tool` với `askEveryTool`) và nối `jobMemLimitMb`. Ràng buộc: fail-closed, có công tắc tắt rõ ràng, ghi giới hạn (cổng Claude không thấy mọi lời gọi, không phải sandbox), xử lý `--safe-mode`. CHƯA triển khai (việc C1 trong NEXT_PLAN); hiện hai cổng vẫn TẮT trong mã.
+- Q1 đã chọn hướng (a) (allowlist là lớp chính, cổng là lớp phụ). Q2 (duyệt 5 bước recovery) vẫn chờ người dùng.
+- Tình trạng nhánh: `worktree-p4-close-prep` ở `acfcaa0`, hơn nhánh chính `claude/loving-lovelace-32lh71` (`080adce`) 67 commit; chưa ghép vào nhánh chính, chưa push, chưa tạo PR, CI chưa chạy trên phần này.
+- Lần chạy gate đầy đủ gần nhất là ở mục "ghép 4 nhánh" ngay trên (trước `e8d7f2f`/`acfcaa0`); hai commit sau chỉ đổi docs nên không chạy lại gate, chỉ chạy Prettier trên file docs đã đổi.

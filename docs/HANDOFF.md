@@ -1,8 +1,15 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-06 (đêm, đã đối chiếu lại với git và CI). Nhánh `claude/loving-lovelace-32lh71` ở `9db9c7c`, đã push, khớp origin (đã ghép cục bộ P4-1 c). CI `315914d`, `c2856af`, `c914033` xanh. CI `b1abf87` và `3cfcfc4` ĐỎ ở job TypeScript ubuntu (do test helper, đã sửa ở `c914033`). CI `9db9c7c`: Security đỏ do secret scan, đã sửa cục bộ, chưa push, CI chưa chạy lại. Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-07 (cuối ngày, đã đối chiếu với git). Việc Phase 4 hiện nằm ở nhánh `worktree-p4-close-prep` (head `acfcaa0`, hơn nhánh chính `claude/loving-lovelace-32lh71` 67 commit, chưa ghép vào nhánh chính, chưa push, chưa có CI trên phần này). Nhánh chính vẫn ở `080adce`. Các mục "Vị trí" và CI bên dưới là lịch sử đến 2026-11-06 và nói về nhánh chính cũ; kế hoạch hiện hành nằm ở `docs/NEXT_PLAN.md` (C0–C13). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
-## Vị trí
+## Phase 4 hiện tại (2026-11-07, nhánh `worktree-p4-close-prep`)
+
+- Đã ghép vào nhánh này: cổng Codex/Claude (opt-in), `agent-job-wrap` (bật mặc định khi có binary), watchdog RAM cả cây, resume Peer Review, threat model (đã duyệt), T19 (vô hiệu hook repo), R3 (hộp thoại native, chưa kiểm trong app thật), allowlist tuổi gói Cargo có hạn (hết hạn 2026-11-09…14 thì CI đỏ). Gate gần nhất (trước hai commit docs `e8d7f2f`, `acfcaa0`): lint, format, typecheck, test (847 qua), build, clippy, `cargo test --locked` đều thoát 0.
+- Quyết định Q3 (2026-11-07): bật mặc định hai cổng quyền, nối `jobMemLimitMb`; CHƯA làm trong mã (NEXT_PLAN C1).
+- Chưa kiểm/BLOCKED: CI thật, installer thật (thiếu NSIS/WiX), hộp thoại native trong app Tauri thật, Low IL đăng nhập/gọi model, soak 100 workflow với CLI thật, TOCTOU/hard link/mount point của artifact.
+- Chờ người dùng: ghép `worktree-p4-close-prep` vào nhánh chính (từ thư mục gốc repo) và đồng ý push; Q2 duyệt 5 bước recovery; cho phép chạy CLI thật cho C1/C5; cài NSIS/WiX cho C2; xác nhận đóng Phase 4 (`PHASE4_REPORT.md` chưa viết).
+
+## Vị trí (lịch sử đến 2026-11-06)
 
 - **Khoá single-instance của sidecar (A3, ADR-006 §2d) đã xong và push** (`1fe2290`, `d5afd87`, `b1abf87`): `services/orchestrator/src/sidecar-lock.ts`, sidecar thua khoá thoát mã 75 kèm sự kiện `fatal`. Gate cục bộ xanh (xem PROGRESS 2026-11-06 đêm). Chưa kiểm: socket trừu tượng Linux (chờ job CI ubuntu), Node 22, Job Object thật, macOS. Phần còn lại của ADR-006 (chủ DB, kênh, token, vai, cầu nối Harness, spawn sớm, yêu cầu lặp) vẫn là đề xuất, chờ sau Phase 4.
 - Nhánh chính `claude/loving-lovelace-32lh71` ở `3cfcfc4`, khớp origin (đã push). Đã chứa Phase 4 mã thuần (`98539d3`), các nhánh phiên con (policy-win-hardening, wire-resource-monitor, flaky-root-cause, probe-permissions, p4-*), `p4-tests-c781ca` (cả `86ee0e9`, ghép cục bộ `87cc0e6`) và `fix-pm-abort-flaky` (`9f5de1a`). Nhánh còn lại trên origin: `fix-pm-abort-flaky-7e3a1f` (xoá được sau khi push) và `phase-2-kickoff-8a5732` (không ghép). Các nhánh đã ghép khác đã xoá 2026-11-05.

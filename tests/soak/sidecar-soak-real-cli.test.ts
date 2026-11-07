@@ -2,12 +2,19 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, parse } from "node:path";
 import { Writable } from "node:stream";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAdapter } from "@agent-studio/adapter-codex";
 import { createLogger } from "@agent-studio/shared-utils";
 import { SidecarService } from "@agent-studio/orchestrator";
+import {
+  CLI_NAME,
+  ProcessTracker,
+  listProcesses,
+  renderTable,
+  type WorkflowRow,
+} from "./real-cli-metrics";
 
 /**
  * MANUAL, OPT-IN small soak with the REAL `claude` and `codex` through the real SidecarService (P4-10, item 7b).
@@ -22,7 +29,11 @@ import { SidecarService } from "@agent-studio/orchestrator";
  *   1 claude plain, 2 codex plain, 3 claude plain, 4 codex plain, 5 peer review (claude implements, codex reviews).
  * What the model answers varies, so assertions are SAFETY/consistency invariants only (every task terminal, DB
  * consistent, no leaked handles/intervals, no secret in the log or the stored messages). The observed facts
- * (calls, durations, states) go to the file named by AGENT_STUDIO_REAL_CLI_SOAK_OUT and are recorded by hand in docs/ASSUMPTIONS.md (d8).
+ * (per workflow: id, final state, ms, task count and states, CLI processes left alive) go to the JSON file named by
+ * AGENT_STUDIO_REAL_CLI_SOAK_OUT plus a Markdown table next to it (same name, `.md`); keep both OUTSIDE the repo and
+ * summarise the table by hand in docs/ASSUMPTIONS.md (d8). Orphans are measured by sampling this process' descendants
+ * (OS process list) every ~0.7 s and checking, after each workflow and after close, which of them are still alive
+ * (same pid AND creation time). A process that starts and dies between two samples is not seen.
  */
 const RAW = Number(process.env["AGENT_STUDIO_REAL_CLI_SOAK"] ?? 0);
 const N = Math.min(5, Math.max(0, Number.isFinite(RAW) ? Math.floor(RAW) : 0));
@@ -154,10 +165,15 @@ describe.skipIf(N === 0)("real-CLI soak (opt-in, at most 5 workflows)", () => {
       ];
 
       const observed: Record<string, unknown>[] = [];
+      const rows: WorkflowRow[] = [];
+      let currentTag = "setup";
+      const tracker = new ProcessTracker();
+      tracker.start(() => currentTag);
       const t0 = Date.now();
       for (let i = 0; i < N; i++) {
         const step = plan[i]!;
         const started = Date.now();
+        currentTag = `w${i + 1}`;
         const root = freshRepo(`p${i}`);
         const { projectId } = await call<{ projectId: string }>("projects.create", {
           name: `p${i}`,
@@ -198,6 +214,22 @@ describe.skipIf(N === 0)("real-CLI soak (opt-in, at most 5 workflows)", () => {
           await new Promise((res) => setTimeout(res, 500));
         }
         await svc.idle();
+        const ms = Date.now() - started;
+        await tracker.sample(currentTag);
+        const orphansNow = tracker
+          .survivors(await listProcesses())
+          .filter((p) => CLI_NAME.test(p.name) && p.during.includes(currentTag));
+        rows.push({
+          n: i + 1,
+          workflowId,
+          kind: step.kind,
+          agent: step.agent ?? "rclaude-impl+rcodex",
+          workflowState: wfState,
+          ms,
+          taskCount: tasks.length,
+          taskStates: tasks.map((t) => t.state),
+          orphansAfter: orphansNow.length,
+        });
         observed.push({
           i,
           kind: step.kind,
@@ -248,6 +280,11 @@ describe.skipIf(N === 0)("real-CLI soak (opt-in, at most 5 workflows)", () => {
       svc = undefined;
       await new Promise((res) => setTimeout(res, 1500)); // let stdio grace timers and children finish
       const after = leakSensitive(handles());
+      await tracker.stop();
+      await tracker.sample("closed");
+      const finalSurvivors = tracker
+        .survivors(await listProcesses())
+        .filter((p) => CLI_NAME.test(p.name));
 
       // vitest does not show console output of a passing run here, so the report goes to a file when asked for.
       const reportFile = process.env["AGENT_STUDIO_REAL_CLI_SOAK_OUT"];
@@ -260,9 +297,21 @@ describe.skipIf(N === 0)("real-CLI soak (opt-in, at most 5 workflows)", () => {
             totalSeconds,
             handlesBefore: before,
             handlesAfter: after,
+            processesSeen: tracker.seenCount,
+            cliProcessesAliveAfterClose: finalSurvivors.length,
+            cliProcessesAliveAfterCloseNames: finalSurvivors.map((p) => p.name),
+            rows,
             logBytes: logText.length,
             observed,
           }),
+        );
+        const { dir: outDir, name: outName } = parse(reportFile);
+        writeFileSync(
+          join(outDir, `${outName}.md`),
+          `${renderTable(rows)}
+
+CLI processes alive after svc.close(): ${finalSurvivors.length}; descendants seen: ${tracker.seenCount}
+`,
         );
       }
       expect(after, "handles after close vs before").toBeLessThanOrEqual(before + 2);

@@ -490,8 +490,20 @@ Mã lặp lại được: `tests/soak/sidecar-soak-real-cli.test.ts` (bỏ qua n
 **(b) Soak thật, 1 lần chạy, 5 workflow:** 1 claude trơn (`haiku`, `--safe-mode`), 2 codex trơn (`exec`, `--ephemeral`, effort low), 3 claude trơn, 4 codex trơn, 5 peer review (claude `haiku` `safeMode:false --tools Write` làm implementer, codex làm reviewer), tất cả qua `SidecarService` thật (SQLite thật, git worktree thật). Kết quả: test XANH, 103,2 giây tổng (`vitest`), tối thiểu 6 task (4 trơn + implementer + reviewer; số vòng review thật của workflow 5 KHÔNG ghi lại được).
 
 - Sau MỖI workflow: không task nào kẹt `queued/running/waiting_approval`, không worktree `creating/removing`, `sequence` của message liên tục 0..n-1. Cuối: không có giá trị biến môi trường dạng secret (tên chứa KEY/TOKEN/SECRET/PASSWORD/CREDENTIAL) và không có chuỗi dạng `sk-…`/`Bearer …`/`ghp_…` trong log pino hay bảng `messages`; số handle nhạy với rò (Timeout, socket, ChildProcess, FSWatcher, Pipe, Immediate) sau `svc.close()` không vượt mức trước khi mở quá 2.
-- **KHÔNG ghi lại được:** trạng thái từng task/workflow, thời gian từng workflow, số vòng review. Lý do: lần chạy này dùng `console.log` cho báo cáo và vitest không hiện nó; đã đổi sang ghi file (`…_OUT`). Không chạy lại vì sẽ vượt trần 5 workflow thật đã cho phép; muốn số liệu chi tiết cần người dùng cho phép một lần chạy nữa. Vì vậy kết luận chỉ là "các bất biến an toàn giữ nguyên", không phải "workflow 5 được duyệt".
-- **Chưa kiểm:** quy mô 100 (cố ý không chạy: tốn chi phí); tiến trình `claude`/`codex` mồ côi sau soak (không đo được độc lập vì máy có nhiều tiến trình `claude` của các phiên khác; chỉ đo handle trong tiến trình test); CLI bị kill giữa chừng; tăng bộ nhớ dài hạn.
+- **Chạy lại có số liệu (2026-11-06, cùng phiên bản CLI, PASS cho các bất biến, 1 lần chạy):** harness giờ ghi từng workflow (id, trạng thái cuối, ms, task, trạng thái task, số tiến trình CLI còn sống) ra JSON + MD ngoài repo (`…_OUT`). Số CLI mồ côi đo bằng cách lấy mẫu cây tiến trình con của tiến trình test (~0,7 giây/lần) rồi kiểm tiến trình đã thấy nào còn sống sau mỗi workflow và sau `svc.close()` (khớp pid VÀ thời điểm tạo, chỉ tên claude/codex/node/bun/agent-job-wrap).
+
+| #   | kiểu / agent                 | trạng thái workflow | ms     | task | trạng thái task      | CLI mồ côi |
+| --- | ---------------------------- | ------------------- | ------ | ---- | -------------------- | ---------- |
+| 1   | trơn / claude                | `pending`           | 8 692  | 1    | completed            | 0          |
+| 2   | trơn / codex                 | `pending`           | 26 598 | 1    | completed            | 0          |
+| 3   | trơn / claude                | `pending`           | 7 061  | 1    | completed            | 0          |
+| 4   | trơn / codex                 | `pending`           | 24 369 | 1    | completed            | 0          |
+| 5   | peer review (claude → codex) | `completed`         | 54 391 | 2    | completed, completed | 0          |
+
+Tổng 6 task, 150,3 giây tổng cộng các workflow; sau `svc.close()`: 0 tiến trình CLI còn sống (616 tiến trình con đã thấy trong lúc chạy), handle nhạy rò 4 → 6 (trong ngưỡng +2). Test xanh.
+
+- **Lưu ý khi đọc bảng:** workflow trơn luôn ở `pending` dù task `completed` (đó là cách `workflows.start` trơn hoạt động trong lần chạy này, không phải lỗi được điều tra ở đây); harness coi "xong" là mọi task terminal. Peer review không ghi số vòng. Thời gian tường vitest (341,6 giây) lớn hơn tổng các workflow (150,3 giây) và 103,2 giây của lần trước; phần chênh chưa được giải thích (nghi do lấy mẫu tiến trình bằng PowerShell/CIM tốn kém trên Windows và dọn dẹp cuối), nên các số ms chỉ so sánh trong cùng lần chạy. Mẫu ~0,7 giây: tiến trình sống và chết giữa hai mẫu không bị thấy, nên "0 mồ côi" nghĩa là "không thấy mồ côi", không phải bằng chứng tuyệt đối.
+- **Chưa kiểm:** quy mô 100 (cố ý không chạy: tốn chi phí); CLI bị kill giữa chừng; tăng bộ nhớ dài hạn; một lần chạy duy nhất nên chưa có phương sai.
 
 **(a) Nghi vấn symlink của artifact — là THẬT, đã sửa:**
 

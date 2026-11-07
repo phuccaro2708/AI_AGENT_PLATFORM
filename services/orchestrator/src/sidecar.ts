@@ -120,8 +120,8 @@ export interface SidecarOptions {
   jobWrap?: JobWrapOptions;
   /**
    * Opt-in (P4-4 (b)): kill the `claude`/`codex` process tree when its total resident memory passes this many MB
-   * (host-side polling watchdog; the Job Object caps are per process). Unset here = off; `sidecar-main` defaults it
-   * to min(8192 MB, half of RAM), `AGENT_STUDIO_CLI_TREE_MEM_MB` overrides, `0`/`off` disables.
+   * (host-side polling watchdog; the Job Object caps are per process). OFF by default (it only polls); set here,
+   * or via `AGENT_STUDIO_CLI_TREE_MEM_MB=<positive MB>` in `sidecar-main`, to opt in.
    */
   cliTreeMemoryLimitMb?: number;
   /** Parent folder of diagnostics bundles. Default: `diagnostics` next to the database. */

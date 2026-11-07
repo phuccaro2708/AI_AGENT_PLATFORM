@@ -1,4 +1,3 @@
-import { totalmem } from "node:os";
 import { createInterface } from "node:readline";
 import { NodeResourceSource } from "@agent-studio/resource-monitor";
 import { createLogger } from "@agent-studio/shared-utils";
@@ -62,9 +61,9 @@ try {
   process.stdout.write(line, () => process.exit(err instanceof SidecarLockError ? EXIT_LOCKED : 1));
   await new Promise<never>(() => undefined); // never construct the service; the callback above exits
 }
-// P4-4 (b): wrapper ON by default when the installed binary is found, else a warning and no wrap; RAM watchdog ON.
+// P4-4 (b): wrapper ON by default when the installed binary is found, else a warning and no wrap. RAM watchdog stays OFF unless opted in.
 const jobWrap = resolveJobWrap(arg("job-wrap"), process.env, log);
-const cliTreeMemoryLimitMb = resolveTreeMemoryLimitMb(process.env, totalmem());
+const cliTreeMemoryLimitMb = resolveTreeMemoryLimitMb(process.env);
 const service = new SidecarService(
   {
     dbPath,

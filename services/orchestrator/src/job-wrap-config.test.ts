@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolveJobWrap, resolveTreeMemoryLimitMb } from "./job-wrap-config.js";
 
-const GB = 1024 ** 3;
 const dirs: string[] = [];
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -50,19 +49,13 @@ describe("resolveJobWrap", () => {
 });
 
 describe("resolveTreeMemoryLimitMb", () => {
-  it("defaults to min(8192 MB, half of RAM), at least 1024", () => {
-    expect(resolveTreeMemoryLimitMb({}, 32 * GB)).toBe(8192);
-    expect(resolveTreeMemoryLimitMb({}, 8 * GB)).toBe(4096);
-    expect(resolveTreeMemoryLimitMb({}, 1 * GB)).toBe(1024);
+  it("is OFF by default (the watchdog only polls)", () => {
+    expect(resolveTreeMemoryLimitMb({})).toBeUndefined();
   });
-  it("env overrides it; 0/off disables; garbage falls back to the default", () => {
-    expect(resolveTreeMemoryLimitMb({ AGENT_STUDIO_CLI_TREE_MEM_MB: "2048" }, 32 * GB)).toBe(2048);
-    expect(
-      resolveTreeMemoryLimitMb({ AGENT_STUDIO_CLI_TREE_MEM_MB: "0" }, 32 * GB),
-    ).toBeUndefined();
-    expect(
-      resolveTreeMemoryLimitMb({ AGENT_STUDIO_CLI_TREE_MEM_MB: "off" }, 32 * GB),
-    ).toBeUndefined();
-    expect(resolveTreeMemoryLimitMb({ AGENT_STUDIO_CLI_TREE_MEM_MB: "-5" }, 32 * GB)).toBe(8192);
+  it("a positive integer in the env opts in; 0, off and garbage stay off", () => {
+    expect(resolveTreeMemoryLimitMb({ AGENT_STUDIO_CLI_TREE_MEM_MB: "2048" })).toBe(2048);
+    for (const v of ["0", "off", "-5", "abc", ""]) {
+      expect(resolveTreeMemoryLimitMb({ AGENT_STUDIO_CLI_TREE_MEM_MB: v })).toBeUndefined();
+    }
   });
 });

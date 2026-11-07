@@ -4,10 +4,8 @@ import type { JobWrapOptions } from "@agent-studio/process-manager";
 
 /** `0`/`off`/`false` turns the wrapper off (default: ON when the installed binary is found). */
 export const JOB_WRAP_ENV = "AGENT_STUDIO_JOB_WRAP";
-/** MB for the whole-tree watchdog; `0`/`off` turns it off; unset/invalid = the conservative default. */
+/** MB for the whole-tree watchdog (opt-in; unset, `0`, `off` or invalid = off). */
 export const TREE_MEM_ENV = "AGENT_STUDIO_CLI_TREE_MEM_MB";
-/** Upper bound of the default tree limit. */
-export const DEFAULT_TREE_MEM_CAP_MB = 8192;
 
 export interface Warn {
   warn(obj: object, msg: string): void;
@@ -43,17 +41,11 @@ export function resolveJobWrap(
 }
 
 /**
- * Whole-tree memory watchdog limit in MB, or `undefined` (off). Default: min(8192 MB, half of system RAM). Rationale:
- * a legitimate run (claude/codex plus the cargo/node builds and tests they start) can reach a few GB, so the default
- * only catches a runaway; it is a polling watchdog, not a hard cap. Override with `AGENT_STUDIO_CLI_TREE_MEM_MB`.
+ * Whole-tree memory watchdog limit in MB. OFF by default (`undefined`): it only polls resident memory, so a fast
+ * allocator can overshoot before it is killed; it is not a hard cap. A positive integer in
+ * `AGENT_STUDIO_CLI_TREE_MEM_MB` opts in; `0`, `off` or anything else leaves it off.
  */
-export function resolveTreeMemoryLimitMb(
-  env: NodeJS.ProcessEnv,
-  totalMemBytes: number,
-): number | undefined {
+export function resolveTreeMemoryLimitMb(env: NodeJS.ProcessEnv): number | undefined {
   const raw = env[TREE_MEM_ENV]?.trim();
-  if (raw !== undefined && isOff(raw)) return undefined;
-  if (raw !== undefined && /^[1-9]\d*$/.test(raw)) return Number(raw);
-  const half = Math.floor(totalMemBytes / 2 / 1048576);
-  return Math.max(1024, Math.min(DEFAULT_TREE_MEM_CAP_MB, half));
+  return raw !== undefined && /^[1-9]\d*$/.test(raw) ? Number(raw) : undefined;
 }

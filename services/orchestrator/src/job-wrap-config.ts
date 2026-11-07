@@ -12,6 +12,8 @@ export const JOB_MEM_ENV = "AGENT_STUDIO_JOB_MEM_LIMIT_MB";
  * claude/codex tree has been measured (docs/ASSUMPTIONS.md, d9). A low value could break healthy tasks in a way that
  * looks like a CLI crash, so this only stops runaway growth. Lower it with the env var once real figures exist.
  */
+/** Upper bound (16 TiB in MB): anything larger is a typo and would not survive as an exact integer in argv. */
+export const MAX_JOB_MEM_LIMIT_MB = 16 * 1024 * 1024;
 export const DEFAULT_JOB_MEM_LIMIT_MB = 8192;
 /** MB for the whole-tree watchdog (opt-in; unset, `0`, `off` or invalid = off). */
 export const TREE_MEM_ENV = "AGENT_STUDIO_CLI_TREE_MEM_MB";
@@ -56,8 +58,12 @@ function resolveJobMemLimitMb(env: NodeJS.ProcessEnv, log: Warn): number | undef
   const raw = env[JOB_MEM_ENV]?.trim();
   if (raw === undefined || raw === "") return DEFAULT_JOB_MEM_LIMIT_MB;
   if (isOff(raw)) return undefined;
-  if (/^[1-9]\d*$/.test(raw)) return Number(raw);
-  log.warn({ value: raw }, `${JOB_MEM_ENV} is not a positive integer: using the default`);
+  const n = /^[1-9]\d*$/.test(raw) ? Number(raw) : NaN;
+  if (Number.isSafeInteger(n) && n <= MAX_JOB_MEM_LIMIT_MB) return n;
+  log.warn(
+    { value: raw },
+    `${JOB_MEM_ENV} is not a positive integer up to ${MAX_JOB_MEM_LIMIT_MB}: using the default`,
+  );
   return DEFAULT_JOB_MEM_LIMIT_MB;
 }
 

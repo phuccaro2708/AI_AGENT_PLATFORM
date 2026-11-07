@@ -346,6 +346,45 @@ export class SidecarService {
     return { ok: probe.status === "ok" && looksLikeTheCli, probe, checked, looksLikeTheCli };
   }
 
+  /**
+   * `codex-app-server`: the same program, environment and secrets as the stored `codex` settings (so a custom path,
+   * proxy variable or Credential Manager key reaches it too); explicit `SidecarOptions.codexAppServer` fields win.
+   * The stored `args` are NOT passed: they are `codex exec` arguments and were never probed for `app-server`.
+   */
+  private buildAppServerAdapter(s?: {
+    command: string;
+    args: string[];
+    env: Record<string, string>;
+  }): AgentAdapter {
+    const explicit = this.opts.codexAppServer || {};
+    const secret = this.secrets.codex;
+    const fromSettings =
+      s || Object.keys(secret).length > 0
+        ? {
+            ...(s ? { command: s.command } : {}),
+            env: this.childEnv("codex", s?.env ?? {}),
+            envAllow: [...Object.keys(s?.env ?? {}), ...Object.keys(secret)],
+          }
+        : {};
+    const appServer = { ...fromSettings, ...explicit };
+    const run = this.opts.policyEvaluate ?? evaluate;
+    return this.gate.wrap(
+      new CodexAppServerAdapter({
+        ...appServer,
+        id: "codex-app-server",
+        evaluate: async (request, ctx) =>
+          run(appServerPolicy(ctx), request, { taskId: ctx.taskId }),
+      }),
+      { checkLaunch: appServer.command === undefined },
+    );
+  }
+
+  /** A change of the `codex` settings also reaches `codex-app-server` (when it is registered). */
+  private refreshAppServer(provider: "claude" | "codex"): void {
+    if (provider !== "codex" || this.opts.codexAppServer === false) return;
+    this.registry.replace(this.buildAppServerAdapter(this.repo.getAgentSettings("codex")));
+  }
+
   /** What an agent of this provider is started with: our environment, its settings, its secrets. */
   private childEnv(provider: "claude" | "codex", env: Record<string, string>) {
     return { ...process.env, ...env, ...this.secrets[provider] };
@@ -406,19 +445,7 @@ export class SidecarService {
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
     this.registry.register(this.gate.wrap(new AntigravityAdapter()));
     if (opts.codexAppServer !== false) {
-      const appServer = opts.codexAppServer ?? {};
-      const run = opts.policyEvaluate ?? evaluate;
-      this.registry.register(
-        this.gate.wrap(
-          new CodexAppServerAdapter({
-            ...appServer,
-            id: "codex-app-server",
-            evaluate: async (request, ctx) =>
-              run(appServerPolicy(ctx), request, { taskId: ctx.taskId }),
-          }),
-          { checkLaunch: appServer.command === undefined },
-        ),
-      );
+      this.registry.register(this.buildAppServerAdapter(this.repo.getAgentSettings("codex")));
     }
     for (const a of opts.extraAdapters ?? [])
       this.registry.register(
@@ -792,6 +819,7 @@ export class SidecarService {
           if (settings === null) {
             this.repo.clearAgentSettings(provider);
             this.registry.replace(this.buildCliAdapter(provider));
+            this.refreshAppServer(provider);
             return ok(req.id, { ok: true, settings: null });
           }
           const r = await this.tryAgentSettings(provider, settings);
@@ -822,6 +850,7 @@ export class SidecarService {
             probedAt: r.probe.probedAt,
           });
           this.registry.replace(this.buildCliAdapter(provider, r.checked.settings));
+          this.refreshAppServer(provider);
           return ok(req.id, {
             ok: true,
             resolvedPath: r.checked.resolvedPath,

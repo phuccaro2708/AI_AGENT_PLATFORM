@@ -77,7 +77,7 @@ describe("resolveJobWrap: default whole-tree RAM cap (Q3)", () => {
     }
   });
   it("garbage falls back to the default and warns", () => {
-    for (const v of ["abc", "-5", "1.5"]) {
+    for (const v of ["abc", "-5", "1.5", "9".repeat(309), "1000000000000000000000", "16777217"]) {
       const w = warnings();
       const r = resolveJobWrap(fakeBinary(), { AGENT_STUDIO_JOB_MEM_LIMIT_MB: v }, w.log);
       expect(r?.jobMemLimitMb).toBe(DEFAULT_JOB_MEM_LIMIT_MB);

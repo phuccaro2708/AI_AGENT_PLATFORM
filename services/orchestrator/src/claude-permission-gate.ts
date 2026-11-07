@@ -24,6 +24,16 @@ export const GATE_TOOL_NAME = "approve";
 
 const safeName = (s: string): string => s.replace(/[^A-Za-z0-9_-]/g, "_");
 
+/** Tools whose calls `askEveryTool` forces through the gate. Anything else claude has is NOT covered. */
+export const ASK_EVERY_TOOL_RULES: readonly string[] = [
+  "Write",
+  "Edit",
+  "Read",
+  "Glob",
+  "Grep",
+  "Bash",
+];
+
 export function encodePolicy(policy: Policy): string {
   return Buffer.from(JSON.stringify(policy), "utf8").toString("base64url");
 }
@@ -52,6 +62,13 @@ export interface ClaudeGateLauncher {
 export function claudeGateTaskArgs(o: {
   configDir: string;
   launcher: ClaudeGateLauncher;
+  /**
+   * R2, opt-in, default OFF: also pass `--settings` with `permissions.ask` for every tool in `ASK_EVERY_TOOL_RULES`,
+   * which in the 2026-11-06 probe (claude 2.1.318) routed ALL calls of those tools to the gate (Read, Glob, Grep,
+   * `echo`, `git status`, Write in cwd, also under `acceptEdits` and `--allowedTools`). Only effective when claude is
+   * ALSO limited to those tools (`--tools`): a tool not listed here is not covered. Not a sandbox.
+   */
+  askEveryTool?: boolean;
 }): (task: AgentTask) => string[] {
   return (task) => {
     const policy = appServerPolicy({
@@ -78,6 +95,9 @@ export function claudeGateTaskArgs(o: {
       "--strict-mcp-config",
       "--permission-prompt-tool",
       `mcp__${GATE_SERVER_NAME}__${GATE_TOOL_NAME}`,
+      ...(o.askEveryTool
+        ? ["--settings", JSON.stringify({ permissions: { ask: [...ASK_EVERY_TOOL_RULES] } })]
+        : []),
     ];
   };
 }

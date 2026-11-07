@@ -290,6 +290,8 @@ interface ClaudeStubRun {
   /** `tools/call` requests the stub received: tool name and input */
   calls: { tool: string | undefined; input: Record<string, unknown> | undefined }[];
   starts: number;
+  /** tool_use blocks claude emitted (name + short input), whether or not they reached the gate */
+  toolUses: { name: string; input: string }[];
   toolResults: { isError: boolean; text: string }[];
   mcpServers: unknown;
   permissionMode: unknown;
@@ -369,6 +371,7 @@ async function runClaudeStub(o: {
 
   const lines = out.split("\n").filter(Boolean).map(parse);
   const toolResults: ClaudeStubRun["toolResults"] = [];
+  const toolUses: ClaudeStubRun["toolUses"] = [];
   let mcpServers: unknown;
   let permissionMode: unknown;
   let permissionDenials: unknown;
@@ -377,6 +380,17 @@ async function runClaudeStub(o: {
     if (m["type"] === "system" && m["subtype"] === "init") {
       mcpServers = m["mcp_servers"];
       permissionMode = m["permissionMode"];
+    }
+    if (m["type"] === "assistant") {
+      const content = (m["message"] as { content?: unknown[] } | undefined)?.content ?? [];
+      for (const c of content as Record<string, unknown>[]) {
+        if (c["type"] === "tool_use") {
+          toolUses.push({
+            name: String(c["name"]),
+            input: JSON.stringify(c["input"]).slice(0, 120),
+          });
+        }
+      }
     }
     if (m["type"] === "user") {
       const content = (m["message"] as { content?: unknown[] } | undefined)?.content ?? [];
@@ -410,6 +424,7 @@ async function runClaudeStub(o: {
         input: s.msg?.params?.arguments?.input,
       })),
     starts: stub.filter((s) => s.dir === "start").length,
+    toolUses,
     toolResults,
     mcpServers,
     permissionMode,
@@ -597,6 +612,100 @@ describe.skipIf(!WANT_CLAUDE)(
         expect(r.calls.length).toBeGreaterThan(0);
       }
     }, 300_000);
+  },
+);
+
+// R2 (docs/ASSUMPTIONS.md d4): which flag combination makes EVERY tool call reach the gate? The stub denies all,
+// so a call that reaches it is "gated"; a tool_use with no matching gate call was decided by claude itself.
+const ASK_ALL = JSON.stringify({
+  permissions: { ask: ["Write", "Edit", "Read", "Glob", "Grep", "Bash"] },
+});
+const STRICT_COMBOS: { label: string; extra: string[]; permissionMode?: string }[] = [
+  { label: "baseline", extra: [] },
+  { label: "manual", extra: [], permissionMode: "manual" },
+  { label: "dontAsk", extra: [], permissionMode: "dontAsk" },
+  { label: "ask-all-settings", extra: ["--settings", ASK_ALL] },
+  { label: "acceptEdits+ask-all", extra: ["--settings", ASK_ALL], permissionMode: "acceptEdits" },
+  {
+    label: "allowedTools-all+ask-all",
+    extra: ["--settings", ASK_ALL, "--allowedTools=Write,Read,Bash"],
+  },
+  { label: "restricted+ask-all", extra: ["--restricted", "--settings", ASK_ALL] },
+];
+const STRICT_A =
+  "Do these steps in order, continuing even if one fails: (1) use the Write tool to create w.txt containing ok; (2) use the Read tool on seed.txt; (3) run the shell command: echo probe-ok ; (4) run the shell command: git status . Then say done.";
+const STRICT_B =
+  "Do these steps in order, continuing even if one fails: (1) use the Edit tool in seed.txt to replace SEEDVALUE with CHANGED; (2) use the Glob tool with pattern *.txt; (3) use the Grep tool to search SEED in the working directory. Then say done.";
+
+describe.skipIf(!(MODE === "claude-strict"))(
+  "REAL claude stricter permission combos + --permission-prompt-tool (R2, opt-in: AGENT_STUDIO_REAL_CLI_GATES=claude-strict)",
+  () => {
+    it("records, per combination, which tool calls reach the gate; a denying gate must leave no trace outside the repo", async () => {
+      const seed = { "seed.txt": "SEEDVALUE-123" };
+      const summary: Record<string, unknown> = {};
+      for (const c of STRICT_COMBOS) {
+        for (const [part, prompt, tools] of [
+          ["A", STRICT_A, "Write,Read,Bash"],
+          ["B", STRICT_B, "Edit,Read,Glob,Grep"],
+        ] as const) {
+          const r = await runClaudeStub({
+            name: `claude-strict-${c.label}-${part}`,
+            mode: "deny",
+            prompt,
+            tools,
+            seed,
+            extra: c.extra,
+            ...(c.permissionMode ? { permissionMode: c.permissionMode } : {}),
+            timeoutMs: 150_000,
+          });
+          summary[`${c.label}/${part}`] = {
+            code: r.code,
+            mcpStarted: r.starts,
+            gated: r.calls.map((x) => `${x.tool}:${JSON.stringify(x.input).slice(0, 70)}`),
+            toolUses: r.toolUses.map((u) => `${u.name}:${u.input.slice(0, 70)}`),
+            results: r.toolResults.map((t) => `${t.isError ? "ERR" : "ok"} ${t.text.slice(0, 90)}`),
+            repoFiles: filesIn(r.repo),
+            stray: strayFiles(r.root),
+          };
+          // Safety only: nothing may appear outside the (temporary) repo.
+          expect(strayFiles(r.root)).toEqual([]);
+        }
+      }
+      report["claude-strict-combos"] = summary;
+    }, 2_400_000);
+
+    it("ask-all settings + an allowing stub: Read then Edit both reach the gate (Edit is only blocked earlier when the file was not read)", async () => {
+      const r = await runClaudeStub({
+        name: "claude-strict-edit-after-read",
+        mode: "allow",
+        prompt:
+          "First use the Read tool on seed.txt, then use the Edit tool in seed.txt to replace SEEDVALUE with CHANGED. Then say done.",
+        tools: "Edit,Read",
+        seed: { "seed.txt": "SEEDVALUE-123" },
+        extra: ["--settings", ASK_ALL],
+      });
+      report["claude-strict-edit-after-read"] = {
+        gated: r.calls.map((x) => x.tool),
+        uses: r.toolUses.map((u) => u.name),
+        seed: readFileSync(join(r.repo, "seed.txt"), "utf8"),
+      };
+      expect(strayFiles(r.root)).toEqual([]);
+    }, 150_000);
+
+    it("--permission-prompts none: nothing is routed to the gate (denied automatically)", async () => {
+      const r = await runClaudeStub({
+        name: "claude-strict-prompts-none",
+        mode: "allow",
+        prompt: WRITE_W,
+        extra: ["--permission-prompts", "none"],
+      });
+      report["claude-prompts-none"] = {
+        gated: r.calls.length,
+        results: r.toolResults,
+        repoFiles: filesIn(r.repo),
+      };
+      expect(strayFiles(r.root)).toEqual([]);
+    }, 150_000);
   },
 );
 

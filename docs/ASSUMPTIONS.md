@@ -526,7 +526,7 @@ Mã: `services/orchestrator/src/real-cli-gates.test.ts` (Claude: `AGENT_STUDIO_R
 **Ánh xạ Edit/Glob/Grep (sau việc 4; `permission-prompt.ts` `requestFor`; người dùng đã quyết, cổng vẫn OPT-IN và TẮT mặc định).** CHƯA kiểm lại với claude thật (không chạy CLI ở bước này); dạng input suy ra từ mô tả tool đã công bố, không phải từ lần quan sát nào, và chỉ được test bằng stub (`claude-permission-gate.test.ts`):
 
 - `Edit` → `fs.write` trên `file_path` (như `Write`). Bắt buộc `file_path`, `old_string`, `new_string` là chuỗi; `replace_all` nếu có phải là boolean. Thiếu/sai dạng → `deny`.
-- `Glob` → `fs.read` trên `path`; `Grep` → `fs.read` trên `path` (regex `pattern` không phải đường dẫn). Glob (`pattern` của Glob, `glob` của Grep) bị từ chối nếu tuyệt đối (POSIX/ổ đĩa/UNC), bắt đầu bằng `~`, hoặc có đoạn `..`, vì policy chỉ kiểm `path`, không kiểm nơi glob trỏ tới.
+- `Glob` → `fs.read` trên `path`; `Grep` → `fs.read` trên `path` (regex `pattern` không phải đường dẫn). Glob (`pattern` của Glob, `glob` của Grep) bị từ chối nếu tuyệt đối (POSIX/ổ đĩa/UNC), bắt đầu bằng `~`, có đoạn `..`, hoặc chứa `{ } ( ) [ ]` (brace/extglob/lớp ký tự có thể tự tạo đoạn `..` hoặc đường dẫn tuyệt đối; từ chối cả glob hợp lệ như `*.{ts,js}`, fail-closed), vì policy chỉ kiểm `path`, không kiểm nơi glob trỏ tới.
 - Thiếu `path`: dùng thư mục task (`policy.workspaceRoot`, truyền qua `defaultDir`) vì claude tìm trong cwd; không có `defaultDir` thì `deny` (policy chỉ nhận đường dẫn tuyệt đối). Giả định "claude mặc định tìm ở cwd" cũng chưa quan sát.
 - Chưa đo: tên trường khác nếu claude đổi schema (khi đó cổng từ chối, fail-closed); các tham số khác của Grep (`type`, `output_mode`…) bị bỏ qua vì không đổi nơi đọc.
 

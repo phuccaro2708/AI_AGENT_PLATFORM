@@ -51,6 +51,8 @@ function splitPlain(command: string): { executable: string; args: string[] } | u
 function isConfinedGlob(pattern: string): boolean {
   if (pattern === "" || pattern.includes("\0")) return false;
   if (/^([\\/]|[A-Za-z]:|~)/.test(pattern)) return false;
+  // Braces, extglob groups and classes can build a segment (`{..,a}/x`, `@(..|a)`) that the split below cannot see.
+  if (/[{}()[\]]/.test(pattern)) return false;
   return !pattern.split(/[\\/]/).includes("..");
 }
 

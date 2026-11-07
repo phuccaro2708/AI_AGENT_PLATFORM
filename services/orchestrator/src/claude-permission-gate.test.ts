@@ -227,6 +227,10 @@ describe("runPermissionGate (the MCP server claude would start)", () => {
         call(12, tool, escape("/etc/*")),
         call(13, tool, escape("C:\\Users\\*")),
         call(14, tool, escape("~/*")),
+        call(19, tool, escape("{..,a}/{..,a}/x")),
+        call(20, tool, escape("{/etc,a}/passwd")),
+        call(21, tool, escape("@(..|a)/x")),
+        call(22, tool, escape("[.][.]/x")),
         call(15, tool, {}),
         call(16, tool, { pattern: 5 }),
         call(17, tool, { pattern: "" }),
@@ -236,7 +240,7 @@ describe("runPermissionGate (the MCP server claude would start)", () => {
         "allow",
         "allow",
         "allow",
-        ...Array<string>(15).fill("deny"),
+        ...Array<string>(19).fill("deny"),
       ]);
     },
   );

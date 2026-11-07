@@ -74,4 +74,34 @@ describe("startProcess with jobWrap", () => {
     });
     expect(r.exitCode).toBe(124);
   });
+  it.skipIf(!haveBinary)(
+    "cancel (AbortSignal) through the wrapper ends the program and its grandchild",
+    async () => {
+      const ac = new AbortController();
+      // The program starts a grandchild node that would live 60 s and prints its pid.
+      const script =
+        "const c=require('child_process').spawn(process.execPath,['-e','setTimeout(()=>{},60000)'],{stdio:'ignore'});" +
+        "console.log('gc='+c.pid);setTimeout(()=>{},60000)";
+      const started = Date.now();
+      let gcPid = 0;
+      const p = runProcess({
+        command: NODE,
+        args: ["-e", script],
+        jobWrap: { path: binary },
+        signal: ac.signal,
+        timeoutMs: 30_000,
+        onStdout: (chunk: string) => {
+          const m = /gc=(\d+)/.exec(chunk);
+          if (m?.[1]) gcPid = Number(m[1]);
+        },
+      });
+      while (!gcPid && Date.now() - started < 10_000) await new Promise((r) => setTimeout(r, 50));
+      expect(gcPid).toBeGreaterThan(0);
+      ac.abort();
+      const r = await p;
+      expect(r.outcome).toBe("cancelled");
+      await new Promise((r2) => setTimeout(r2, 500));
+      expect(() => process.kill(gcPid, 0)).toThrow(); // grandchild is gone
+    },
+  );
 });

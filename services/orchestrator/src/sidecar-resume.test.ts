@@ -135,7 +135,9 @@ afterEach(() => {
 describe("Peer Review after a restart", () => {
   it("waits for a person: the interrupted task is needs_reconciliation, nothing is re-run", async () => {
     const { workflowId } = await crashedWorkflow();
-    await new Promise((r) => setTimeout(r, 300));
+    // Wait for the restart to mark the task, then give the scheduler a few ticks to (wrongly) re-run it.
+    await until(workflowId, (x) => x.tasks.some((t) => t.state === "needs_reconciliation"));
+    await new Promise((r) => setTimeout(r, 100));
     const l = await list(workflowId);
     expect(l.workflowState).toBe("running");
     expect(l.tasks.map((t) => t.state)).toEqual(["needs_reconciliation"]);

@@ -494,3 +494,10 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - Với claude 2.1.318 và codex 0.166.0 thật (prompt nhỏ, thư mục tạm ngoài repo): chạy qua wrapper exit 0; Ctrl+C, CTRL_BREAK nhóm, kill wrapper, kill wrapper ngoài (thay app) đều không để lại tiến trình con cháu.
 - Sửa mã: `agent-job-wrap` giữ nguyên mã thoát 32 bit (`std::process::exit(i32)`, trước đây `& 0xff` làm 256 thành 0); test `exit_codes_are_not_truncated_to_eight_bits`.
 - Chưa kiểm: kill app Tauri thật khi CLI thật chạy bên trong; Ctrl+C qua sidecar Node thật.
+
+## 2026-11-07: dọn nợ nhỏ (test flaky, Rust gate, ẩn adapter stub)
+
+- Test flaky: `scheduler.test.ts` đã dùng chờ điều kiện có giới hạn từ trước và `git-worktrees.test.ts` không có chờ cố định, nên không sửa. Đã thay chờ cố định ở `sidecar-resume.test.ts` (chờ `needs_reconciliation` rồi mới kiểm không chạy lại) và `process-manager.test.ts` "cancels via AbortSignal" (abort sau khi có `pid`, không sau 200 ms). Không nới timeout nào. Chạy lặp bằng vòng lặp `pnpm exec vitest run <file>`: 20/20 qua cho mỗi file trong 4 file; hai file đã sửa chạy lại 20/20 sau khi sửa. Trước khi sửa, các file này cũng qua 20/20 (không tái hiện được lỗi hiếm), nên chưa chứng minh được nguyên nhân gốc.
+- `apps/desktop/src-tauri`: `cargo clippy --all-targets -- -D warnings` sạch; `cargo test --locked` 24 qua, 0 lỗi, 1 ignored.
+- UI: adapter `stub` bị ẩn khi `import.meta.env.DEV` là false (`visibleAdapters.ts`, 3 test Vitest). Giả định: ẩn ở mọi màn hình, chỉ id `stub`.
+- Gate: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build` qua; test 74 file, 746 qua, 6 expected fail, 3 bỏ qua. Chưa push, chưa tạo PR.

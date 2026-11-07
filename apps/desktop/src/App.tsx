@@ -6,6 +6,7 @@ import { Header } from "./Header";
 import { HistoryView } from "./HistoryView";
 import { Inspector } from "./Inspector";
 import { api, type AdapterInfo, type CliProbe, type Project } from "./api";
+import { visibleAdapters } from "./visibleAdapters";
 import { msg, type TaskRef } from "./components";
 import { getHealth, type Health } from "./health";
 import { loadRuns, saveRuns, type PeerRun } from "./peerReview";
@@ -64,7 +65,8 @@ export function App() {
   const refreshAgents = useCallback(
     () =>
       void api.agents().then(
-        ({ adapters: a, cli: c }) => {
+        ({ adapters: all, cli: c }) => {
+          const a = visibleAdapters(all, import.meta.env.DEV);
           setAdapters(a);
           setCli(c);
           setAgentId((cur) => cur || a.find((x) => x.available)?.id || a[0]?.id || "");

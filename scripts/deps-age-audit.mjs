@@ -6,6 +6,9 @@
 //   --days N          minimum age threshold (default 14)
 //   --now ISO         reference time (default: current time)
 //   --json FILE       also write the full result as JSON
+//   --allowlist FILE  exception list (default scripts/deps-age-allowlist.json)
+//   --rows-from FILE  OFFLINE test seam: reuse rows from a previous --json output, no registry request;
+//                     ages are recomputed against --now from each row's `published`
 // Exit code: 0 = every package resolved and >= threshold; 1 = some package younger than threshold;
 //            2 = some package could not be looked up (and none younger).
 // Rate limit: npm 4 in flight; crates.io 1 request/second (their crawler policy) with a User-Agent.
@@ -258,14 +261,28 @@ async function auditCargo() {
 
 // ---------- report ----------
 const rows = [];
-if (wantNpm) rows.push(...(await auditNpm()));
-if (wantCargo) rows.push(...(await auditCargo()));
+if (opt("rows-from")) {
+  for (const r of JSON.parse(readFileSync(resolve(opt("rows-from")), "utf8")).rows) {
+    const ageDays = r.published ? (NOW - Date.parse(r.published)) / DAY : null;
+    rows.push({ ...r, ageDays, error: ageDays === null ? (r.error ?? "no published date") : null });
+  }
+} else {
+  if (wantNpm) rows.push(...(await auditNpm()));
+  if (wantCargo) rows.push(...(await auditCargo()));
+}
 
 // Accepted exceptions: scripts/deps-age-allowlist.json = [{ "id": "log@0.4.35", "reason": "...", "expires": "YYYY-MM-DD" }].
 // An entry only exempts a too-young package until its expiry date; expired or reason-less entries do not count.
 let allow;
 try {
-  allow = JSON.parse(readFileSync(resolve(root, "scripts/deps-age-allowlist.json"), "utf8"));
+  allow = JSON.parse(
+    readFileSync(
+      opt("allowlist")
+        ? resolve(opt("allowlist"))
+        : resolve(root, "scripts/deps-age-allowlist.json"),
+      "utf8",
+    ),
+  );
 } catch {
   allow = [];
 }

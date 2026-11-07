@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { createInterface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
@@ -85,6 +85,7 @@ export function claudeGateTaskArgs(o: {
 }): (task: AgentTask) => string[] {
   return (task) => {
     if (o.requireLauncher) assertLauncherUsable(o.launcher);
+    if (o.isolateSettings) assertSafeLocalSettings(task.cwd);
     const policy = appServerPolicy({
       taskId: task.id,
       cwd: task.cwd,
@@ -130,6 +131,39 @@ export function claudeGateTaskArgs(o: {
       ...(o.isolateSettings ? ["--setting-sources", "local"] : []),
     ];
   };
+}
+
+/**
+ * Keys of `<cwd>/.claude/settings.local.json` that are accepted under the gate. Everything else is refused: a
+ * 2026-11-07 review reproduced with real claude that `env.NODE_OPTIONS` (a Node preload) and `apiKeyHelper` (a
+ * program run to fetch the key) execute BEFORE any tool call reaches the gate, and `disableAllHooks` only stops
+ * hooks. `permissions` is allowed because `defaultMode`/allow rules were measured NOT to bypass the gate (d11).
+ */
+export const SAFE_LOCAL_SETTINGS_KEYS: readonly string[] = ["$schema", "model", "permissions"];
+
+/**
+ * Fail closed: throws when the task folder's `.claude/settings.local.json` is unreadable, not a JSON object, or has a
+ * key outside `SAFE_LOCAL_SETTINGS_KEYS`. The message names the keys, never their values. Only this one file is
+ * checked (the one `--setting-sources local` still loads); the user's own settings are not read under that flag.
+ */
+export function assertSafeLocalSettings(cwd: string): void {
+  const file = join(cwd, ".claude", "settings.local.json");
+  if (!existsSync(file)) return;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    throw new Error(".claude/settings.local.json in the task folder cannot be read as JSON");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(".claude/settings.local.json in the task folder is not a JSON object");
+  }
+  const bad = Object.keys(parsed).filter((k) => !SAFE_LOCAL_SETTINGS_KEYS.includes(k));
+  if (bad.length > 0) {
+    throw new Error(
+      `.claude/settings.local.json in the task folder has settings that can run code outside the gate: ${bad.join(", ")}`,
+    );
+  }
 }
 
 /** Absolute paths among the launcher's program and first argument must exist (a missing bundle = no gate = no task). */

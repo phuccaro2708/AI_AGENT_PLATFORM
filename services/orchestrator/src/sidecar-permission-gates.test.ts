@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
 import type { AdapterRegistry, AgentTask } from "@agent-studio/agent-core";
 import type { ProbeResult } from "@agent-studio/cli-probe";
 import { createLogger } from "@agent-studio/shared-utils";
-import { claudeGateTaskArgs } from "./claude-permission-gate.js";
+import { assertSafeLocalSettings, claudeGateTaskArgs } from "./claude-permission-gate.js";
 import { SidecarService } from "./sidecar.js";
 
 /**
@@ -148,6 +148,67 @@ describe("Claude permission gate, default ON (Q3)", () => {
     expect(set.ok).toBe(true);
     expect(() => claudeLaunch()).toThrow(/--safe-mode/);
     expect(await runClaudeTask()).toContain("policy gate failed");
+  });
+});
+
+describe("settings.local.json that can run code outside the gate is refused (review 2026-11-07)", () => {
+  const put = (text: string) => {
+    mkdirSync(join(dir, ".claude"), { recursive: true });
+    writeFileSync(join(dir, ".claude", "settings.local.json"), text);
+  };
+
+  it("no file, or only permissions/model/$schema: accepted", () => {
+    expect(() => assertSafeLocalSettings(dir)).not.toThrow();
+    put(JSON.stringify({ $schema: "x", model: "haiku", permissions: { defaultMode: "plan" } }));
+    expect(() => assertSafeLocalSettings(dir)).not.toThrow();
+  });
+
+  it("env (NODE_OPTIONS), apiKeyHelper, statusLine, hooks and unknown keys: refused, naming keys but not values", () => {
+    put(
+      JSON.stringify({
+        env: { NODE_OPTIONS: "--require SECRET-PRELOAD" },
+        apiKeyHelper: "SECRET-HELPER",
+        statusLine: {},
+        hooks: {},
+        whatever: 1,
+      }),
+    );
+    try {
+      assertSafeLocalSettings(dir);
+      expect.unreachable();
+    } catch (e) {
+      const m = (e as Error).message;
+      for (const k of ["env", "apiKeyHelper", "statusLine", "hooks", "whatever"]) {
+        expect(m).toContain(k);
+      }
+      expect(m).not.toContain("SECRET");
+    }
+  });
+
+  it("unparseable or non-object file: refused (fail closed)", () => {
+    for (const text of ["{nope", "[]", "null", "7"]) {
+      put(text);
+      expect(() => assertSafeLocalSettings(dir)).toThrow(/settings\.local\.json/);
+    }
+  });
+
+  it("through the default claude adapter: describeLaunch throws and a started task is refused before claude runs", async () => {
+    open();
+    put(JSON.stringify({ apiKeyHelper: "x" }));
+    // the project root for the task is `dir/proj`; place the file there for the refusal run
+    mkdirSync(join(dir, "proj", ".claude"), { recursive: true });
+    writeFileSync(
+      join(dir, "proj", ".claude", "settings.local.json"),
+      JSON.stringify({ env: { NODE_OPTIONS: "x" } }),
+    );
+    expect(() => claudeLaunch()).toThrow(/apiKeyHelper/);
+    expect(await runClaudeTask()).toContain("policy gate failed");
+  });
+
+  it("with the gate off nothing is checked", () => {
+    open({ claudePermissionGate: false });
+    put(JSON.stringify({ apiKeyHelper: "x" }));
+    expect(() => claudeLaunch()).not.toThrow();
   });
 });
 

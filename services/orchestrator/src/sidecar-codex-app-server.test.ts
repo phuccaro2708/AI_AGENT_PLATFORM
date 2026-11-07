@@ -141,8 +141,8 @@ function project(): string {
 }
 
 describe("codex-app-server in the orchestrator (fake server)", () => {
-  it("is NOT registered unless the embedding code asks for it", async () => {
-    open(undefined);
+  it("is NOT registered when switched off (codexAppServer:false); it is on by default since Q3", async () => {
+    open(undefined, { codexAppServer: false });
     const { projectId } = await call<{ projectId: string }>("projects.create", {
       name: "p",
       rootPath: project(),

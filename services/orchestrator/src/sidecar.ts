@@ -6,7 +6,12 @@ import {
   type TaskState,
   type SidecarResponse,
 } from "@agent-studio/contracts";
-import { AdapterRegistry, StubAdapter, type AgentAdapter } from "@agent-studio/agent-core";
+import {
+  AdapterRegistry,
+  StubAdapter,
+  type AgentAdapter,
+  type AgentTask,
+} from "@agent-studio/agent-core";
 import {
   createSecretRedactor,
   noSecrets,
@@ -98,19 +103,26 @@ export interface SidecarOptions {
   /** How often a gate waiting for an approval looks at the task. Default 200 ms. */
   policyPollMs?: number;
   /**
-   * Opt-in: also register the `codex-app-server` agent (P4-1 c), whose approval requests go through the Policy
-   * Engine. OFF in the real process until it has been checked against a real Codex (docs/ASSUMPTIONS.md, c3).
-   * The fields are launch overrides for the embedding code (tests point them at a fake server); when `command`
-   * is set the program itself is not re-checked, as for `extraAdapters`.
+   * Also register the `codex-app-server` agent (P4-1 c), whose approval requests go through the Policy Engine.
+   * ON by default (Q3, 2026-11-07); `false` switches it off (real process: `AGENT_STUDIO_CODEX_GATE=0`). It is an
+   * ADDITIONAL agent: `codex` (exec) is not rerouted through it. The fields are launch overrides for the embedding
+   * code (tests point them at a fake server); when `command` is set the program itself is not re-checked, as for
+   * `extraAdapters`. Without `command` the `codex` program is checked by the policy gate; if it is missing the
+   * task is refused.
    */
-  codexAppServer?: Pick<CodexAppServerOptions, "command" | "baseArgs" | "env" | "envAllow">;
+  codexAppServer?: Pick<CodexAppServerOptions, "command" | "baseArgs" | "env" | "envAllow"> | false;
   /**
-   * Opt-in (P4-1 d): launch `claude` with `--permission-prompt-tool` so tool calls it did not settle itself are
-   * judged by the Policy Engine. OFF in the real process: not verified with a real claude run, nor together with
-   * `--safe-mode` (docs/ASSUMPTIONS.md, d). `configDir` receives one MCP config file per task; `launcher` is the
-   * program claude starts as that MCP server (default: this sidecar's own bundle, see `sidecar-main.ts`).
+   * P4-1 d: launch `claude` with `--permission-prompt-tool` so tool calls it did not settle itself are judged by
+   * the Policy Engine, with `askEveryTool` (all six tools go to the gate) and `--setting-sources local`.
+   * ON by default (Q3, 2026-11-07); `false` switches it off (real process: `AGENT_STUDIO_CLAUDE_GATE=0`).
+   * Fail closed: `--safe-mode` is turned off (it would stop the gate from loading, d3), and a task is refused when
+   * the launcher is missing or the stored arguments bring `--safe-mode` back. `configDir` (default: `gate` next to
+   * the database) receives one MCP config file per task; `launcher` is the program claude starts as that MCP server
+   * (default: this sidecar's own bundle, see `sidecar-main.ts`). `askEveryTool: false` is a test seam.
+   * Not a sandbox: claude does not send every call to the gate (docs/SECURITY.md).
    */
-  claudePermissionGate?: { configDir: string; launcher?: ClaudeGateLauncher };
+  claudePermissionGate?:
+    { configDir?: string; launcher?: ClaudeGateLauncher; askEveryTool?: boolean } | false;
   /**
    * P4-4 (b): start the `claude` and `codex` CLIs inside `agent-job-wrap` (Windows Job Object, kill on close).
    * Unset here = off. `sidecar-main` sets it by default when the installed binary is found (`job-wrap-config.ts`;
@@ -237,12 +249,24 @@ export class SidecarService {
         : { treeMemoryLimitMb: this.opts.cliTreeMemoryLimitMb }),
     };
     const gateOpt = this.opts.claudePermissionGate;
-    if (provider === "claude" && gateOpt) {
-      const taskArgs = claudeGateTaskArgs({
-        configDir: gateOpt.configDir,
-        launcher: gateOpt.launcher ?? { command: process.execPath, args: [process.argv[1] ?? ""] },
+    if (provider === "claude" && gateOpt !== false) {
+      const build = claudeGateTaskArgs({
+        configDir: gateOpt?.configDir ?? join(dirname(this.opts.dbPath), "gate"),
+        launcher: gateOpt?.launcher ?? { command: process.execPath, args: [process.argv[1] ?? ""] },
+        askEveryTool: gateOpt?.askEveryTool ?? true,
+        isolateSettings: true,
+        requireLauncher: true,
       });
-      return this.gate.wrap(new ClaudeAdapter({ ...o, taskArgs }));
+      const taskArgs = (task: AgentTask) => {
+        // `--safe-mode` keeps the MCP gate from loading (d3): refuse instead of running without the gate.
+        if ((s?.args ?? []).some((a) => a === "--safe-mode")) {
+          throw new Error(
+            "--safe-mode in the stored claude arguments is incompatible with the gate",
+          );
+        }
+        return build(task);
+      };
+      return this.gate.wrap(new ClaudeAdapter({ ...o, safeMode: false, taskArgs }));
     }
     return this.gate.wrap(provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o));
   }
@@ -381,17 +405,18 @@ export class SidecarService {
     this.registry.register(this.buildCliAdapter("claude", this.repo.getAgentSettings("claude")));
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
     this.registry.register(this.gate.wrap(new AntigravityAdapter()));
-    if (opts.codexAppServer) {
+    if (opts.codexAppServer !== false) {
+      const appServer = opts.codexAppServer ?? {};
       const run = opts.policyEvaluate ?? evaluate;
       this.registry.register(
         this.gate.wrap(
           new CodexAppServerAdapter({
-            ...opts.codexAppServer,
+            ...appServer,
             id: "codex-app-server",
             evaluate: async (request, ctx) =>
               run(appServerPolicy(ctx), request, { taskId: ctx.taskId }),
           }),
-          { checkLaunch: opts.codexAppServer.command === undefined },
+          { checkLaunch: appServer.command === undefined },
         ),
       );
     }

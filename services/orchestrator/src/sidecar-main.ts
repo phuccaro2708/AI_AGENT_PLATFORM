@@ -4,6 +4,7 @@ import { createLogger } from "@agent-studio/shared-utils";
 import { runPermissionGate } from "./claude-permission-gate.js";
 import { createEventWriter } from "./event-writer.js";
 import { resolveJobWrap, resolveTreeMemoryLimitMb } from "./job-wrap-config.js";
+import { resolvePermissionGates } from "./permission-gates-config.js";
 import { createSecretRedactor, redactingDestination, takeSecretsFromEnv } from "./secrets.js";
 import { acquireSidecarLock, SidecarLockError } from "./sidecar-lock.js";
 import { SidecarService } from "./sidecar.js";
@@ -17,8 +18,8 @@ function arg(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-// Started by `claude --permission-prompt-tool` as its MCP server (P4-1 d, opt-in): no database, no lock, no logs on
-// stdout. Only ever reached when the sidecar was built with `claudePermissionGate`, which the real process is not.
+// Started by `claude --permission-prompt-tool` as its MCP server (P4-1 d, ON by default since Q3): no database, no
+// lock, no logs on stdout. Reached when the sidecar launched claude with the gate (switch: AGENT_STUDIO_CLAUDE_GATE=0).
 if (process.argv.includes("--permission-gate")) {
   try {
     await runPermissionGate(process.argv, process.stdin, process.stdout);
@@ -73,6 +74,8 @@ const service = new SidecarService(
     ...(nativeBinding ? { nativeBinding } : {}),
     ...(migrationsFolder ? { migrationsFolder } : {}),
     ...(jobWrap ? { jobWrap } : {}),
+    // Q3: both permission gates are ON unless AGENT_STUDIO_CLAUDE_GATE / AGENT_STUDIO_CODEX_GATE says off.
+    ...resolvePermissionGates(process.env),
     ...(cliTreeMemoryLimitMb === undefined ? {} : { cliTreeMemoryLimitMb }),
   },
   log,

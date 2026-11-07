@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import { createInterface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
 import type { AgentTask } from "@agent-studio/agent-core";
@@ -16,8 +16,10 @@ import { appServerPolicy } from "./codex-app-server-gate.js";
  * the flag trio below. The policy travels in argv, not in an env var, because env entries of an MCP server were not
  * probed. Policy: `appServerPolicy` (no command allowed; writes only inside the task's cwd).
  *
- * NOT verified: that these flags work together with `--safe-mode` (the adapter's default), claude versions other
- * than 2.1.318, and a full run with a real claude. It is opt-in for that reason.
+ * `--safe-mode` and the gate DO NOT work together (d3: the MCP server is not loaded). The sidecar therefore turns
+ * `--safe-mode` off whenever the gate is on and refuses a task whose stored arguments bring it back (`sidecar.ts`).
+ * Default ON since Q3 (2026-11-07); switch: `AGENT_STUDIO_CLAUDE_GATE=0` / `claudePermissionGate: false`.
+ * NOT verified: claude versions other than 2.1.318. Not a sandbox: claude does not send every call to the gate.
  */
 export const GATE_SERVER_NAME = "gate";
 export const GATE_TOOL_NAME = "approve";
@@ -69,8 +71,20 @@ export function claudeGateTaskArgs(o: {
    * ALSO limited to those tools (`--tools`): a tool not listed here is not covered. Not a sandbox.
    */
   askEveryTool?: boolean;
+  /**
+   * Also pass `--setting-sources local`. The gate needs `--safe-mode` OFF (d3: with it the MCP gate is not loaded
+   * and claude exits 1), and this is the configuration isolation that was measured together with the gate (d6):
+   * the user's own hooks/plugins are not read from user or project settings. Not a sandbox.
+   */
+  isolateSettings?: boolean;
+  /**
+   * Fail closed: throws (the policy gate turns that into a refused task) when the program claude would start as the
+   * MCP server cannot be found, instead of launching claude with a gate that is not there.
+   */
+  requireLauncher?: boolean;
 }): (task: AgentTask) => string[] {
   return (task) => {
+    if (o.requireLauncher) assertLauncherUsable(o.launcher);
     const policy = appServerPolicy({
       taskId: task.id,
       cwd: task.cwd,
@@ -96,10 +110,32 @@ export function claudeGateTaskArgs(o: {
       "--permission-prompt-tool",
       `mcp__${GATE_SERVER_NAME}__${GATE_TOOL_NAME}`,
       ...(o.askEveryTool
-        ? ["--settings", JSON.stringify({ permissions: { ask: [...ASK_EVERY_TOOL_RULES] } })]
+        ? [
+            "--settings",
+            JSON.stringify({ permissions: { ask: [...ASK_EVERY_TOOL_RULES] } }),
+            // `ask` only covers what claude can use: with no `permissions` on the task the adapter adds no `--tools`
+            // (the measured d6 configuration did), so limit it here. When the task has `permissions`, the adapter
+            // already passed its own `--tools`; a second flag is never emitted (duplicate behaviour was not measured).
+            ...(task.permissions === undefined ? ["--tools", ASK_EVERY_TOOL_RULES.join(",")] : []),
+          ]
         : []),
+      ...(o.isolateSettings ? ["--setting-sources", "local"] : []),
     ];
   };
+}
+
+/** Absolute paths among the launcher's program and first argument must exist (a missing bundle = no gate = no task). */
+function assertLauncherUsable(l: ClaudeGateLauncher): void {
+  const first = l.args[0];
+  if (first === undefined || first === "")
+    throw new Error("permission gate launcher has no script");
+  for (const p of [l.command, first]) {
+    if (isAbsolute(p) && !existsSync(p)) {
+      throw new Error("permission gate launcher not found");
+    }
+  }
+  if (!isAbsolute(first))
+    throw new Error("permission gate launcher script is not an absolute path");
 }
 
 /** The MCP server loop: one JSON request per line in, one reply line out. Resolves when stdin ends. */

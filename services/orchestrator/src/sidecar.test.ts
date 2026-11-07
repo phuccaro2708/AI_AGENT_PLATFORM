@@ -281,6 +281,7 @@ describe("D1 IPC", () => {
       "claude",
       "codex",
       "agy",
+      "codex-app-server", // registered by default since Q3 (2026-11-07)
     ]);
     expect(list.result?.cli).toHaveLength(2);
     expect(

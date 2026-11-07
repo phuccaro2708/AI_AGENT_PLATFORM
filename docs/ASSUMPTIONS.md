@@ -479,7 +479,7 @@ Mã: `real-cli-gates.test.ts`, nhóm "stricter permission combos" (bỏ qua nế
 
 - **Kết luận có bằng chứng:** `permissions.ask` cho từng tool qua `--settings` (JSON inline) là cách duy nhất trong các thử nghiệm làm Read/Glob/Grep/Bash (kể cả `echo`, `git status`) đi qua cổng. Nó giữ nguyên khi kết hợp `acceptEdits`, `--allowedTools`, `--restricted`. `manual` chỉ là tên khác của chế độ mặc định; `dontAsk` TẮT hẳn đường tới cổng (từ chối thay vì hỏi), không phải cách phủ.
 - **Giới hạn đã đo:** Edit ở prompt B bị claude từ chối TRƯỚC cổng ("File has not been read yet") khi Read đã bị cổng từ chối — không có tác dụng phụ. Bài kiểm riêng với stub cho phép: Read rồi Edit đều tới cổng (`gated: [Read, Edit]`, file đổi trong repo tạm). Chỉ sáu tool trên được thử; tool khác (WebFetch, WebSearch, NotebookEdit, Task/Agent, TodoWrite, tool MCP, PowerShell...) KHÔNG được thử với luật `ask` nên không được coi là phủ — phải giới hạn bằng `--tools` đúng danh sách. Luật `ask` với ký tự đại diện chưa thử. Không thử `--safe-mode` (d3: MCP gate không nạp), `bypassPermissions`, `auto`; không thử bản claude khác; chỉ Windows.
-- **Cổng vẫn từ chối Edit/Glob/Grep:** `requestFor` (permission-prompt.ts) chỉ biết Write/Read/Bash dạng từ đơn giản nên các tool còn lại bị `deny` fail-closed; phủ đủ dòng gọi không đồng nghĩa mọi tool dùng được. Không mở rộng `requestFor` ở R2.
+- **Cổng vẫn từ chối Edit/Glob/Grep:** `requestFor` (permission-prompt.ts) chỉ biết Write/Read/Bash dạng từ đơn giản nên các tool còn lại bị `deny` fail-closed; phủ đủ dòng gọi không đồng nghĩa mọi tool dùng được. Không mở rộng `requestFor` ở R2. **Cập nhật sau R2:** đã mở rộng, xem "Ánh xạ Edit/Glob/Grep" ở cuối d6.
 - **`updatedInput` và timeout:** đã đo ở d3 (áp dụng kể cả ra ngoài cwd; claude đợi gate không hạn). Ở R2 không đổi: cổng luôn trả `input` nguyên vẹn, host phải tự đặt hạn.
 - **Cấu hình đã thêm (opt-in, TẮT mặc định):** `claudeGateTaskArgs({ askEveryTool: true })` thêm `--settings {"permissions":{"ask":[...6 tool]}}`. Sidecar chưa truyền cờ này; chưa có lần chạy `ClaudeAdapter` + gate THẬT với cờ này (chỉ stub MCP). Chỉ có hiệu lực nếu claude cũng bị giới hạn `--tools` và không dùng `--safe-mode`. Chính sách ghi/đọc do Policy Engine quyết, không phải sandbox OS.
 
@@ -530,10 +530,17 @@ Mã: `services/orchestrator/src/real-cli-gates.test.ts` (Claude: `AGENT_STUDIO_R
 | Grep `SEED`               | có       | `deny` ("not covered by the gate")                                 | không chạy            |
 
 - 6/6 tool được thử đều tới cổng; mọi `tool_use` của claude có đúng một `tools/call` tương ứng (đối chiếu nhật ký tap với luồng `tool_call`). Cổng khởi động 1 lần mỗi lần chạy.
-- Phân biệt: "tới cổng và bị từ chối" (Edit, Glob, Grep vì `requestFor` không phủ; `echo`, `git status` vì allow list rỗng) khác "tới cổng và được phép" (Write/Read trong cwd). Phủ đủ dòng gọi KHÔNG đồng nghĩa mọi tool dùng được; không mở rộng `requestFor` ở bước này.
+- Phân biệt: "tới cổng và bị từ chối" (Edit, Glob, Grep vì `requestFor` không phủ; `echo`, `git status` vì allow list rỗng) khác "tới cổng và được phép" (Write/Read trong cwd). Phủ đủ dòng gọi KHÔNG đồng nghĩa mọi tool dùng được; không mở rộng `requestFor` ở bước này (đã mở rộng sau đó, xem cuối d6).
 - `updatedInput`: mọi phản hồi `allow` thật có `updatedInput` trùng từng byte (so JSON) với `input` của yêu cầu — cổng không sửa input. (Việc claude áp dụng `updatedInput` khác `input` đã đo ở d3.)
 - Thời gian: cổng thật trả lời trong 1–3 ms mỗi lượt (đo từ mốc thời gian của tap); cả lượt chạy ~9–12 s. Cổng thật KHÔNG có hạn thời gian nào; hạn duy nhất phía host là `AbortSignal` của adapter. Hành vi "cổng treo" chỉ đo bằng stub ở d3 (claude đợi ≥150 s), không dựng lại với cổng thật.
 - Chưa đo: tool ngoài sáu tool trên, `--safe-mode` (d3: MCP gate không nạp), `permissions: "workspace-write"` (adapter thêm `--tools` riêng và `acceptEdits`, trùng cờ `--tools`), bản claude khác, nền khác Windows. Sidecar chưa truyền `askEveryTool`.
+
+**Ánh xạ Edit/Glob/Grep (sau việc 4; `permission-prompt.ts` `requestFor`; người dùng đã quyết, cổng vẫn OPT-IN và TẮT mặc định).** CHƯA kiểm lại với claude thật (không chạy CLI ở bước này); dạng input suy ra từ mô tả tool đã công bố, không phải từ lần quan sát nào, và chỉ được test bằng stub (`claude-permission-gate.test.ts`):
+
+- `Edit` → `fs.write` trên `file_path` (như `Write`). Bắt buộc `file_path`, `old_string`, `new_string` là chuỗi; `replace_all` nếu có phải là boolean. Thiếu/sai dạng → `deny`.
+- `Glob` → `fs.read` trên `path`; `Grep` → `fs.read` trên `path` (regex `pattern` không phải đường dẫn). Glob (`pattern` của Glob, `glob` của Grep) bị từ chối nếu tuyệt đối (POSIX/ổ đĩa/UNC), bắt đầu bằng `~`, có đoạn `..`, hoặc chứa `{ } ( ) [ ]` (brace/extglob/lớp ký tự có thể tự tạo đoạn `..` hoặc đường dẫn tuyệt đối; từ chối cả glob hợp lệ như `*.{ts,js}`, fail-closed), vì policy chỉ kiểm `path`, không kiểm nơi glob trỏ tới.
+- Thiếu `path`: dùng thư mục task (`policy.workspaceRoot`, truyền qua `defaultDir`) vì claude tìm trong cwd; không có `defaultDir` thì `deny` (policy chỉ nhận đường dẫn tuyệt đối). Giả định "claude mặc định tìm ở cwd" cũng chưa quan sát.
+- Chưa đo: tên trường khác nếu claude đổi schema (khi đó cổng từ chối, fail-closed); các tham số khác của Grep (`type`, `output_mode`…) bị bỏ qua vì không đổi nơi đọc.
 
 **Việc 5 — Codex app-server, lệnh qua `CodexAppServerAdapter` + `appServerPolicy` cộng allow list thử nghiệm (policy sản xuất không cho lệnh nào):**
 

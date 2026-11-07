@@ -44,16 +44,68 @@ function splitPlain(command: string): { executable: string; args: string[] } | u
   return executable === undefined ? undefined : { executable, args };
 }
 
-/** The request for a tool call, or a reason why this module will not judge it (→ deny). Only OBSERVED tools. */
+/**
+ * A glob that stays below the directory it is searched in: not absolute (POSIX, drive or UNC), no `~`, no `..`
+ * segment. Otherwise `Glob {path: <workspace>, pattern: "../../**"}` would read outside the path the policy checked.
+ */
+function isConfinedGlob(pattern: string): boolean {
+  if (pattern === "" || pattern.includes("\0")) return false;
+  if (/^([\\/]|[A-Za-z]:|~)/.test(pattern)) return false;
+  // Braces, extglob groups and classes can build a segment (`{..,a}/x`, `@(..|a)`) that the split below cannot see.
+  if (/[{}()[\]]/.test(pattern)) return false;
+  return !pattern.split(/[\\/]/).includes("..");
+}
+
+/**
+ * The request for a tool call, or a reason why this module will not judge it (→ deny).
+ *
+ * `Write`, `Read`, `Bash` were observed (probe 2026-11-05/06). `Edit`, `Glob`, `Grep` are mapped from claude's
+ * documented input shapes and NOT re-observed with a real claude (docs/ASSUMPTIONS.md d4/d6); any other shape is
+ * denied. `defaultDir` is the directory claude searches when `Glob`/`Grep` carry no `path` (the task cwd); without
+ * it such a call is denied, because the policy only takes absolute paths.
+ */
 export function requestFor(
   toolName: string,
   input: unknown,
+  defaultDir?: string,
 ): { request: PromptPolicyRequest } | { problem: string } {
   const i = obj(input);
   if (!i) return { problem: "tool input is not an object" };
   if (toolName === "Write") {
     const path = str(i["file_path"]);
     return path ? { request: { kind: "fs.write", path } } : { problem: "Write without file_path" };
+  }
+  if (toolName === "Edit") {
+    const path = str(i["file_path"]);
+    if (!path) return { problem: "Edit without file_path" };
+    if (str(i["old_string"]) === undefined || str(i["new_string"]) === undefined) {
+      return { problem: "Edit without old_string/new_string" };
+    }
+    const all = i["replace_all"];
+    if (all !== undefined && typeof all !== "boolean")
+      return { problem: "Edit replace_all is not a boolean" };
+    return { request: { kind: "fs.write", path } };
+  }
+  if (toolName === "Glob" || toolName === "Grep") {
+    const pattern = str(i["pattern"]);
+    if (!pattern) return { problem: `${toolName} without pattern` };
+    // Glob: `pattern` itself is a path glob. Grep: `pattern` is a regex; the file filter is `glob`.
+    const globs = toolName === "Glob" ? [pattern] : [];
+    const filter = i["glob"];
+    if (toolName === "Grep" && filter !== undefined) {
+      if (typeof filter !== "string") return { problem: "Grep glob is not a string" };
+      globs.push(filter);
+    }
+    if (!globs.every(isConfinedGlob))
+      return { problem: `${toolName} glob leaves the searched folder` };
+    const given = i["path"];
+    if (given !== undefined && (typeof given !== "string" || given === "")) {
+      return { problem: `${toolName} path is not a non-empty string` };
+    }
+    const path = given ?? defaultDir;
+    return path
+      ? { request: { kind: "fs.read", path } }
+      : { problem: `${toolName} without path and no default folder` };
   }
   if (toolName === "Read") {
     const path = str(i["file_path"]);
@@ -73,13 +125,14 @@ export function requestFor(
 export async function decideToolCall(
   args: unknown,
   evaluate: PromptEvaluate,
+  defaultDir?: string,
 ): Promise<PromptDecision> {
   const a = obj(args);
   const toolName = str(a?.["tool_name"]);
   if (!a || toolName === undefined)
     return { behavior: "deny", message: "malformed permission request" };
   try {
-    const r = requestFor(toolName, a["input"]);
+    const r = requestFor(toolName, a["input"], defaultDir);
     if ("problem" in r) return { behavior: "deny", message: `denied: ${r.problem}` };
     const d = await evaluate(r.request);
     if (d.effect === "allow") return { behavior: "allow", updatedInput: a["input"] };
@@ -96,6 +149,8 @@ export interface PermissionPromptServerOptions {
   evaluate: PromptEvaluate;
   /** Name of the single tool. Default `approve` (the probe's). Claude is told `mcp__<server>__<toolName>`. */
   toolName?: string;
+  /** Folder `Glob`/`Grep` search when the call has no `path` (the task cwd). Absent → such calls are denied. */
+  defaultDir?: string;
 }
 
 const TOOL_SCHEMA = {
@@ -144,7 +199,7 @@ export function createPermissionPromptServer(opts: PermissionPromptServerOptions
       if (method === "tools/call") {
         const decision =
           str(params?.["name"]) === toolName
-            ? await decideToolCall(params?.["arguments"], opts.evaluate)
+            ? await decideToolCall(params?.["arguments"], opts.evaluate, opts.defaultDir)
             : ({ behavior: "deny", message: "unknown tool" } satisfies PromptDecision);
         return reply({ content: [{ type: "text", text: JSON.stringify(decision) }] });
       }

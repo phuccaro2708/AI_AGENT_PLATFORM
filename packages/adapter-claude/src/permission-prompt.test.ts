@@ -128,7 +128,7 @@ describe("decideToolCall", () => {
       undefined,
       "x",
       { input: {} },
-      { tool_name: "Edit", input: { file_path: "/w/a" } }, // tool not observed
+      { tool_name: "Edit", input: { file_path: "/w/a" } }, // no old_string/new_string
       { tool_name: "WebFetch", input: { url: "http://x" } },
       { tool_name: "Write", input: {} },
       { tool_name: "Write", input: "not an object" },

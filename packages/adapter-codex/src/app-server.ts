@@ -8,9 +8,11 @@ import {
   createLineSplitter,
   extendManifest,
   filterEnv,
+  jobWrapArgs,
   killTree,
   resolveExecutable,
   unwrapNpmShim,
+  type JobWrapOptions,
   type SpawnManifest,
 } from "@agent-studio/process-manager";
 import { CODEX_MANIFEST, codexSandboxFor, type CodexSandbox } from "./adapter.js";
@@ -57,6 +59,12 @@ export interface CodexAppServerOptions {
   ) => Promise<AppServerGateDecision>;
   /** How long one approval may take before it is declined (never retried). Default 60 000 ms. */
   approvalTimeoutMs?: number;
+  /**
+   * Start the server inside `agent-job-wrap` (kill-on-close Job Object, optional whole-tree commit cap), like the
+   * `codex exec` adapter. The wrapper inherits stdio, so the JSON-RPC pipe is unchanged. A bad path fails the task
+   * closed (`could not start codex`). Not a sandbox.
+   */
+  jobWrap?: JobWrapOptions;
 }
 
 type Json = Record<string, unknown>;
@@ -196,7 +204,14 @@ export class CodexAppServerAdapter implements AgentAdapter {
       const target = resolved.kind === "shim" ? unwrapNpmShim(resolved) : resolved;
       if (!target) throw new Error(`unsupported launcher: ${resolved.path}`);
       const launch = this.describeLaunch();
-      child = spawn(target.path, [...(target.prefixArgs ?? []), ...launch.args], {
+      const program = [target.path, ...(target.prefixArgs ?? []), ...launch.args];
+      const wrapped = this.opts.jobWrap
+        ? {
+            file: this.opts.jobWrap.path,
+            args: [...jobWrapArgs(this.opts.jobWrap), "--", ...program],
+          }
+        : { file: program[0]!, args: program.slice(1) };
+      child = spawn(wrapped.file, wrapped.args, {
         shell: false,
         windowsHide: true,
         detached: process.platform !== "win32",

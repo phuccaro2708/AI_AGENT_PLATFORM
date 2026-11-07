@@ -556,3 +556,8 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - Resume Peer Review có mã (`resume`/`resumeAll`, gọi lúc khởi động và sau reconciliation); các dòng "chưa làm" ở TODO/HANDOFF đã sửa. Soak 100 workflow dùng sidecar, SQLite, worktree thật nhưng adapter giả; tài liệu nay ghi rõ nó không chứng minh hành vi CLI thật (CLI thật: 5 workflow, ASSUMPTIONS d8).
 - Test mới (agent giả, `sidecar-resume.test.ts`, 4 ca): round-2 implementer bị ngắt chờ người; `requeue` tiếp tục đúng vòng 2; `maxRounds` = 3 lưu qua restart (6 task); không lưu thì mặc định 2 kết thúc ở vòng 2 (workflow `failed`, 4 task). 12/12 qua trong file.
 - NOT_RUN: resume vòng ≥ 2 với CLI thật. Resume vẫn chưa nên coi là nghiệm thu đầy đủ cho tới khi có lượt đó.
+
+## 2026-11-07: `codex-app-server` chạy trong `agent-job-wrap`
+
+- Mã: `CodexAppServerOptions.jobWrap` (app-server.ts) và sidecar truyền `jobWrap`. Trước đó chỉ `claude`/`codex` qua wrapper. Test: đường dẫn sai → lỗi đóng; wrapper thật + app-server giả → handshake và tur hoàn tất; sidecar truyền đúng option (6 ca trong file cấu hình).
+- NOT_RUN: codex thật qua wrapper (cần người dùng cho phép), watchdog RAM RSS cho app-server.

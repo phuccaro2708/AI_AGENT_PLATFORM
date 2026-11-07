@@ -377,6 +377,7 @@ export class SidecarService {
     const run = this.opts.policyEvaluate ?? evaluate;
     return this.gate.wrap(
       new CodexAppServerAdapter({
+        ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
         ...appServer,
         id: "codex-app-server",
         evaluate: async (request, ctx) =>

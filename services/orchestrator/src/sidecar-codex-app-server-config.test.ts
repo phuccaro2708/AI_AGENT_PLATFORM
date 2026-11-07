@@ -76,6 +76,15 @@ describe("codex-app-server shares the stored codex configuration", () => {
     expect(last()["env"]).toBeUndefined();
   });
 
+  it("the job wrapper reaches it; without a wrapper no option is passed", () => {
+    open();
+    expect(last()["jobWrap"]).toBeUndefined();
+    svc?.close();
+    const jobWrap = { path: process.execPath, jobMemLimitMb: 4096 };
+    open({ jobWrap });
+    expect(last()["jobWrap"]).toEqual(jobWrap);
+  });
+
   it("provider secrets reach it (env and envAllow)", () => {
     open({
       secrets: { claude: {}, codex: { PROXY_TOKEN: "fake-secret-value-123" } }, // pragma: allowlist secret

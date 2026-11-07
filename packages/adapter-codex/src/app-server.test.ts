@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -180,6 +180,44 @@ describe("CodexAppServerAdapter handshake", () => {
       args: ["app-server", "--stdio"],
     });
   });
+});
+
+describe("jobWrap (agent-job-wrap)", () => {
+  it("does not start the server when the wrapper path is unusable, and says why", async () => {
+    const e = env();
+    const events = await run(
+      make(e, [], { jobWrap: { path: "relative/agent-job-wrap.exe" } }),
+      task(e),
+    );
+    expect(existsSync(e.logFile)).toBe(false); // the fake server never ran
+    const last = events.at(-1);
+    expect(last?.type).toBe("error");
+    expect(JSON.stringify(last)).toContain("agent-job-wrap");
+  });
+});
+
+// Windows only, and only when `cargo build` has produced the wrapper (apps/desktop/src-tauri/target/debug).
+const realWrap = fileURLToPath(
+  new URL("../../../apps/desktop/src-tauri/target/debug/agent-job-wrap.exe", import.meta.url),
+);
+describe("through the REAL agent-job-wrap", () => {
+  it.skipIf(process.platform !== "win32" || !existsSync(realWrap))(
+    "the JSON-RPC pipe still works and the turn completes",
+    async () => {
+      const e = env();
+      const events = await run(
+        make(e, [], { jobWrap: { path: realWrap, jobMemLimitMb: 4096 } }),
+        task(e),
+      );
+      expect(traffic(e).map((m) => m.method)).toEqual([
+        "initialize",
+        "initialized",
+        "thread/start",
+        "turn/start",
+      ]);
+      expect(events.at(-1)?.type).toBe("completed");
+    },
+  );
 });
 
 describe("command approvals", () => {

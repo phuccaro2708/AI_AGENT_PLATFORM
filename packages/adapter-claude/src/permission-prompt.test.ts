@@ -156,4 +156,39 @@ describe("decideToolCall", () => {
       }),
     ).toMatchObject({ behavior: "deny" });
   });
+
+  it("denies when the engine never answers, ignores the late answer, and does not stall the next call", async () => {
+    const call = { tool_name: "Write", input: { file_path: "/w/a" } };
+    let late: (d: { effect: "allow"; reason: string }) => void = () => {};
+    const hung: PromptEvaluate = () =>
+      new Promise((r) => {
+        late = r;
+      });
+    const d = await decideToolCall(call, hung, undefined, 30);
+    expect(d).toMatchObject({ behavior: "deny", message: expect.stringContaining("timed out") });
+    late({ effect: "allow", reason: "too late" }); // must not change anything or throw
+    expect(await decideToolCall(call, allow, undefined, 30)).toMatchObject({ behavior: "allow" });
+  });
+
+  it("the server answers deny after evaluateTimeoutMs and keeps serving", async () => {
+    let n = 0;
+    const server = createPermissionPromptServer({
+      evaluateTimeoutMs: 30,
+      evaluate: () => (n++ === 0 ? new Promise(() => {}) : allow({} as never)),
+    });
+    const line = (id: number) =>
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        method: "tools/call",
+        params: {
+          name: "approve",
+          arguments: { tool_name: "Write", input: { file_path: "/w/a" } },
+        },
+      });
+    const text = (r: string | undefined) =>
+      (JSON.parse(r!) as { result: { content: { text: string }[] } }).result.content[0]!.text;
+    expect(JSON.parse(text(await server.handleLine(line(1))))).toMatchObject({ behavior: "deny" });
+    expect(JSON.parse(text(await server.handleLine(line(2))))).toMatchObject({ behavior: "allow" });
+  });
 });

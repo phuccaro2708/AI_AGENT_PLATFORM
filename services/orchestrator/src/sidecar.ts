@@ -136,6 +136,8 @@ export interface SidecarOptions {
    * or via `AGENT_STUDIO_CLI_TREE_MEM_MB=<positive MB>` in `sidecar-main`, to opt in.
    */
   cliTreeMemoryLimitMb?: number;
+  /** Wall-clock limit of one `claude` run while its permission gate is on (ms, default 2 h; 0 = none). Backstop for a hung gate process. */
+  claudeTaskTimeoutMs?: number;
   /** Parent folder of diagnostics bundles. Default: `diagnostics` next to the database. */
   diagnosticsDir?: string;
   /** Folder and file stem of the sidecar's log file (the native side redirects stderr there). Default: next to the database, `sidecar`. */
@@ -183,6 +185,8 @@ const SCAN_ONLY_ADAPTERS: ReadonlySet<string> = new Set(["agy"]);
 
 /** Same requirement the UI applies to a single-agent task (`AGENT_TASK_REQUIRES`): a live log. */
 const AUTO_AGENT_REQUIRES: readonly AgentCapability[] = ["streaming"];
+
+const DEFAULT_CLAUDE_TASK_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 export class SidecarService {
   readonly db: StudioDb;
@@ -266,7 +270,10 @@ export class SidecarService {
         }
         return build(task);
       };
-      return this.gate.wrap(new ClaudeAdapter({ ...o, safeMode: false, taskArgs }));
+      const t = this.opts.claudeTaskTimeoutMs ?? DEFAULT_CLAUDE_TASK_TIMEOUT_MS;
+      return this.gate.wrap(
+        new ClaudeAdapter({ ...o, safeMode: false, taskArgs, ...(t > 0 ? { timeoutMs: t } : {}) }),
+      );
     }
     return this.gate.wrap(provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o));
   }

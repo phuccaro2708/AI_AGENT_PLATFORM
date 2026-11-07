@@ -121,11 +121,37 @@ export function requestFor(
   return { problem: `tool ${toolName} is not covered by the gate` };
 }
 
-/** One `tools/call` → allow/deny. Never throws. */
+/** Default deadline of one policy check. The checks are local (path/command rules), so this is generous. */
+export const DEFAULT_EVALUATE_TIMEOUT_MS = 10_000;
+
+/**
+ * Resolves with `evaluate`'s result, or rejects after `ms` (the late result is then ignored: the promise is
+ * already settled). No retry. `ms` that is not a positive finite number falls back to the default.
+ */
+function withDeadline<T>(work: Promise<T>, ms: number | undefined): Promise<T> {
+  const limit =
+    ms !== undefined && Number.isFinite(ms) && ms > 0 ? ms : DEFAULT_EVALUATE_TIMEOUT_MS;
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("policy check timed out")), limit);
+    work.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e: unknown) => {
+        clearTimeout(timer);
+        reject(e instanceof Error ? e : new Error("policy check failed"));
+      },
+    );
+  });
+}
+
+/** One `tools/call` → allow/deny. Never throws. A check that does not finish within `timeoutMs` is `deny`. */
 export async function decideToolCall(
   args: unknown,
   evaluate: PromptEvaluate,
   defaultDir?: string,
+  timeoutMs?: number,
 ): Promise<PromptDecision> {
   const a = obj(args);
   const toolName = str(a?.["tool_name"]);
@@ -134,14 +160,23 @@ export async function decideToolCall(
   try {
     const r = requestFor(toolName, a["input"], defaultDir);
     if ("problem" in r) return { behavior: "deny", message: `denied: ${r.problem}` };
-    const d = await evaluate(r.request);
+    const d = await withDeadline(
+      Promise.resolve().then(() => evaluate(r.request)),
+      timeoutMs,
+    );
     if (d.effect === "allow") return { behavior: "allow", updatedInput: a["input"] };
     return {
       behavior: "deny",
       message: `denied by policy${d.effect === "ask" ? " (needs approval; none available here)" : ""}: ${d.reason}`,
     };
-  } catch {
-    return { behavior: "deny", message: "denied: the policy check failed" };
+  } catch (e) {
+    return {
+      behavior: "deny",
+      message:
+        e instanceof Error && e.message === "policy check timed out"
+          ? "denied: the policy check timed out"
+          : "denied: the policy check failed",
+    };
   }
 }
 
@@ -151,6 +186,8 @@ export interface PermissionPromptServerOptions {
   toolName?: string;
   /** Folder `Glob`/`Grep` search when the call has no `path` (the task cwd). Absent → such calls are denied. */
   defaultDir?: string;
+  /** Deadline of one policy check in ms (default `DEFAULT_EVALUATE_TIMEOUT_MS`). On expiry the call is denied. */
+  evaluateTimeoutMs?: number;
 }
 
 const TOOL_SCHEMA = {
@@ -199,7 +236,12 @@ export function createPermissionPromptServer(opts: PermissionPromptServerOptions
       if (method === "tools/call") {
         const decision =
           str(params?.["name"]) === toolName
-            ? await decideToolCall(params?.["arguments"], opts.evaluate, opts.defaultDir)
+            ? await decideToolCall(
+                params?.["arguments"],
+                opts.evaluate,
+                opts.defaultDir,
+                opts.evaluateTimeoutMs,
+              )
             : ({ behavior: "deny", message: "unknown tool" } satisfies PromptDecision);
         return reply({ content: [{ type: "text", text: JSON.stringify(decision) }] });
       }

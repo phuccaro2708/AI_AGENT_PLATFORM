@@ -27,7 +27,7 @@ ADR-002 keeps an OS sandbox out of 1.0. No prototype was written and nothing was
 - Idea: run each CLI under a restricted token or an AppContainer profile with capabilities limited to the worktree. Windows Sandbox (a disposable VM) is the heavier alternative.
 - Expected obstacles (unverified): CLIs such as claude and codex need their own config/credential folders, the network and `%TEMP%`; an AppContainer denies these by default and needs explicit ACL grants on each folder, which changes system state. Windows Sandbox needs the optional feature enabled, is not available on Home editions (this machine is Home), and cannot share a live worktree without a mapped folder.
 - Probe facts that do exist (P4-1 d, see `docs/ASSUMPTIONS.md`): codex `workspace-write` blocks writes outside the working folder (but treats `%TEMP%` as writable); claude `acceptEdits` blocks writes outside the working folder, while `--allowedTools Write` does not. Claude enforces by tool/path rules inside the CLI, not by the OS.
-- **Not achieved:** no OS-level containment of agent processes; agents can read files and use the network as the user. Git worktrees remain branch isolation only.
+- **Not achieved:** no OS-level containment of agent processes; agents can read files and use the network as the user. Git worktrees remain branch isolation only. A Low Integrity Level probe (docs/ASSUMPTIONS.md d5, PARTIAL) showed Low IL blocks writes outside labelled directories without admin rights, but not reads of user files nor network; login/model calls under Low IL were not verified, so nothing is implemented and ADR-002 is unchanged. UI should warn that agents run with the user's privileges.
 
 ### Policy gate in the permission loop (P4-1 c/d) — implemented, OPT-IN, OFF by default
 

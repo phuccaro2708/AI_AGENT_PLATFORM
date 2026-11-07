@@ -111,6 +111,74 @@ fn is_allowed(method: &str) -> bool {
     ALLOWED_METHODS.contains(&method)
 }
 
+/// Decisions a hijacked webview must not be able to make on its own (THREAT_MODEL T12). Each one is
+/// confirmed in a native dialog the shell opens, showing text the *sidecar* writes from its own
+/// database; only on "Allow" does the shell forward the call. All of these are also in
+/// `ALLOWED_METHODS`: being callable by the UI and being confirmed outside it are separate checks.
+/// `agents.setSettings` is here because it chooses the executable the sidecar later launches.
+const CONFIRMED_METHODS: &[&str] = &[
+    "approvals.resolve",
+    "recovery.resolve",
+    "tasks.resolveReconciliation",
+    "agents.setSettings",
+];
+
+/// Internal read-only request the shell sends the sidecar to get the dialog text. Not in
+/// `ALLOWED_METHODS`, so the webview cannot call it (and cannot choose what the dialog says).
+const DESCRIBE_METHOD: &str = "confirm.describe";
+
+fn needs_confirmation(method: &str) -> bool {
+    CONFIRMED_METHODS.contains(&method)
+}
+
+/// Longest dialog body the shell will show; the sidecar already shortens its text, this is the
+/// shell's own bound so a misbehaving sidecar cannot produce an unusable dialog.
+const MAX_DIALOG_CHARS: usize = 2000;
+
+fn clip(text: &str) -> String {
+    if text.chars().count() <= MAX_DIALOG_CHARS {
+        return text.to_string();
+    }
+    let mut out: String = text.chars().take(MAX_DIALOG_CHARS).collect();
+    out.push('\u{2026}');
+    out
+}
+
+/// The confirmation flow, with the three side effects injected so it can be tested without a
+/// sidecar or a window: ask the sidecar to describe the call, ask the person, and only on a yes
+/// forward the *same* call. Fails closed: a missing or empty description, a sidecar error or a
+/// "no" means nothing is forwarded.
+fn confirmed_call(
+    describe: impl FnOnce() -> Result<Value, String>,
+    confirm: impl FnOnce(&str, &str) -> bool,
+    forward: impl FnOnce() -> Result<Value, String>,
+) -> Result<Value, String> {
+    let d = describe()?;
+    let title = d["title"].as_str().filter(|t| !t.trim().is_empty());
+    let message = d["message"].as_str().filter(|m| !m.trim().is_empty());
+    let (Some(title), Some(message)) = (title, message) else {
+        return Err("the sidecar gave no text to confirm; nothing was done".into());
+    };
+    if !confirm(&clip(title), &clip(message)) {
+        return Err("declined in the confirmation dialog; nothing was done".into());
+    }
+    forward()
+}
+
+/// Opens the native Allow/Deny dialog (blocks until answered). Runs off the UI thread.
+fn native_confirm(app: &tauri::AppHandle, title: &str, message: &str) -> bool {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+    app.dialog()
+        .message(message)
+        .title(title)
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            "Allow".to_string(),
+            "Deny".to_string(),
+        ))
+        .blocking_show()
+}
+
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const STUB_TIMEOUT: Duration = Duration::from_secs(60);
 /// Tauri event carrying every server-pushed sidecar event (`task.message`, `task.state`).
@@ -166,7 +234,22 @@ async fn sidecar_call(
     if !is_allowed(&method) {
         return Err(format!("method not allowed: {method}"));
     }
-    call(&app, &state, &method, params, REQUEST_TIMEOUT).await
+    if !needs_confirmation(&method) {
+        return call(&app, &state, &method, params, REQUEST_TIMEOUT).await;
+    }
+    let sidecar = ensure_sidecar(&app, &state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        confirmed_call(
+            || {
+                let args = json!({ "method": &method, "params": &params });
+                sidecar.request(DESCRIBE_METHOD, Some(args), REQUEST_TIMEOUT)
+            },
+            |title, message| native_confirm(&app, title, message),
+            || sidecar.request(&method, params.clone(), REQUEST_TIMEOUT),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -414,9 +497,108 @@ mod tests {
             "Health",
             "agents",
             "system.activeTasks",
+            "confirm.describe",
         ] {
             assert!(!is_allowed(m), "{m:?}");
         }
+    }
+
+    #[test]
+    fn sensitive_methods_are_confirmed_and_the_describe_call_is_not_reachable() {
+        for m in [
+            "approvals.resolve",
+            "recovery.resolve",
+            "tasks.resolveReconciliation",
+            "agents.setSettings",
+        ] {
+            assert!(needs_confirmation(m) && is_allowed(m), "{m:?}");
+        }
+        for m in ["approvals.list", "tasks.cancel", "recovery.inspect", "health", ""] {
+            assert!(!needs_confirmation(m), "{m:?}");
+        }
+        // The webview must not be able to call the describe request (it would choose the text).
+        assert!(!is_allowed(DESCRIBE_METHOD));
+        // Every confirmed method is callable by the UI at all (otherwise the list is dead weight).
+        assert!(CONFIRMED_METHODS.iter().all(|m| is_allowed(m)));
+    }
+
+    fn described() -> Result<Value, String> {
+        Ok(json!({ "title": "Approve?", "message": "Task t1 wants to run a command" }))
+    }
+
+    #[test]
+    fn a_yes_forwards_the_call_after_showing_the_sidecar_text() {
+        let mut shown = None;
+        let r = confirmed_call(
+            described,
+            |t, m| {
+                shown = Some((t.to_string(), m.to_string()));
+                true
+            },
+            || Ok(json!({ "resolved": true })),
+        );
+        assert_eq!(r, Ok(json!({ "resolved": true })));
+        assert_eq!(
+            shown,
+            Some(("Approve?".into(), "Task t1 wants to run a command".into()))
+        );
+    }
+
+    #[test]
+    fn a_no_forwards_nothing() {
+        let mut forwarded = false;
+        let r = confirmed_call(
+            described,
+            |_, _| false,
+            || {
+                forwarded = true;
+                Ok(json!({}))
+            },
+        );
+        assert!(r.unwrap_err().contains("declined"));
+        assert!(!forwarded);
+    }
+
+    #[test]
+    fn no_description_means_no_dialog_and_no_forward() {
+        for bad in [
+            Err("Unknown approval: a1".to_string()),
+            Ok(json!({})),
+            Ok(json!({ "title": "t" })),
+            Ok(json!({ "title": "t", "message": "   " })),
+            Ok(json!({ "title": 1, "message": "m" })),
+        ] {
+            let mut asked = false;
+            let mut forwarded = false;
+            let r = confirmed_call(
+                || bad,
+                |_, _| {
+                    asked = true;
+                    true
+                },
+                || {
+                    forwarded = true;
+                    Ok(json!({}))
+                },
+            );
+            assert!(r.is_err());
+            assert!(!asked && !forwarded);
+        }
+    }
+
+    #[test]
+    fn a_forward_error_is_returned_as_is() {
+        let r = confirmed_call(described, |_, _| true, || Err("Approval has expired".into()));
+        assert_eq!(r, Err("Approval has expired".to_string()));
+    }
+
+    #[test]
+    fn dialog_text_is_bounded() {
+        let long = "x".repeat(MAX_DIALOG_CHARS + 50);
+        let c = clip(&long);
+        assert_eq!(c.chars().count(), MAX_DIALOG_CHARS + 1);
+        assert!(c.ends_with('\u{2026}'));
+        assert_eq!(clip("short"), "short");
     }
 
     #[test]

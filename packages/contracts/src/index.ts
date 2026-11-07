@@ -195,6 +195,21 @@ export const SidecarRequest = z.discriminatedUnion("method", [
   // Internal: asked by the native side before it restarts the sidecar. Not in the UI allowlist.
   z.object({ id: z.number().int(), method: z.literal("system.activeTasks") }),
   z.object({ id: z.number().int(), method: z.literal("projects.list") }),
+  // Internal: asked by the native shell before it forwards a sensitive decision. Returns the text of the native
+  // confirmation dialog, built here from the stored state, never from the webview. Not in the UI allowlist.
+  z.object({
+    id: z.number().int(),
+    method: z.literal("confirm.describe"),
+    params: z.object({
+      method: z.enum([
+        "approvals.resolve",
+        "recovery.resolve",
+        "tasks.resolveReconciliation",
+        "agents.setSettings",
+      ]),
+      params: z.unknown(),
+    }),
+  }),
   z.object({
     id: z.number().int(),
     method: z.literal("workflows.create"),

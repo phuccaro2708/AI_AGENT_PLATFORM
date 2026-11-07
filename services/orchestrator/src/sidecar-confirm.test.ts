@@ -11,7 +11,7 @@ import { SidecarService } from "./sidecar.js";
  * T12 / R3: the text of the native confirmation dialog is written by the sidecar from its own state.
  * `confirm.describe` is read-only, refuses calls that could not succeed, and never echoes secrets.
  */
-const SECRET = "sk-ant-test-SECRETSECRETSECRETSECRET";
+const SECRET = "sk-ant-test-SECRETSECRETSECRETSECRET"; // pragma: allowlist secret
 let dir: string;
 let svc: SidecarService;
 let n = 0;

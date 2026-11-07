@@ -158,6 +158,11 @@ ACCEPTED_HISTORY = {
     ("426c200f", ".codex/agents/security-reviewer.toml", "Secret Keyword", 13),
     ("9db9c7c7", ".codex/agents/security-reviewer.toml", "Secret Keyword", 13),
     ("56cbc94e", ".codex/agents/security-reviewer.toml", "Secret Keyword", 13),
+    # R3 (2026-11-06): FAKE test literal "sk-ant-test-SECRETSECRET…" in sidecar-confirm.test.ts, committed
+    # before the inline pragma was added. Reviewed by hand: not a real key.
+    ("9394e634", "services/orchestrator/src/sidecar-confirm.test.ts", "Secret Keyword", 14),
+    ("2377ce9d", "services/orchestrator/src/sidecar-confirm.test.ts", "Secret Keyword", 14),
+    ("c7c6dfc9", "services/orchestrator/src/sidecar-confirm.test.ts", "Secret Keyword", 14),
 }
 
 # Reviewed by hand, valid at any commit: exact (file, type, line). Line 28 of the Phase 0 spike

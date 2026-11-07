@@ -86,8 +86,17 @@ Mỗi phiên bản npm khác nhau của cùng một gói được đếm riêng.
 - Việc phải làm khi người dùng quyết định (KHÔNG làm tự động): (a) chấp nhận có ghi nhận (các crate đã có trên crates.io ≥ 6,9 ngày, không có advisory tại `cargo audit` ngày 2026-11-05), hoặc (b) hạ các crate này về bản cũ hơn bằng `cargo update -p <crate> --precise <ver>` rồi chạy lại `cargo test --locked`, hoặc (c) đợi đủ 14 ngày (muộn nhất 2026-11-13 cho `log`) rồi chạy lại script. Chạy lại script sau mỗi lần đổi lockfile.
 - Giới hạn: kiểm tuổi không phải kiểm an toàn; script không kiểm yanked, chữ ký hay nội dung. Metadata registry là dữ liệu không đáng tin tuyệt đối (ngày do registry ghi, chưa xác minh độc lập).
 
-### Chặn bằng CI (2026-11-06)
+### Chặn bằng CI và allowlist có hạn (2026-11-07)
 
-Job `security` trong `.github/workflows/ci.yml` chạy `node scripts/deps-age-audit.mjs`; thoát khác 0 nếu có gói < 14 ngày hoặc không tra được. Ngoại lệ đã chấp nhận ghi trong `scripts/deps-age-allowlist.json` (mảng `{id, reason, expires}`; thiếu lý do hoặc quá hạn thì không có hiệu lực). File này hiện CHƯA tồn tại: 13 crate ở trên chưa được chấp nhận, nên job sẽ đỏ cho đến khi người dùng quyết định (thêm ngoại lệ có hạn hoặc hạ bản). **CI NOT_RUN**: chưa chạy trên runner thật; script chỉ đã chạy ở local. Gate cục bộ: thêm `node scripts/deps-age-audit.mjs` (cần mạng, cargo mất ~7 phút do giới hạn 1 request/giây).
+Job `security` trong `.github/workflows/ci.yml` chạy `node scripts/deps-age-audit.mjs`; thoát khác 0 nếu có gói < 14 ngày (không có ngoại lệ còn hạn) hoặc không tra được. Ngoại lệ ghi trong `scripts/deps-age-allowlist.json` (mảng `{id, reason, expires}`; thiếu lý do hoặc quá hạn thì không có hiệu lực).
 
-Đề xuất `scripts/deps-age-allowlist.json` (CHƯA tạo; chờ người dùng quyết): 13 mục `{"id":"<crate>@<ver>","reason":"transitive qua tauri/reqwest/keyring-core, không advisory, lockfile khoá; chờ đủ 14 ngày","expires":"2026-11-14"}`. Hạn 2026-11-14 vì crate trẻ nhất (`log`, publish 2026-10-30) đủ 14 ngày vào 2026-11-13, sau đó bước CI tự xanh và mục hết hạn không còn hiệu lực.
+Chạy lại audit cargo thật (registry chỉ-đọc) lúc 2026-11-07T02:36Z: vẫn đúng 13 crate trên (trẻ nhất `log` 0.4.35, 7,2 ngày; 423/423 tra được). File allowlist đã tạo với 13 mục, mỗi mục có lý do (đường kéo vào + có/không nằm trong đồ thị build Windows, theo `cargo tree -i`) và `expires` = ngày đầu tiên crate đủ 14 ngày (publish + 14 ngày, làm tròn lên ngày kế): `erased-serde`, `brotli-decompressor` 2026-11-09; `brotli` 2026-11-11; `utf8_iter`, `utf_types` 2026-11-13; `log`, `js-sys`, `web-sys`, 5 crate `wasm-bindgen*` 2026-11-14. Vì hạn trùng thời điểm đủ tuổi, mục hết hạn thì crate đã đủ 14 ngày và CI vẫn xanh; nếu `Cargo.lock` được cập nhật lên bản mới hơn (id khác) mà chưa có mục, hoặc mục bị gia hạn thủ công quá hạn thật, bước CI đỏ.
+
+Kiểm chứng (local, không sửa lockfile, không sửa dữ liệu thật):
+
+- `node scripts/deps-age-audit.mjs --cargo --rows-from <cargo.json> --now 2026-11-07T02:36:00Z` (dùng lại dữ liệu registry vừa lấy, cờ test mới `--rows-from`): exit 0, 0 crate < 14 ngày. Không có allowlist: 13 crate YOUNG, exit 1.
+- Giả lập quá hạn: allowlist tạm với mọi `expires` = 2026-11-08 và `--now 2026-11-09` → 11 crate YOUNG, exit 1.
+- `tests/contract/deps-age-audit.test.ts` (offline, fixture tổng hợp, cờ `--allowlist`/`--rows-from`): không có mục → exit 1; mục còn hạn → exit 0; mục hết hạn trong khi gói còn trẻ → exit 1; mục thiếu lý do bị bỏ qua; file thật có đủ id/lý do/hạn hợp lệ.
+- Rà soát lần chạy `pnpm test` toàn bộ: một lần fail ở `packages/adapter-codex/src/app-server.test.ts` do `EPERM` trên thư mục temp `policy-engine-*` (nhiều phiên song song dùng chung temp); chạy riêng lại pass.
+
+Giới hạn: chỉ kiểm tuổi, không kiểm an toàn. **CI NOT_RUN**: workflow chưa chạy trên runner thật (không push). Bản đầy đủ npm chưa chạy lại ở lần này (npm trước đó 0 gói < 14 ngày). Allowlist không thay thế quyết định (b) hạ bản `cargo update -p ... --precise` nếu người dùng muốn loại crate khỏi lockfile.

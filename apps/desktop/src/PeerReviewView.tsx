@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { draftAfterStart } from "./draft";
 import { api, type AdapterInfo, type Approval, type Project, type WorkflowTask } from "./api";
 import { PEER_REVIEW_REQUIRES, capabilityBlocker, gapOf } from "./capabilityGap";
 import { Composer, StartSteps } from "./Composer";
@@ -43,7 +44,12 @@ export function PeerReviewView({
   run: PeerRun | null;
   snapshot: Snapshot | undefined;
   approvals: Approval[];
-  onStart: (implementer: string, reviewer: string, goal: string) => void;
+  /** Resolves `false` when the backend refused the run: the goal is then kept. */
+  onStart: (
+    implementer: string,
+    reviewer: string,
+    goal: string,
+  ) => void | boolean | Promise<void | boolean>;
   onResolved: () => void;
   onError: (m: string) => void;
 }) {
@@ -145,8 +151,9 @@ export function PeerReviewView({
         submitLabel="Start review"
         blocker={blocker}
         onSubmit={(text) => {
-          onStart(impl, rev, text);
-          setGoal("");
+          void Promise.resolve(onStart(impl, rev, text)).then((ok) => {
+            setGoal((cur) => draftAfterStart(cur, text, ok));
+          });
         }}
       />
     </div>

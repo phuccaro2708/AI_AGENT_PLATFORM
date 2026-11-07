@@ -420,3 +420,24 @@ Mã lặp lại được: `services/orchestrator/src/real-cli-gates.test.ts` (b�
 - Không qua gate: Write trong cwd ở `acceptEdits`, `--allowedTools=Write`, Read trong cwd, `git status`, plan mode (ghi `~/.claude/plans`, ngoài repo). Có qua gate: Write mặc định, Edit (luôn deny vì `requestFor` không phủ), Bash có redirect, Write ngoài cwd (nếu gate allow thì file ngoài được ghi).
 - **Gate THẬT + claude thật** (`ClaudeAdapter` + `claudeGateTaskArgs` + bundle sidecar, 2.1.318): `--safe-mode` mặc định → "tool … not found", `claude exited (code 1) without a result`, không ghi file; `safeMode:false` + `workspace-write`: ghi trong repo claude tự chấp nhận (không qua gate), ghi ngoài repo → gate trả "denied by policy: Outside the workspace" + sự kiện `permission_denied`, không có file ngoài; chế độ mặc định, Write trong repo → file được tạo (policy cho phép trong cwd).
 - **Khuyến nghị (người dùng đã chọn giữ TẮT):** chưa bật mặc định. Điều kiện để cân nhắc: `safeMode:false` kèm cách ly cấu hình khác, hạn thời gian phía host cho gate, phủ dạng wrapper Codex thật, kiểm lại mỗi lần đổi bản CLI (cờ ẩn, giao thức experimental). Cả hai chỉ là cổng thứ hai, không phải sandbox.
+
+### d5. Probe chạy CLI ở Windows Low Integrity Level (2026-11-06, claude 2.1.318, codex-cli 0.166.0, Windows 11 10.0.26200; PARTIAL — chưa quan sát đăng nhập/gọi model)
+
+Công cụ: script PowerShell + P/Invoke tạm (ngoài repo, không dependency): `OpenProcessToken` → `DuplicateTokenEx` (primary) → `SetTokenInformation(TokenIntegrityLevel, S-1-16-4096)` → `CreateProcessAsUserW`. Không cần quyền admin. Vùng thử: `%TEMP%\r1probe\low` gán nhãn bằng `icacls <thư mục> /setintegritylevel "(OI)(CI)L"` (repo git rỗng, `cfg`, `tmp` bên trong); thư mục `med` cùng cấp giữ mức Medium. Prompt của claude chỉ là "Reply with exactly: OK", không có mã/đường dẫn dự án. Ghi chú Git Bash: `/setintegritylevel` bị đổi thành đường dẫn, phải chạy `icacls` từ PowerShell.
+
+**Quan sát được (thật):**
+
+- Token Low IL được tạo và dùng: `whoami /groups` trong tiến trình con có `Mandatory Label\Low Mandatory Level S-1-16-4096`.
+- Ghi vào thư mục Medium (`med\`) hoặc thư mục `low` CHƯA gán nhãn: `Access is denied`. Ghi vào thư mục đã gán nhãn Low: thành công. **Đọc** file Medium của người dùng (`type med\m.txt`) vẫn ĐƯỢC (Low IL chỉ chặn ghi lên — "no-write-up"; không chặn đọc).
+- `claude --version` ở Low IL: chạy, trả `2.1.318`. `claude -p` với `CLAUDE_CONFIG_DIR`, `TEMP`, `TMP` trỏ vào vùng low: khởi động, ghi được `.claude.json`, `backups\`, `plugins\`, `projects\<repo>\*.jsonl`, `sessions\` trong vùng low, trả JSON hợp lệ, lỗi `Not logged in` (thư mục cấu hình rỗng nên chưa đăng nhập; không có exit giữa chừng do quyền).
+- `curl.exe https://api.anthropic.com/` ở Low IL: HTTP 404 (kết nối mạng ra ngoài vẫn hoạt động).
+- `codex --version` ở Low IL: chạy, trả `codex-cli 0.166.0`, kèm cảnh báo không dọn/không tạo được `%USERPROFILE%\.codex\tmp\arg0-windows\…` (`Access is denied`) — bằng chứng thêm rằng ghi ra ngoài vùng low bị chặn.
+
+**KHÔNG kiểm chứng được (BLOCKED, ghi rõ, không suy diễn):**
+
+- Đăng nhập thật, gọi model thật và làm mới token của `claude`/`codex` ở Low IL. Lý do: sao chép `.credentials.json`/`auth.json` vào thư mục tạm bị bộ phân loại quyền của phiên chặn (nhóm "Credential Materialization"); phiên không lách. Cần người dùng quyết: tự đăng nhập một lần trong cấu hình tạm ở Low IL, hoặc cho phép đọc credential tại chỗ.
+- `codex exec` thật ở Low IL (cần xác thực, sandbox của Codex, `~/.codex` ghi được hay không).
+- Con cháu tiến trình (Node, git, shell do CLI sinh) và công cụ cần ghi `%USERPROFILE%` (npm/pnpm cache, `~/.claude` thật, hook toàn cục, `.git` của dự án) ở Low IL.
+- Tích hợp với Job Object của `agent-job-wrap` (`JOB_OBJECT_LIMIT_BREAKAWAY`, token cho `CreateProcessAsUser` từ Rust).
+
+**Kết luận tạm (PARTIAL):** cơ chế Low IL có thật và chặn ghi ra ngoài vùng đã gán nhãn mà không cần admin; CLI khởi động và ghi cấu hình được trong vùng low. Nhưng (1) không chặn ĐỌC file người dùng (credential, SSH key, mã nguồn khác) và không chặn mạng, nên T20 không được giảm; (2) chưa chứng minh được luồng đăng nhập/gọi model, nên chưa có cơ sở viết opt-in trong `packages/process-manager`. Không đổi mã chạy, không đổi ADR-002. Đề xuất: cảnh báo UI "agent chạy với quyền người dùng, đọc được mọi file và mạng"; làm nốt phần BLOCKED rồi mới quyết hiện thực opt-in.

@@ -25,18 +25,16 @@ describe("jobWrapArgs", () => {
   it("rejects limits that are not positive integers", () => {
     for (const bad of [0, -1, 1.5, Number.NaN]) {
       expect(() => jobWrapArgs({ path: NODE, memLimitMb: bad })).toThrow(/--mem-limit-mb/);
+      expect(() => jobWrapArgs({ path: NODE, jobMemLimitMb: bad })).toThrow(/--job-mem-limit-mb/);
       expect(() => jobWrapArgs({ path: NODE, timeoutSecs: bad })).toThrow(/--timeout-secs/);
     }
   });
 
   it("returns only the flags that were set, in a fixed order", () => {
     expect(jobWrapArgs({ path: NODE })).toEqual([]);
-    expect(jobWrapArgs({ path: NODE, timeoutSecs: 9, memLimitMb: 512 })).toEqual([
-      "--mem-limit-mb",
-      "512",
-      "--timeout-secs",
-      "9",
-    ]);
+    expect(
+      jobWrapArgs({ path: NODE, timeoutSecs: 9, memLimitMb: 512, jobMemLimitMb: 1024 }),
+    ).toEqual(["--mem-limit-mb", "512", "--job-mem-limit-mb", "1024", "--timeout-secs", "9"]);
   });
 });
 
@@ -102,6 +100,39 @@ describe("startProcess with jobWrap", () => {
       expect(r.outcome).toBe("cancelled");
       await new Promise((r2) => setTimeout(r2, 500));
       expect(() => process.kill(gcPid, 0)).toThrow(); // grandchild is gone
+    },
+  );
+
+  // R4: parent and child each commit 250 MB. A job-wide cap below the total refuses the child's
+  // allocation (Windows fails the allocation, it does not kill the process); a roomy cap does not.
+  it.skipIf(!haveBinary)(
+    "--job-mem-limit-mb caps the SUM of the process tree, not each process",
+    async () => {
+      const child =
+        "try{Buffer.alloc(250*1024*1024,1);console.log('CHILD_OK')}catch(e){console.log('CHILD_FAIL')}";
+      const parent =
+        "const b=Buffer.alloc(250*1024*1024,1);" +
+        `const r=require('child_process').spawnSync(process.execPath,['-e',${JSON.stringify(child)}],{encoding:'utf8'});` +
+        "console.log('PARENT_OK '+(r.stdout||'').trim()+' '+b[0])";
+      const run = async (jobMemLimitMb: number | undefined, memLimitMb?: number) =>
+        (
+          await runProcess({
+            command: NODE,
+            args: ["-e", parent],
+            jobWrap: {
+              path: binary,
+              ...(jobMemLimitMb ? { jobMemLimitMb } : {}),
+              ...(memLimitMb ? { memLimitMb } : {}),
+              timeoutSecs: 60,
+            },
+            timeoutMs: 90_000,
+          })
+        ).stdout;
+      expect(await run(undefined)).toContain("PARENT_OK CHILD_OK");
+      expect(await run(2000)).toContain("PARENT_OK CHILD_OK");
+      // per-process cap 400 MB: each process stays under it, the 500 MB total is not seen
+      expect(await run(undefined, 400)).toContain("PARENT_OK CHILD_OK");
+      expect(await run(450)).toContain("PARENT_OK CHILD_FAIL");
     },
   );
 });

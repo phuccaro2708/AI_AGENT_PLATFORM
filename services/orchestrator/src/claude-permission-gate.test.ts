@@ -62,6 +62,18 @@ const behavior = (r: { result: Record<string, unknown> }): string =>
     .behavior;
 
 describe("claudeGateTaskArgs", () => {
+  it("askEveryTool is OFF by default and, when on, only appends --settings with permissions.ask", () => {
+    const base = { configDir: join(tmp(), "gate"), launcher: { command: "node", args: ["/b.js"] } };
+    const off = claudeGateTaskArgs(base)(task(tmp()));
+    expect(off).not.toContain("--settings");
+    const on = claudeGateTaskArgs({ ...base, askEveryTool: true })(task(tmp()));
+    expect(on.slice(0, off.length)).toEqual(off.map((a, i) => (i === 1 ? on[1] : a)));
+    const at = on.indexOf("--settings");
+    expect(JSON.parse(on[at + 1]!)).toEqual({
+      permissions: { ask: ["Write", "Edit", "Read", "Glob", "Grep", "Bash"] },
+    });
+  });
+
   it("writes one MCP config per task and names the trio of flags the probe used", () => {
     const cwd = tmp();
     const configDir = join(tmp(), "gate");

@@ -118,6 +118,11 @@ async function runCodex(o: {
   permissions: TaskPermissions;
   /** Added to the production policy (`appServerPolicy`: no command allowed) so the ACCEPT path can be observed. */
   allowCommands?: string[];
+  /** Run the server inside the REAL `agent-job-wrap` (2026-11-07 follow-up). */
+  jobWrap?: { path: string; jobMemLimitMb?: number };
+  approvalTimeoutMs?: number;
+  /** Called before the policy answers; may stall (timeout case) or kill the connection (lost-connection case). */
+  beforeEvaluate?: () => Promise<void>;
 }): Promise<CodexRun & { repo: string; root: string }> {
   const { root, repo } = freshRepo(o.name);
   const logFile = join(root, "tap.jsonl");
@@ -134,8 +139,10 @@ async function runCodex(o: {
       CODEX_TAP_TARGET: JSON.stringify({ path: target.path, prefixArgs: target.prefixArgs ?? [] }),
     },
     envAllow: ["CODEX_TAP_LOG", "CODEX_TAP_TARGET"],
-    approvalTimeoutMs: 30_000,
+    approvalTimeoutMs: o.approvalTimeoutMs ?? 30_000,
+    ...(o.jobWrap ? { jobWrap: o.jobWrap } : {}),
     evaluate: async (request, ctx) => {
+      await o.beforeEvaluate?.();
       const base = appServerPolicy(ctx);
       const policy: Policy = {
         ...base,
@@ -306,6 +313,128 @@ describe.skipIf(!WANT_CODEX)("REAL codex app-server behind the policy gate", () 
     }
   }, 180_000);
 });
+
+// ------------------------------------------------------------------------------------------------------------
+// Codex app-server inside the REAL agent-job-wrap, plus timeout and lost connection (opt-in: =codex-wrapped)
+// ------------------------------------------------------------------------------------------------------------
+const wrapperExe = join(repoRoot, "apps/desktop/src-tauri/target/debug/agent-job-wrap.exe");
+const codexProcessCount = (): number => {
+  try {
+    const out = execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        "(Get-Process -Name codex* -ErrorAction SilentlyContinue | Measure-Object).Count",
+      ],
+      { encoding: "utf8", shell: false },
+    );
+    return Number(out.trim());
+  } catch {
+    return -1;
+  }
+};
+/** Ends only the tap node process of the run (it holds the pipe to codex); the wrapper then closes its Job Object. */
+const killTapProcess = (): void => {
+  execFileSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-Command",
+      `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*codex-tap.mjs*' -and $_.Name -eq 'node.exe' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`,
+    ],
+    { shell: false },
+  );
+};
+
+describe.skipIf(MODE !== "codex-wrapped" || !existsSync(wrapperExe))(
+  "REAL codex app-server inside the REAL agent-job-wrap",
+  () => {
+    const jobWrap = { path: wrapperExe, jobMemLimitMb: 8192 };
+    it("workspace-write, `echo` allowed: the accept path still works through the wrapper, no codex left behind", async () => {
+      const before = codexProcessCount();
+      const r = await runCodex({
+        name: "codex-wrapped-echo",
+        permissions: "workspace-write",
+        allowCommands: ["echo", "Write-Output"],
+        jobWrap,
+        prompt:
+          "Run exactly this PowerShell command in the current directory: echo gate-ok (nothing else, no pipes) and tell me the output.",
+      });
+      expect(r.events.at(-1)?.type).toBe("completed");
+      expect(filesIn(r.root).sort()).toEqual(["repo", "tap.jsonl"]);
+      await new Promise((res) => setTimeout(res, 1500));
+      (report["codex-wrapped-echo"] as Record<string, unknown>)["codexProcsBeforeAfter"] = [
+        before,
+        codexProcessCount(),
+      ];
+      expect(codexProcessCount()).toBeLessThanOrEqual(before);
+    }, 180_000);
+
+    it("production policy: the command is declined through the wrapper", async () => {
+      const r = await runCodex({
+        name: "codex-wrapped-deny",
+        permissions: "read-only",
+        jobWrap,
+        prompt:
+          "Run a shell command that lists the files in the current directory. One simple command.",
+      });
+      expect(r.asked.filter((x) => x.effect === "allow")).toEqual([]);
+      expect(
+        r.approvals.filter(
+          (a) => (a.answer as { decision?: string } | undefined)?.decision === "accept",
+        ),
+      ).toEqual([]);
+    }, 180_000);
+
+    it("the policy never answers: the approval times out as a decline and the task ends (no hang, no retry)", async () => {
+      const r = await runCodex({
+        name: "codex-wrapped-timeout",
+        permissions: "workspace-write",
+        allowCommands: ["echo", "Write-Output"],
+        approvalTimeoutMs: 4000,
+        jobWrap,
+        beforeEvaluate: () => new Promise<void>(() => undefined),
+        prompt:
+          "Run exactly this PowerShell command in the current directory: echo gate-ok (nothing else, no pipes).",
+      });
+      const accepted = r.approvals.filter(
+        (a) => (a.answer as { decision?: string } | undefined)?.decision === "accept",
+      );
+      expect(accepted).toEqual([]);
+      expect(r.events.length).toBeGreaterThan(0);
+    }, 180_000);
+
+    it("the connection is cut during an approval: the task ends needing reconciliation and nothing is left running", async () => {
+      const before = codexProcessCount();
+      let killed = false;
+      const r = await runCodex({
+        name: "codex-wrapped-lost",
+        permissions: "workspace-write",
+        allowCommands: ["echo", "Write-Output"],
+        jobWrap,
+        beforeEvaluate: async () => {
+          if (!killed) {
+            killed = true;
+            killTapProcess();
+            await new Promise((res) => setTimeout(res, 500));
+          }
+        },
+        prompt:
+          "Run exactly this PowerShell command in the current directory: echo gate-ok (nothing else, no pipes).",
+      });
+      const last = r.events.at(-1) as { type: string; needsReconciliation?: boolean } | undefined;
+      expect(last?.type).toBe("error");
+      expect(last?.needsReconciliation).toBe(true);
+      await new Promise((res) => setTimeout(res, 2000));
+      (report["codex-wrapped-lost"] as Record<string, unknown>)["codexProcsBeforeAfter"] = [
+        before,
+        codexProcessCount(),
+      ];
+      expect(codexProcessCount()).toBeLessThanOrEqual(before);
+    }, 180_000);
+  },
+);
 
 // ------------------------------------------------------------------------------------------------------------
 // Claude: `--permission-prompt-tool`

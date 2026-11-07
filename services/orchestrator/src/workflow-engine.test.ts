@@ -127,6 +127,32 @@ const implOk = (task: AgentTask): AgentEvent[] => {
 };
 
 describe("PeerReviewEngine", () => {
+  it("a custom maxRounds survives a restart: a fresh engine with another default still uses the stored limit", async () => {
+    setup(implOk, () => verdict("request_changes", ["again"]), 4);
+    engine.start({ workflowId: wf, goal: "g", maxRounds: 1 });
+    expect(repo.getWorkflowMaxRounds(wf)).toBe(1);
+    await scheduler.tick(); // round 1 implementer only
+    await scheduler.idle();
+    expect(impl.tasks).toHaveLength(1);
+    expect(rev.tasks).toHaveLength(0);
+
+    // "Restart": new engine, scheduler and adapters over the same database; the in-memory steps are gone.
+    setup(implOk, () => verdict("request_changes", ["again"]), 4);
+    await engine.resume(wf);
+    await drive();
+    expect(rev.tasks).toHaveLength(1);
+    expect(impl.tasks).toHaveLength(0); // limit 1 (stored), not the new default 4: no second round
+    expect(repo.getWorkflowState(wf)).toBe("failed");
+  });
+
+  it("without a stored maxRounds the engine default applies", async () => {
+    setup(implOk, () => verdict("request_changes", ["again"]), 3);
+    engine.start({ workflowId: wf, goal: "g" });
+    expect(repo.getWorkflowMaxRounds(wf)).toBeUndefined();
+    await drive();
+    expect(impl.tasks).toHaveLength(3);
+  });
+
   it("runs implement then review: the reviewer sees only the goal and verified artifacts", async () => {
     setup(implOk, () => verdict("approve"));
     engine.start({ workflowId: wf, goal: "add out.txt" });

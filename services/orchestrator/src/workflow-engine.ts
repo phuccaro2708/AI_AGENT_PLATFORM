@@ -48,7 +48,7 @@ type Step = {
  * Step bookkeeping is in memory, but it can be rebuilt from the database (`resume`): tasks of a workflow
  * alternate implementer, reviewer, implementer, ... in creation order. A task that ended in
  * `needs_reconciliation` is never continued by the engine; the workflow waits until a person decides.
- * Not persisted: a custom `maxRounds` (a resumed workflow uses the default).
+ * A custom `maxRounds` is stored on the workflow row, so a resumed workflow keeps it (NULL = the engine default).
  */
 export class PeerReviewEngine {
   private readonly repo: Repo;
@@ -57,7 +57,6 @@ export class PeerReviewEngine {
   private readonly workspaces: Workspaces;
   private readonly maxRounds: number;
   private readonly steps = new Map<string, Step>();
-  private readonly roundLimits = new Map<string, number>();
 
   constructor(opts: {
     repo: Repo;
@@ -107,7 +106,8 @@ export class PeerReviewEngine {
       source: "verified",
       createdBy: "user",
     });
-    if (opts.maxRounds !== undefined) this.roundLimits.set(opts.workflowId, opts.maxRounds);
+    if (opts.maxRounds !== undefined)
+      this.repo.setWorkflowMaxRounds(opts.workflowId, opts.maxRounds);
     this.enqueueImplement(opts.workflowId, 1);
   }
 
@@ -302,7 +302,7 @@ export class PeerReviewEngine {
       this.repo.setWorkflowState(step.workflowId, "completed");
       return;
     }
-    if (step.round >= (this.roundLimits.get(step.workflowId) ?? this.maxRounds)) {
+    if (step.round >= (this.repo.getWorkflowMaxRounds(step.workflowId) ?? this.maxRounds)) {
       this.fail(step.workflowId, `changes still requested after ${step.round} round(s)`);
       return;
     }

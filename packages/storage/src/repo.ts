@@ -177,6 +177,27 @@ export class Repo {
       .get();
   }
 
+  /** Round limit stored by `setWorkflowMaxRounds`; undefined = none stored (the engine default applies). */
+  getWorkflowMaxRounds(workflowId: string): number | undefined {
+    return (
+      this.db
+        .select({ m: workflows.maxRounds })
+        .from(workflows)
+        .where(eq(workflows.id, workflowId))
+        .get()?.m ?? undefined
+    );
+  }
+
+  setWorkflowMaxRounds(workflowId: string, maxRounds: number): void {
+    if (!Number.isInteger(maxRounds) || maxRounds < 1) throw new Error("maxRounds must be >= 1");
+    const res = this.db
+      .update(workflows)
+      .set({ maxRounds })
+      .where(eq(workflows.id, workflowId))
+      .run();
+    if (res.changes !== 1) throw new Error(`Unknown workflow: ${workflowId}`);
+  }
+
   getWorkflowState(workflowId: string): WorkflowState | undefined {
     return this.db
       .select({ s: workflows.state })

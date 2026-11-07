@@ -1,0 +1,1 @@
+ALTER TABLE `workflows` ADD `max_rounds` integer;

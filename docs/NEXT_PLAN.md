@@ -1,5 +1,62 @@
 # Kế hoạch tiếp theo
 
+## Chặng gần (soạn 2026-11-07, cập nhật theo trạng thái nhánh `worktree-p4-close-prep` @ `ad3de62`): đóng Phase 4, rồi 7C-2 và đóng Phase 7
+
+Căn cứ: `docs/ROADMAP.md` (mục Phase 4, "Còn thiếu để đóng"), `docs/PROGRESS.md` (mục 2026-11-06 và 2026-11-07), `docs/THREAT_MODEL.md`, ADR-005. Các mục "đã xong" dưới đây lấy từ các tài liệu đó và từ gate đã chạy thật trên nhánh `worktree-p4-close-prep` (lint, format, typecheck, 847 test, build, clippy, `cargo test --locked` đều exit 0). CI thật chưa chạy trên phần này. Nhánh đó chưa nằm trong nhánh chính `claude/loving-lovelace-32lh71`.
+
+### Giả định cần bạn xác nhận
+
+- "Chặng gần" = Phase 4 → 7C-2 → đóng Phase 7 (đúng thứ tự ADR-005). Phase 3 (Ollama, VRAM) và Phase 5+ để sau.
+- Không `git push`, không tạo PR cho tới khi bạn yêu cầu (CLAUDE.md). Bước C0 cần bạn đồng ý push.
+
+### Đã xong (không còn trong danh sách làm)
+
+- P4-1 c: cổng Codex `app-server` nối vào orchestrator, opt-in, TẮT mặc định; kiểm với server giả và Codex thật (ASSUMPTIONS d6).
+- P4-1 d: cổng Claude `--permission-prompt-tool` (kể cả `askEveryTool`, phủ Edit/Glob/Grep bằng stub), opt-in, TẮT mặc định; hướng (a) của Q1 đã chọn, giới hạn "cổng không thấy mọi lời gọi" đã ghi.
+- `agent-job-wrap` nối vào process-manager, BẬT mặc định khi tìm thấy binary; watchdog RAM cả cây; trần cứng `--job-mem-limit-mb` đã đo (R4); kiểm với claude/codex thật (d9): Ctrl+C, CTRL_BREAK, kill wrapper, mã thoát 32 bit.
+- P4-8 (b): engine resume Peer Review, có test cả khi reviewer bị ngắt.
+- Threat model: `docs/THREAT_MODEL.md`, người dùng đã duyệt 2026-11-06.
+- Tuổi gói transitive: npm 0 gói trẻ; Cargo 13 crate trẻ nằm trong allowlist có hạn (hết hạn thì CI đỏ lại).
+- Soak 100 workflow với agent giả và test bảo mật; soak CLI thật 5 workflow có số liệu từng workflow; sửa lỗ symlink của artifact.
+- T19: `git-worktrees` vô hiệu hoá hook/fsmonitor/diff driver của repo; R3: xác nhận 5 quyết định nhạy cảm bằng hộp thoại native.
+
+### Thứ tự và tiêu chí (việc còn lại)
+
+| #   | Việc                                                                                                | Tiêu chí xong (lệnh/test)                                                                                                           | Phụ thuộc / cần người dùng                                      |
+| --- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| C0  | Đưa nhánh `worktree-p4-close-prep` vào nhánh chính, push, đọc CI bằng GraphQL                       | CI 5/5 job xanh, Security xanh (kể cả bước kiểm tuổi gói); ghi PROGRESS với run id thật                                             | Bạn đồng ý ghép vào nhánh chính và push                         |
+| C1  | Quyết định bật mặc định hai cổng quyền; nối `askEveryTool` và `jobMemLimitMb` vào cấu hình mặc định | Quyết định ghi ADR; nếu bật: test mặc định mới, kiểm lại Edit/Glob/Grep với claude thật; `pnpm test` + gate đầy đủ                  | **Bạn quyết**; lượt chạy CLI thật cần bạn cho phép              |
+| C2  | Build installer thật có `agent-job-wrap` và kiểm kill app Tauri thật khi CLI thật chạy bên trong    | Installer build được; test thủ công ghi lệnh + kết quả; Ctrl+C qua sidecar Node thật                                                | Cài NSIS/WiX (hiện BLOCKED, tải về cần bạn cho phép)            |
+| C3  | Lưu `maxRounds` tuỳ chỉnh và test resume vòng ≥ 2                                                   | Test sidecar kill/restart với agent giả: tiếp tục đúng vòng; `maxRounds` được lưu                                                   | —                                                               |
+| C4  | Chốt 5 bước recovery                                                                                | Bạn duyệt văn bản 5 bước trong `SECURITY.md`/ASSUMPTIONS; sửa theo góp ý                                                            | **Q2: duyệt**                                                   |
+| C5  | Soak 100 workflow với CLI thật và vá phần symlink còn hở (TOCTOU, hard link, mount point)           | Kết quả ghi `PHASE4_REPORT.md`; test hồi quy cho từng lỗ đã vá                                                                      | Chi phí CLI thật; cần bạn cho phép                              |
+| C6  | Hộp thoại native (R3) kiểm trong app Tauri thật; Low IL (đăng nhập/gọi model) nếu khả thi           | Ghi kết quả vào ASSUMPTIONS; mục không kiểm được ghi là ngoại lệ                                                                    | Low IL cần bạn tự đăng nhập trong thư mục cấu hình gán nhãn low |
+| C7  | Sửa dòng P4-8 (b) còn ghi "chặn" ở bảng ROADMAP nếu còn; đối chiếu ROADMAP với báo cáo              | ROADMAP khớp trạng thái thật                                                                                                        | —                                                               |
+| C8  | Đóng Phase 4: `docs/PHASE4_REPORT.md`                                                               | Đủ acceptance trong ROADMAP, lệnh + kết quả thật; mục chưa đạt ghi là ngoại lệ                                                      | Bạn xác nhận đóng phase                                         |
+| C9  | 7C-2: cấp quyền thường trực, phạm vi hẹp (đường dẫn con trong worktree)                             | Nối `approvals.resolve` + `approval_grants` + UI (sửa IPC đủ 4 chỗ + `lib.rs` test); test hết hạn/thu hồi; xem trong app Tauri thật | Sau C1; phạm vi grant đã duyệt (2026-11-05)                     |
+| C10 | Ngưỡng tài nguyên/concurrency lưu trong settings (song song được với C9 nếu khác file)              | Method IPC mới đủ 4 chỗ; không vượt trần `concurrency`; test                                                                        | —                                                               |
+| C11 | Tailwind + shadcn (đã duyệt) — thêm dependency đúng quy trình                                       | Mỗi gói: license, `pnpm audit`, pin chính xác ≥ 2 tuần, ghi `REFERENCES.md`; build/test xanh; không đổi hành vi                     | Chọn phiên bản sau khi kiểm tuổi                                |
+| C12 | E2E "cài đặt → project → task thật" không đụng terminal (Playwright đã duyệt)                       | Kịch bản chạy được cục bộ; ghi lệnh + kết quả                                                                                       | Sau C11                                                         |
+| C13 | Đóng Phase 7: `docs/PHASE7_REPORT.md`                                                               | Đủ tiêu chí ROADMAP; Ctrl+Enter, preset, Auto/`agy` đã xem trong app thật                                                           | Bạn xác nhận đóng                                               |
+
+### Có thể chạy song song (khác file)
+
+- C2 (Rust, installer) song song C3 (orchestrator, engine) và C5 (tests/soak) → dùng `/subtask` riêng worktree, giao bằng brief có tiêu chí ở trên.
+- C9 và C10 chỉ song song nếu không cùng sửa bảng IPC; nếu cùng, làm tuần tự.
+
+### Câu hỏi còn mở cho bạn
+
+- **Q1 (C2 cũ): ĐÃ CHỌN (2026-11-07) hướng (a).** Allowlist công cụ là lớp chính; `--permission-prompt-tool` chỉ là lớp phụ và chấp nhận cổng không thấy mọi lời gọi; giới hạn đã ghi trong `docs/SECURITY.md` và `docs/ASSUMPTIONS.md`.
+- **Q2 (C4):** duyệt 5 bước recovery hiện tại.
+- **Q3 (C1):** bật mặc định hai cổng quyền hay giữ TẮT (hiện TẮT theo quyết định của bạn).
+- Lượt probe `agy` thứ 3 (P3-6) và ADR-006 (A1/A7/A8) không thuộc chặng này; hỏi lại khi tới Phase 3/sau Phase 4.
+
+### Ngoài chặng (không làm lúc này)
+
+Ollama + VRAM (chờ cài Ollama), Phase 5 (installer đầy đủ, `node-pty` chưa duyệt), Phase 6, 8, 9, 10, ADR-006 phần còn lại, `phase-2-kickoff-8a5732` (khuyến nghị không ghép).
+
+---
+
 Nội dung đã chuyển sang `docs/PHASE_PLANS.md` (kế hoạch theo phase, lane, wave và danh sách quyết định). File này chỉ giữ lại để các liên kết cũ không gãy.
 
 Tình trạng các bước của bản cũ (soạn 2026-11-05):

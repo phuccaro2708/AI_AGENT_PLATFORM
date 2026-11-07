@@ -15,11 +15,11 @@
 //! **This is NOT a security sandbox.** It manages lifetime and memory only; the CLI keeps all of
 //! the user's file, network and registry access (ADR-002).
 //!
-//! Exit codes: the CLI's own code; 124 on timeout (tree killed); 125 for a wrapper error
+//! Exit codes: the CLI's own code, unchanged (full 32 bits on Windows); 124 on timeout (tree killed); 125 for a wrapper error
 //! (bad arguments, job or spawn failure).
 
 use agent_studio_lib::job::JobObject;
-use std::process::{Command, ExitCode};
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 struct Opts {
@@ -69,7 +69,7 @@ fn parse(argv: &[String]) -> Result<Opts, String> {
     })
 }
 
-fn run(opts: Opts) -> Result<ExitCode, String> {
+fn run(opts: Opts) -> Result<i32, String> {
     let limit = opts.mem_limit_mb.map(|mb| mb.saturating_mul(1024 * 1024));
     let job_limit = opts
         .job_mem_limit_mb
@@ -84,28 +84,38 @@ fn run(opts: Opts) -> Result<ExitCode, String> {
     loop {
         if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
             // Normal end: dropping `job` below still reaps any stragglers the CLI left behind.
-            let code = status.code().unwrap_or(1);
-            return Ok(ExitCode::from(u8::try_from(code & 0xff).unwrap_or(1)));
+            // `ExitCode::from` only takes a u8 (256 would become 0 = success); `process::exit(i32)` hands
+            // Windows the full 32-bit code (e.g. 0xC0000005 for a crash).
+            return Ok(status.code().unwrap_or(1));
         }
         if opts.timeout.is_some_and(|t| started.elapsed() >= t) {
             eprintln!("agent-job-wrap: timeout, killing the process tree");
             drop(job); // closes the last handle: Windows kills the whole tree
             let _ = child.wait();
-            return Ok(ExitCode::from(124));
+            return Ok(124);
         }
         std::thread::sleep(Duration::from_millis(50));
     }
 }
 
-fn main() -> ExitCode {
+fn main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
-    match parse(&argv).and_then(run) {
+    // Everything with a destructor (the job handle) lives inside `run`, so it is already dropped
+    // when `exit` skips the rest of `main`'s cleanup.
+    let code = match parse(&argv).and_then(run) {
         Ok(code) => code,
         Err(e) => {
             eprintln!("agent-job-wrap: {e}");
-            ExitCode::from(125)
+            125
         }
-    }
+    };
+    #[cfg(not(windows))]
+    let code = if code & 0xff == 0 && code != 0 {
+        1
+    } else {
+        code
+    }; // the OS keeps 8 bits: never let a failure look like success
+    std::process::exit(code);
 }
 
 #[cfg(test)]

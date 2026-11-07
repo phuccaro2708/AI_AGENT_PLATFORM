@@ -126,6 +126,19 @@ fn exit_code_and_argv_pass_through_without_a_shell() {
     assert_eq!(String::from_utf8_lossy(&out.stdout), "a & b; c");
 }
 
+/// 256 would become 0 (success) if cut to 8 bits; 0xC0000005 (access violation) is a real
+/// 32-bit Windows exit code, seen by Rust as a negative i32.
+#[test]
+fn exit_codes_are_not_truncated_to_eight_bits() {
+    for (arg, want) in [("256", 256), ("3221225477", 0xC000_0005_u32 as i32)] {
+        let out = Command::new(WRAP)
+            .args(["--", "cmd.exe", "/C", "exit", arg])
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(want), "cmd exit {arg}");
+    }
+}
+
 #[test]
 fn a_missing_program_is_a_wrapper_error() {
     let out = Command::new(WRAP)

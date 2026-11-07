@@ -110,7 +110,11 @@ fn main() {
         }
     };
     #[cfg(not(windows))]
-    let code = if code & 0xff == 0 && code != 0 { 1 } else { code }; // the OS keeps 8 bits: never let a failure look like success
+    let code = if code & 0xff == 0 && code != 0 {
+        1
+    } else {
+        code
+    }; // the OS keeps 8 bits: never let a failure look like success
     std::process::exit(code);
 }
 

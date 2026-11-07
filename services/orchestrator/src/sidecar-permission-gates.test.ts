@@ -106,6 +106,7 @@ describe("Claude permission gate, default ON (Q3)", () => {
     expect(valueOf(args, "--setting-sources")).toBe("local");
     expect(JSON.parse(valueOf(args, "--settings")!)).toEqual({
       permissions: { ask: ["Write", "Edit", "Read", "Glob", "Grep", "Bash"] },
+      disableAllHooks: true,
     });
     expect(valueOf(args, "--tools")).toBe("Write,Edit,Read,Glob,Grep,Bash");
     expect(args).not.toContain("--safe-mode");
@@ -175,6 +176,15 @@ describe("claudeGateTaskArgs options added for the default (Q3)", () => {
       ),
     ).toBe("local");
     expect(claudeGateTaskArgs(withDir())(taskOf())).not.toContain("--setting-sources");
+  });
+
+  it("isolateSettings alone sends ONE --settings with disableAllHooks and no permissions; hooks stay enabled without it", () => {
+    const only = claudeGateTaskArgs({ ...withDir(), isolateSettings: true })(taskOf());
+    expect(only.filter((a) => a === "--settings")).toHaveLength(1);
+    expect(JSON.parse(valueOf(only, "--settings")!)).toEqual({ disableAllHooks: true });
+    expect(claudeGateTaskArgs(withDir())(taskOf())).not.toContain("--settings");
+    const ask = claudeGateTaskArgs({ ...withDir(), askEveryTool: true })(taskOf());
+    expect(JSON.parse(valueOf(ask, "--settings")!)).not.toHaveProperty("disableAllHooks");
   });
 
   it("requireLauncher throws for an empty, relative or missing launcher script", () => {

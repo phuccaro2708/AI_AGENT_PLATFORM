@@ -109,15 +109,23 @@ export function claudeGateTaskArgs(o: {
       "--strict-mcp-config",
       "--permission-prompt-tool",
       `mcp__${GATE_SERVER_NAME}__${GATE_TOOL_NAME}`,
-      ...(o.askEveryTool
+      // ONE `--settings` object (two flags were never measured): `ask` for askEveryTool, and `disableAllHooks` when
+      // the settings are isolated, because the 2026-11-07 probe showed a PreToolUse hook from the task folder's
+      // `.claude/settings.local.json` (still read under `--setting-sources local`) RUNS a command outside the gate.
+      ...(o.askEveryTool || o.isolateSettings
         ? [
             "--settings",
-            JSON.stringify({ permissions: { ask: [...ASK_EVERY_TOOL_RULES] } }),
-            // `ask` only covers what claude can use: with no `permissions` on the task the adapter adds no `--tools`
-            // (the measured d6 configuration did), so limit it here. When the task has `permissions`, the adapter
-            // already passed its own `--tools`; a second flag is never emitted (duplicate behaviour was not measured).
-            ...(task.permissions === undefined ? ["--tools", ASK_EVERY_TOOL_RULES.join(",")] : []),
+            JSON.stringify({
+              ...(o.askEveryTool ? { permissions: { ask: [...ASK_EVERY_TOOL_RULES] } } : {}),
+              ...(o.isolateSettings ? { disableAllHooks: true } : {}),
+            }),
           ]
+        : []),
+      // `ask` only covers what claude can use: with no `permissions` on the task the adapter adds no `--tools`
+      // (the measured d6 configuration did), so limit it here. When the task has `permissions`, the adapter
+      // already passed its own `--tools`; a second flag is never emitted (duplicate behaviour was not measured).
+      ...(o.askEveryTool && task.permissions === undefined
+        ? ["--tools", ASK_EVERY_TOOL_RULES.join(",")]
         : []),
       ...(o.isolateSettings ? ["--setting-sources", "local"] : []),
     ];

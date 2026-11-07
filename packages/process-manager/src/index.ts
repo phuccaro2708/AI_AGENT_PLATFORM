@@ -22,7 +22,7 @@ export {
   filterEnv,
 } from "./manifest.js";
 export type { SpawnManifest } from "./manifest.js";
-export { killTree } from "./kill-tree.js";
+export { killTree, type KillResult, type KillTreeOptions } from "./kill-tree.js";
 export { parseProcessRows, sampleTreeBytes, treeBytes } from "./tree-memory.js";
 export type { ProcessRow, TreeMemorySampler } from "./tree-memory.js";
 export { createLineSplitter } from "./lines.js";

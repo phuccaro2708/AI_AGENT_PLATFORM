@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { StringDecoder } from "node:string_decoder";
-import { killTree } from "./kill-tree.js";
+import { killTree, type KillResult } from "./kill-tree.js";
 import { assertExecutableAllowed, filterEnv, type SpawnManifest } from "./manifest.js";
 import { sampleTreeBytes, type TreeMemorySampler } from "./tree-memory.js";
 import { UnsupportedShimError, resolveExecutable, unwrapNpmShim } from "./resolve.js";
@@ -58,6 +58,8 @@ export interface RunOptions {
   maxCapture?: number;
   /** After the process exits, how long to wait for stdio to close before destroying streams. Default 1000. */
   stdioCloseGraceMs?: number;
+  /** Test seam: replaces `killTree` (e.g. to simulate a refused kill). */
+  killImpl?: (pid: number) => Promise<KillResult>;
 }
 
 export type RunOutcome = "exited" | "timeout" | "cancelled" | "spawn_error" | "memory_limit";
@@ -74,6 +76,8 @@ export interface RunResult {
   error?: string;
   /** Why the run was ended by the host (`memory_limit`: measured size and limit). */
   detail?: string;
+  /** Set when the host tried to end the process (timeout, cancel, memory limit) and `killTree` reported `failed`: the process may still be running. */
+  killError?: string;
 }
 
 export interface RunningProcess {
@@ -207,10 +211,16 @@ export function startProcess(opts: RunOptions): RunningProcess {
 
   let outcome: RunOutcome = "exited";
   let killing: Promise<void> | undefined;
+  let killError: string | undefined;
   const terminate = (why: RunOutcome): Promise<void> => {
     if (killing) return killing;
     outcome = why;
-    killing = child.pid === undefined ? Promise.resolve() : killTree(child.pid);
+    killing =
+      child.pid === undefined
+        ? Promise.resolve()
+        : (opts.killImpl ?? killTree)(child.pid).then((r) => {
+            if (r.status === "failed") killError = r.detail ?? "the process could not be killed";
+          });
     return killing;
   };
 
@@ -278,6 +288,7 @@ export function startProcess(opts: RunOptions): RunningProcess {
         stderrTruncated: errTrunc,
         ...(error === undefined ? {} : { error }),
         ...(detail === undefined ? {} : { detail }),
+        ...(killError === undefined ? {} : { killError }),
       });
     };
     child.on("error", (e) => finish(null, null, e.message));

@@ -550,3 +550,9 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - (5) `AGENT_STUDIO_CLI_TREE_MEM_MB`: số nguyên an toàn ≤ 16777216, ngược lại RAM watchdog TẮT và cảnh báo (309 chữ số, `1e21`, `9007199254740993`, thập phân, vượt trần đều có test).
 - Gate (kết quả thật): `pnpm lint` 0; `pnpm format` 0 (sau khi chạy Prettier lên 2 JSON drizzle sinh ra); `pnpm typecheck` 0; `pnpm build` 0; `pnpm test` 0 (94 file qua + 2 bỏ qua, 891 test qua, 6 expected fail, 31 bỏ qua). Không đụng `src-tauri` nên không chạy cargo. `scripts/secret-scan.py`: đúng 2 phát hiện đường dẫn Windows đã biết.
 - Chưa push, chưa tạo PR, chưa tuyên bố đóng Phase 4.
+
+## 2026-11-07: đối chiếu tài liệu với mã (resume, soak) và test resume vòng ≥ 2
+
+- Resume Peer Review có mã (`resume`/`resumeAll`, gọi lúc khởi động và sau reconciliation); các dòng "chưa làm" ở TODO/HANDOFF đã sửa. Soak 100 workflow dùng sidecar, SQLite, worktree thật nhưng adapter giả; tài liệu nay ghi rõ nó không chứng minh hành vi CLI thật (CLI thật: 5 workflow, ASSUMPTIONS d8).
+- Test mới (agent giả, `sidecar-resume.test.ts`, 4 ca): round-2 implementer bị ngắt chờ người; `requeue` tiếp tục đúng vòng 2; `maxRounds` = 3 lưu qua restart (6 task); không lưu thì mặc định 2 kết thúc ở vòng 2 (workflow `failed`, 4 task). 12/12 qua trong file.
+- NOT_RUN: resume vòng ≥ 2 với CLI thật. Resume vẫn chưa nên coi là nghiệm thu đầy đủ cho tới khi có lượt đó.

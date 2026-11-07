@@ -31,7 +31,7 @@
 ### Việc làm ngoài ROADMAP (theo yêu cầu người dùng)
 
 - Làm lại UI: theme sáng/tối, sidebar kiểu Claude Code (Projects, Search, tab Agent/Multi-agent, "…" ẩn session), trang Settings + biệt danh hiển thị (mặc định "Admin", không có quyền hạn), bố cục 3 cột, Inspector thu gọn (Context/Activity/Tools/Logs), composer "task trước", trạng thái rỗng 3 bước, thẻ lỗi có hành động. Phần lấn sang Phase 5/7 về hình thức; chỉ là giao diện trên backend sẵn có.
-- Mode thứ hai của UI nay là Peer Review thật (Phase 2). Supervisor / Parallel Workers: Phase 9. Nợ Phase 2: engine resume sau restart, UI giải quyết reconciliation, chạy qua app Tauri thật.
+- Mode thứ hai của UI nay là Peer Review thật (Phase 2). Supervisor / Parallel Workers: Phase 9. Nợ Phase 2: chạy qua app Tauri thật. (Engine resume sau restart và UI giải quyết reconciliation đã có từ 7A.)
 - [ ] ADR-006 (Đề xuất, chờ duyệt, ngoài thứ tự phase ADR-005): một sidecar duy nhất sở hữu DB + cầu nối MCP cho DeepSeek Harness chỉ dùng allowlist. Xem `docs/DECISIONS.md#adr-006`. Đã duyệt (2026-11-06) chỉ khoá single-instance (mục 2d) làm trước; **2d đã triển khai** (`sidecar-lock.ts`, xem `PROGRESS.md`), chờ CI ubuntu xác nhận socket trừu tượng; phần kênh/vai/cầu nối chờ sau Phase 4.
 - Cố ý không giả lập vì backend chưa có: danh sách file thay đổi, tab Plan/Files, nhánh git, "Diagnose", sửa đường dẫn project, command palette, remote agent, terminal thật (`node-pty` chưa spike, Phase 5). Ô Logs chỉ là khung xem tool_call/tool_result chỉ đọc.
 
@@ -125,7 +125,7 @@
 - [x] Task DAG: cycle detection, ready-set, priority, lease/heartbeat (chưa có IPC `createDag`)
 - [~] Scheduler giới hạn concurrency (mặc định 2; chưa đọc từ settings)
 - [x] `git-worktrees`: create/remove/list, branch naming, dirty check, conflict detect, cleanup khi hủy (S4 hủy khi đang ghi với CLI thật: chưa)
-- [~] Workflow engine: Peer Review xong; **Supervisor, Parallel Workers chưa làm (Phase 9)**; engine chưa resume sau restart
+- [~] Workflow engine: Peer Review xong; **Supervisor, Parallel Workers chưa làm (Phase 9)**; engine resume sau restart đã có (`resumeAll`/`resume`, từ 7A)
 - [~] Message types: `task.*`, `review.*`, `approval.request` xong; `agent.message` chưa dùng
 - [x] Vai (role) trong workflow: hướng dẫn, quyền, agent cho phép; gán agent vào vai theo cấu hình lượt chạy (chưa có IPC `roles.upsert`)
 - [x] Bảng ngữ cảnh chung tối thiểu: lọc theo vai, có test
@@ -136,7 +136,7 @@
 - [x] Tests: kill giữa chừng (thật), duplicate delivery (fake), 2 agent song song (thật)
 - [x] PHASE2_REPORT.md → tag `mvp-phase2`
 
-Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết reconciliation (Phase 7); Supervisor/Parallel Workers (Phase 9); đường tạo approval từ CLI thật (Phase 4); perf-baseline sau bước 3 (R11).
+Nợ chuyển tiếp từ Phase 2: (engine resume + UI giải quyết reconciliation đã xong ở 7A); Supervisor/Parallel Workers (Phase 9); đường tạo approval từ CLI thật (Phase 4); perf-baseline sau bước 3 (R11).
 
 ## Phase 3 — Quét CLI & Local AI
 
@@ -160,7 +160,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [x] Spike AppContainer / Windows Sandbox — chỉ tài liệu hoá vào `docs/SECURITY.md` (2026-11-05), ghi phần chưa đạt; không có prototype
 - [~] Credential Manager cho secrets (7B); redaction test: DB + log + IPC + sự kiện đã có test với agent giả (`sidecar-redaction.test.ts`, che theo giá trị chính xác ≥ 6 ký tự); diagnostics export đã có test rò secret (nối IPC 2026-11-05) và còn giới hạn đã ghi ở SECURITY.md
 - [x] Siết Tauri capabilities — `default` chỉ còn event listen/unlisten (2026-11-05, kiểm bằng WebView2 CDP); không có WS. Từ chối `emit`/`window|close`/`fs` và method ngoài danh sách đã kiểm lại trong app Tauri thật 2026-11-05 (CDP)
-- [~] Recovery 5 bước + UI resume/retry/abandon — 5 bước + UI xong, test sidecar kill/restart với agent giả (2026-11-05); 5 bước là giả định của lane IPC chờ người dùng duyệt; đã kiểm trong app Tauri thật 2026-11-05 (inspect/abandon/từ chối retry không xác nhận, khởi động lại, RecoveryPanel; chưa bấm resume/retry vì sẽ chạy CLI thật); engine resume Peer Review (P4-8 b) đã có từ 7A, test thêm cho reviewer bị ngắt (2026-11-06); còn hở: lưu `maxRounds` tuỳ chỉnh, test vòng ≥ 2
+- [~] Recovery 5 bước + UI resume/retry/abandon — 5 bước + UI xong, test sidecar kill/restart với agent giả (2026-11-05); 5 bước là giả định của lane IPC chờ người dùng duyệt; đã kiểm trong app Tauri thật 2026-11-05 (inspect/abandon/từ chối retry không xác nhận, khởi động lại, RecoveryPanel; chưa bấm resume/retry vì sẽ chạy CLI thật); engine resume Peer Review (P4-8 b) đã có từ 7A, test thêm cho reviewer bị ngắt (2026-11-06); `maxRounds` tuỳ chỉnh nay được lưu trong DB (2026-11-07) và có test resume vòng ≥ 2 với agent giả; chưa có lượt CLI thật ở vòng ≥ 2
 - [~] Log rotation, retention, diagnostics export (redacted) — gói `diagnostics` + logger xoay vòng có test đã ghép (`98539d3`); đã nối method IPC `diagnostics.export` + nút Settings (2026-11-05); đã kiểm trong app Tauri thật 2026-11-05 (nút + bundle verified, không rò đường dẫn); redaction secret thật trong bundle mới có test đơn vị
 - [~] Security tests: prompt injection, output độc hại, path escape — xong với agent giả đã ghép (`98539d3`); nghi vấn symlink của artifact là THẬT và đã sửa (fail-closed, `worktree-hash.ts`, ASSUMPTIONS d8); còn hở: TOCTOU, hard link, mount point
 - [~] Soak test 100 workflow — xong với agent giả (`tests/soak`); với CLI thật mới chạy 5 workflow (ASSUMPTIONS d8, xanh, bất biến an toàn giữ nguyên) và đã chạy lại có số liệu từng workflow (trạng thái, ms, task, 0 CLI mồ côi thấy được; 1 lần chạy); 100 workflow thật cố ý chưa chạy (tốn chi phí)
@@ -193,7 +193,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 
 - [x] `tasks.history` + `logs.search` (lọc project/agent/state, phân trang; tìm log bằng LIKE trên `payload_json`, chưa có index, chưa benchmark) — tab History trong UI
 - [x] `tasks.resolveReconciliation` (quyết định tường minh + ghi chú bắt buộc; `requeue` mới tăng `attempt`)
-- [x] Peer Review engine resume sau restart và sau quyết định reconciliation (`resumeAll`/`resume`); giới hạn: `maxRounds` tùy chỉnh không được lưu qua restart
+- [x] Peer Review engine resume sau restart và sau quyết định reconciliation (`resumeAll`/`resume`); `maxRounds` tùy chỉnh được lưu trong DB từ 2026-11-07 (migration 0007); test resume vòng ≥ 2 với agent giả; CLI thật mới kiểm vòng 1
 - [x] UI: thẻ "Needs your decision" (diff trước, không quyết định mặc định, requeue cần xác nhận)
 - [x] Kiểm với CLI thật (2026-11-04: claude→codex và codex→claude đều: kill → needs_reconciliation → requeue → workflow completed, exit 0): `node scripts/e2e-peer-review.mjs resume <impl> <rev>` (script đã viết, đã chạy 2026-11-03 với claude→codex: kill → needs_reconciliation → requeue → workflow completed; một lần thoát mã 1 chỉ do dọn thư mục tạm bị EPERM, đã sửa)
 - [x] Chạy UI 7A trong app Tauri thật (2026-11-03, bản debug build từ `1009755`, WebView2 + CDP cổng 9334, DB tạm, PATH chỉ có System32 nên không CLI thật nào chạy; không dùng chuột/bàn phím người dùng). Đạt: (a) History liệt kê 9 task, lọc project/agent/state và tổ hợp đều đúng, "No tasks match." khi rỗng; (b) tìm log không phân biệt hoa/thường, `%` `_` khớp nghĩa đen, không khớp → "No log line contains that text."; (c) task `running` có lease hết hạn → sau khi mở lại app thành `needs_reconciliation`, thẻ "Needs your decision" hiện; nút Confirm bị khoá tới khi chọn + có ghi chú; cả 4 quyết định completed/failed/cancelled/requeue ghi `events` với `reason = "reconciled by user: <note>"`; requeue cần tick xác nhận, tăng `attempt` 0→1; (d) tắt/mở lại app: 9 task, 4 message, 10 event giữ nguyên, danh sách run Peer Review giữ nguyên. Giới hạn: workflow seed không có `workflow_roles` nên sau `completed` workflow chuyển `failed` (không kiểm hand-over sang reviewer ở UI); task requeue chạy xong `failed` ("task has no task.request message") vì dữ liệu seed; "kill app giữa lúc task chạy" được mô phỏng bằng seed `running` + khởi động lại, không kill tiến trình thật; ô Search im lặng với truy vấn 1 ký tự (đúng thiết kế 2+ ký tự); chưa kiểm Open log và Newer/Older ở bộ dữ liệu >1 trang

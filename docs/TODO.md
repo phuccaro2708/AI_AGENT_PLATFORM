@@ -164,7 +164,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 - [~] Log rotation, retention, diagnostics export (redacted) — gói `diagnostics` + logger xoay vòng có test đã ghép (`98539d3`); đã nối method IPC `diagnostics.export` + nút Settings (2026-11-05); đã kiểm trong app Tauri thật 2026-11-05 (nút + bundle verified, không rò đường dẫn); redaction secret thật trong bundle mới có test đơn vị
 - [~] Security tests: prompt injection, output độc hại, path escape — xong với agent giả đã ghép (`98539d3`); chưa chạy CLI thật
 - [~] Soak test 100 workflow — xong với agent giả (`tests/soak`) đã ghép (`98539d3`); chưa chạy CLI thật
-- [~] `pnpm audit` + rà dependency; SECURITY.md cập nhật — audit + ghim Actions theo SHA + `docs/DEPS_AUDIT.md` + `docs/SECURITY.md` xong (2026-11-05), 4 cảnh báo ghi chấp nhận; còn: threat model đầy đủ, tuổi gói transitive
+- [~] `pnpm audit` + rà dependency; SECURITY.md cập nhật — audit + ghim Actions theo SHA + `docs/DEPS_AUDIT.md` + `docs/SECURITY.md` xong (2026-11-05), 4 cảnh báo ghi chấp nhận; threat model xong và đã được người dùng duyệt (2026-11-06); tuổi gói transitive: npm sạch, 13 crate Cargo trẻ trong allowlist có hạn (CI thật NOT_RUN)
 - [ ] PHASE4_REPORT.md
 
 ## Phase 5 — Desktop Beta

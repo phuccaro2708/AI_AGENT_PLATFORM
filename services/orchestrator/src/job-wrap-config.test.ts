@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_JOB_MEM_LIMIT_MB,
+  MAX_JOB_MEM_LIMIT_MB,
   resolveJobWrap,
   resolveTreeMemoryLimitMb,
 } from "./job-wrap-config.js";
@@ -97,6 +98,35 @@ describe("resolveTreeMemoryLimitMb", () => {
     expect(resolveTreeMemoryLimitMb({ AGENT_STUDIO_CLI_TREE_MEM_MB: "2048" })).toBe(2048);
     for (const v of ["0", "off", "-5", "abc", ""]) {
       expect(resolveTreeMemoryLimitMb({ AGENT_STUDIO_CLI_TREE_MEM_MB: v })).toBeUndefined();
+    }
+  });
+  it("out-of-range values stay off and warn (no Infinity, no unsafe integer)", () => {
+    const max = String(MAX_JOB_MEM_LIMIT_MB);
+    expect(resolveTreeMemoryLimitMb({ AGENT_STUDIO_CLI_TREE_MEM_MB: max })).toBe(
+      MAX_JOB_MEM_LIMIT_MB,
+    );
+    const bad = [
+      "9".repeat(309),
+      "1000000000000000000000",
+      "9007199254740993",
+      String(MAX_JOB_MEM_LIMIT_MB + 1),
+      "1.5",
+      "1e3",
+    ];
+    for (const v of bad) {
+      const w = warnings();
+      expect(
+        resolveTreeMemoryLimitMb({ AGENT_STUDIO_CLI_TREE_MEM_MB: v }, w.log),
+        v,
+      ).toBeUndefined();
+      expect(w.seen, v).toHaveLength(1);
+    }
+  });
+  it("off/unset/empty values stay off without a warning", () => {
+    for (const v of [undefined, "", "0", "off", "false"]) {
+      const w = warnings();
+      expect(resolveTreeMemoryLimitMb({ AGENT_STUDIO_CLI_TREE_MEM_MB: v }, w.log)).toBeUndefined();
+      expect(w.seen).toHaveLength(0);
     }
   });
 });

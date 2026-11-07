@@ -64,7 +64,7 @@ try {
 }
 // P4-4 (b): wrapper ON by default when the installed binary is found, else a warning and no wrap. RAM watchdog stays OFF unless opted in.
 const jobWrap = resolveJobWrap(arg("job-wrap"), process.env, log);
-const cliTreeMemoryLimitMb = resolveTreeMemoryLimitMb(process.env);
+const cliTreeMemoryLimitMb = resolveTreeMemoryLimitMb(process.env, log);
 const service = new SidecarService(
   {
     dbPath,

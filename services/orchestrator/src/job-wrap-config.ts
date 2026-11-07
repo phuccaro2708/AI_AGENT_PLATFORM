@@ -69,10 +69,19 @@ function resolveJobMemLimitMb(env: NodeJS.ProcessEnv, log: Warn): number | undef
 
 /**
  * Whole-tree memory watchdog limit in MB. OFF by default (`undefined`): it only polls resident memory, so a fast
- * allocator can overshoot before it is killed; it is not a hard cap. A positive integer in
- * `AGENT_STUDIO_CLI_TREE_MEM_MB` opts in; `0`, `off` or anything else leaves it off.
+ * allocator can overshoot before it is killed; it is not a hard cap. A positive safe integer up to
+ * `MAX_JOB_MEM_LIMIT_MB` in `AGENT_STUDIO_CLI_TREE_MEM_MB` opts in. `0`/`off`/`false`/unset/empty leave it off; any
+ * other value (decimal, negative, text, out of range such as a 309-digit number that becomes `Infinity`) also
+ * leaves it off and, when a logger is given, logs a warning.
  */
-export function resolveTreeMemoryLimitMb(env: NodeJS.ProcessEnv): number | undefined {
+export function resolveTreeMemoryLimitMb(env: NodeJS.ProcessEnv, log?: Warn): number | undefined {
   const raw = env[TREE_MEM_ENV]?.trim();
-  return raw !== undefined && /^[1-9]\d*$/.test(raw) ? Number(raw) : undefined;
+  if (raw === undefined || raw === "" || isOff(raw)) return undefined;
+  const n = /^[1-9]\d*$/.test(raw) ? Number(raw) : NaN;
+  if (Number.isSafeInteger(n) && n <= MAX_JOB_MEM_LIMIT_MB) return n;
+  log?.warn(
+    { value: raw.length > 40 ? `${raw.slice(0, 40)}…` : raw },
+    `${TREE_MEM_ENV} is not a positive integer up to ${MAX_JOB_MEM_LIMIT_MB}: the RAM watchdog stays off`,
+  );
+  return undefined;
 }

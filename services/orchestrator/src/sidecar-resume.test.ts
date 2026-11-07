@@ -41,6 +41,47 @@ class Fake implements AgentAdapter {
   }
 }
 
+/**
+ * Role-aware script for multi-round runs. Implementer runs listed in `hangImpl` (1-based, per adapter instance) never
+ * settle; reviewer run k answers `verdicts[k-1]` (the last one repeats).
+ */
+class Scripted implements AgentAdapter {
+  implRuns = 0;
+  revRuns = 0;
+  constructor(
+    readonly id: string,
+    private readonly hangImpl: readonly number[] = [],
+    private readonly verdicts: readonly ("approve" | "request_changes")[] = ["approve"],
+  ) {}
+  async detect() {
+    return true;
+  }
+  async capabilities() {
+    return [];
+  }
+  async cancel() {}
+  async *execute(task: AgentTask): AsyncIterable<AgentEvent> {
+    if (task.permissions === "workspace-write") {
+      this.implRuns++;
+      writeFileSync(
+        join(task.cwd, "feature.txt"),
+        `run ${this.implRuns}
+`,
+      );
+      yield { type: "text", content: "wrote feature.txt" };
+      if (this.hangImpl.includes(this.implRuns)) await new Promise<void>(() => undefined);
+    } else {
+      this.revRuns++;
+      const v = this.verdicts[Math.min(this.revRuns, this.verdicts.length) - 1]!;
+      yield {
+        type: "text",
+        content: JSON.stringify({ verdict: v, comments: v === "approve" ? [] : ["please change"] }),
+      };
+    }
+    yield { type: "completed" };
+  }
+}
+
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
@@ -52,7 +93,7 @@ let rev: Fake;
 let n = 0;
 const sink = () => new Writable({ write: (_c, _e, cb) => cb() });
 
-const open = (adapters: Fake[]) =>
+const open = (adapters: AgentAdapter[]) =>
   new SidecarService(
     {
       dbPath: join(dir, "s.db"),
@@ -229,5 +270,98 @@ describe("Peer Review after a restart", () => {
       const l = await until(workflowId, (x) => x.workflowState === "failed");
       expect(l.tasks).toHaveLength(2);
     });
+  });
+});
+
+describe("Peer Review restarted in round 2 or later", () => {
+  /** Round 1 ends with `request_changes`; the implementer of round 2 "dies"; the sidecar restarts on the same database. */
+  async function crashedInRound2(maxRounds?: number) {
+    const first = new Scripted("impl", [2]);
+    svc = open([first, new Scripted("rev", [], ["request_changes"])]);
+    const { projectId } = await call<{ projectId: string }>("projects.create", {
+      name: "p",
+      rootPath: projectRoot,
+    });
+    const { workflowId } = await call<{ workflowId: string }>("workflows.create", { projectId });
+    await call("workflows.startPeerReview", {
+      workflowId,
+      implementerAgent: "impl",
+      reviewerAgent: "rev",
+      goal: "add feature.txt",
+      ...(maxRounds === undefined ? {} : { maxRounds }),
+    });
+    while (first.implRuns < 2) await new Promise((r) => setTimeout(r, 10));
+    const running = await list(workflowId);
+    svc.close();
+    return { workflowId, roundTwoTask: running.tasks.at(-1)!.id };
+  }
+  const restart = (verdicts: ("approve" | "request_changes")[]) => {
+    const impl2 = new Scripted("impl");
+    const rev2 = new Scripted("rev", [], verdicts);
+    svc = open([impl2, rev2]);
+    return { impl2, rev2 };
+  };
+
+  it("an interrupted round-2 implementer waits for a person; earlier rounds stay as they were", async () => {
+    const { workflowId } = await crashedInRound2();
+    const { impl2, rev2 } = restart(["approve"]);
+    const l = await until(workflowId, (x) =>
+      x.tasks.some((t) => t.state === "needs_reconciliation"),
+    );
+    await new Promise((r) => setTimeout(r, 100));
+    expect((await list(workflowId)).tasks.map((t) => t.state)).toEqual([
+      "completed",
+      "completed",
+      "needs_reconciliation",
+    ]);
+    expect(l.workflowState).toBe("running");
+    expect(impl2.implRuns + rev2.revRuns).toBe(0);
+  });
+
+  it("`requeue` continues as round 2 (not round 1) and the workflow completes", async () => {
+    const { workflowId, roundTwoTask } = await crashedInRound2();
+    const { impl2, rev2 } = restart(["approve"]);
+    await call("tasks.resolveReconciliation", {
+      taskId: roundTwoTask,
+      decision: "requeue",
+      note: "safe to run again",
+    });
+    const l = await until(workflowId, (x) => x.workflowState === "completed");
+    expect(l.tasks.map((t) => t.state)).toEqual([
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+    ]);
+    expect(impl2.implRuns).toBe(1);
+    expect(rev2.revRuns).toBe(1);
+  });
+
+  it("a stored maxRounds of 3 survives the restart: a second request_changes in round 2 starts round 3", async () => {
+    const { workflowId, roundTwoTask } = await crashedInRound2(3);
+    const { impl2, rev2 } = restart(["request_changes", "approve"]);
+    await call("tasks.resolveReconciliation", {
+      taskId: roundTwoTask,
+      decision: "requeue",
+      note: "safe to run again",
+    });
+    const l = await until(workflowId, (x) => x.workflowState !== "running");
+    expect(l.workflowState).toBe("completed");
+    expect(l.tasks).toHaveLength(6); // 3 rounds x (implementer + reviewer)
+    expect(impl2.implRuns).toBe(2);
+    expect(rev2.revRuns).toBe(2);
+  });
+
+  it("without a stored maxRounds the default of 2 ends the workflow after round 2", async () => {
+    const { workflowId, roundTwoTask } = await crashedInRound2();
+    restart(["request_changes"]);
+    await call("tasks.resolveReconciliation", {
+      taskId: roundTwoTask,
+      decision: "requeue",
+      note: "safe to run again",
+    });
+    const l = await until(workflowId, (x) => x.workflowState !== "running");
+    expect(l.workflowState).toBe("failed");
+    expect(l.tasks).toHaveLength(4);
   });
 });

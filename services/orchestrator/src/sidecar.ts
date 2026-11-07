@@ -103,9 +103,10 @@ export interface SidecarOptions {
   /** How often a gate waiting for an approval looks at the task. Default 200 ms. */
   policyPollMs?: number;
   /**
-   * Also register the `codex-app-server` agent (P4-1 c), whose approval requests go through the Policy Engine.
-   * ON by default (Q3, 2026-11-07); `false` switches it off (real process: `AGENT_STUDIO_CODEX_GATE=0`). It is an
-   * ADDITIONAL agent: `codex` (exec) is not rerouted through it. The fields are launch overrides for the embedding
+   * Codex permission gate (P4-1 c): approval requests go through the Policy Engine. ON by default (Q3, 2026-11-07);
+   * `false` switches it off (real process: `AGENT_STUDIO_CODEX_GATE=0`). While ON, the `codex` agent itself runs the
+   * app-server adapter (ADR-008; stored `codex exec` args are not used) and `codex-app-server` stays registered too;
+   * `false` restores `codex exec` and drops `codex-app-server`. The fields are launch overrides for the embedding
    * code (tests point them at a fake server); when `command` is set the program itself is not re-checked, as for
    * `extraAdapters`. Without `command` the `codex` program is checked by the policy gate; if it is missing the
    * task is refused.
@@ -235,6 +236,12 @@ export class SidecarService {
     provider: "claude" | "codex",
     s?: { command: string; args: string[]; env: Record<string, string> },
   ): AgentAdapter {
+    // Q3 follow-up (2026-11-07, user decision): while the Codex gate is ON, the `codex` agent IS the app-server
+    // adapter, so every command/file request goes through the Policy Engine. The stored `args` (`codex exec`
+    // arguments) are not used. Switch back to `codex exec` with `codexAppServer:false` / AGENT_STUDIO_CODEX_GATE=0.
+    if (provider === "codex" && this.opts.codexAppServer !== false) {
+      return this.buildAppServerAdapter(s, "codex");
+    }
     const secret = this.secrets[provider];
     // Variables the user (stored settings) or the native side (secrets) named on purpose may reach the child;
     // the rest of this process's environment is cut down by the adapter's own manifest (P4-3).
@@ -358,11 +365,10 @@ export class SidecarService {
    * proxy variable or Credential Manager key reaches it too); explicit `SidecarOptions.codexAppServer` fields win.
    * The stored `args` are NOT passed: they are `codex exec` arguments and were never probed for `app-server`.
    */
-  private buildAppServerAdapter(s?: {
-    command: string;
-    args: string[];
-    env: Record<string, string>;
-  }): AgentAdapter {
+  private buildAppServerAdapter(
+    s?: { command: string; args: string[]; env: Record<string, string> },
+    id: "codex" | "codex-app-server" = "codex-app-server",
+  ): AgentAdapter {
     const explicit = this.opts.codexAppServer || {};
     const secret = this.secrets.codex;
     const fromSettings =
@@ -378,8 +384,11 @@ export class SidecarService {
     return this.gate.wrap(
       new CodexAppServerAdapter({
         ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
+        ...(this.opts.cliTreeMemoryLimitMb === undefined
+          ? {}
+          : { treeMemoryLimitMb: this.opts.cliTreeMemoryLimitMb }),
         ...appServer,
-        id: "codex-app-server",
+        id,
         evaluate: async (request, ctx) =>
           run(appServerPolicy(ctx), request, { taskId: ctx.taskId }),
       }),

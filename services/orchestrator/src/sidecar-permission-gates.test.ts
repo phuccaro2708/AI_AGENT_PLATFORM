@@ -200,10 +200,22 @@ describe("claudeGateTaskArgs options added for the default (Q3)", () => {
 });
 
 describe("codex-app-server agent, default ON (Q3)", () => {
-  it("is registered by default and `codex` is not rerouted", async () => {
+  it("is registered by default (and `codex` itself is the gated app-server adapter, see below)", async () => {
     open();
     const { adapters } = await call<{ adapters: { id: string }[] }>("agents.list");
     expect(adapters.map((a) => a.id)).toEqual(["claude", "codex", "agy", "codex-app-server"]);
+  });
+
+  it("the `codex` agent is the gated app-server adapter by default (declares approval) and codex exec when the gate is off", async () => {
+    const caps = async () => {
+      const registry = (svc as unknown as { registry: AdapterRegistry }).registry;
+      return registry.get("codex")!.capabilities();
+    };
+    open();
+    expect(await caps()).toContain("approval");
+    svc?.close();
+    open({ codexAppServer: false });
+    expect(await caps()).not.toContain("approval");
   });
 
   it("codexAppServer:false switches it off", async () => {

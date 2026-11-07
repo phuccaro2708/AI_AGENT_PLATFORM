@@ -12,8 +12,10 @@ import {
   killTree,
   resolveExecutable,
   unwrapNpmShim,
+  sampleTreeBytes,
   type JobWrapOptions,
   type SpawnManifest,
+  type TreeMemorySampler,
 } from "@agent-studio/process-manager";
 import { CODEX_MANIFEST, codexSandboxFor, type CodexSandbox } from "./adapter.js";
 
@@ -65,6 +67,15 @@ export interface CodexAppServerOptions {
    * closed (`could not start codex`). Not a sandbox.
    */
   jobWrap?: JobWrapOptions;
+  /**
+   * Whole-tree RAM watchdog in MB (opt-in, same semantics as `startProcess`): it polls the resident memory of the
+   * server's process tree and kills the tree when it passes the limit; the task then ends with an error that needs
+   * reconciliation if the turn had started. A watchdog, not a hard cap. Positive integer.
+   */
+  treeMemoryLimitMb?: number;
+  memoryPollMs?: number;
+  /** Tests only. */
+  memorySampler?: TreeMemorySampler;
 }
 
 type Json = Record<string, unknown>;
@@ -254,6 +265,42 @@ export class CodexAppServerAdapter implements AgentAdapter {
       if (child.pid !== undefined && !closed) await killTree(child.pid);
     };
     this.running.set(task.id, kill);
+    let memoryDetail: string | undefined;
+    let stopWatch: (() => void) | undefined;
+    const memMb = this.opts.treeMemoryLimitMb;
+    if (memMb !== undefined && child.pid !== undefined) {
+      if (!Number.isInteger(memMb) || memMb <= 0) {
+        memoryDetail = "treeMemoryLimitMb must be a positive integer";
+        void kill();
+      } else {
+        const rootPid = child.pid;
+        const sample = this.opts.memorySampler ?? sampleTreeBytes;
+        let busy = false;
+        let failures = 0;
+        const tick = async (): Promise<void> => {
+          if (busy || closed || memoryDetail !== undefined) return;
+          busy = true;
+          try {
+            const bytes = await sample(rootPid);
+            failures = 0;
+            if (bytes > memMb * 1024 * 1024) {
+              memoryDetail = `process tree uses ${Math.round(bytes / 1048576)} MB, limit ${memMb} MB`;
+              await kill();
+            }
+          } catch {
+            if (++failures >= 5) {
+              memoryDetail = "cannot measure the memory of the process tree";
+              await kill(); // fail closed, like startProcess
+            }
+          } finally {
+            busy = false;
+          }
+        };
+        const interval = setInterval(() => void tick(), this.opts.memoryPollMs ?? 1000);
+        interval.unref();
+        stopWatch = () => clearInterval(interval);
+      }
+    }
     const onAbort = () => void kill();
     task.signal.addEventListener("abort", onAbort, { once: true });
 
@@ -522,7 +569,13 @@ export class CodexAppServerAdapter implements AgentAdapter {
       }
       while (queue.length) yield queue.shift() as AgentEvent; // events that arrived with the terminal line
 
-      if (final) {
+      if (memoryDetail !== undefined) {
+        yield {
+          type: "error",
+          message: `codex stopped: ${memoryDetail}${turnSent ? "; side effects unverified" : ""}`,
+          ...(turnSent ? { needsReconciliation: true } : {}),
+        };
+      } else if (final) {
         yield final;
       } else if (task.signal.aborted) {
         yield { type: "error", message: "cancelled" };
@@ -544,6 +597,7 @@ export class CodexAppServerAdapter implements AgentAdapter {
         };
       }
     } finally {
+      stopWatch?.();
       task.signal.removeEventListener("abort", onAbort);
       this.running.delete(task.id);
       await kill(); // the server is long-lived: it never exits on its own after the turn

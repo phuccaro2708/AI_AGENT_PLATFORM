@@ -220,6 +220,43 @@ describe("through the REAL agent-job-wrap", () => {
   );
 });
 
+describe("treeMemoryLimitMb (RAM watchdog)", () => {
+  it("kills a server whose tree is over the limit and asks for reconciliation (turn had started)", async () => {
+    const e = env();
+    const a = make(e, [{ hang: true }], {
+      treeMemoryLimitMb: 100,
+      memoryPollMs: 20,
+      memorySampler: () => Promise.resolve(300 * 1024 * 1024),
+    });
+    const events = await run(a, task(e));
+    const last = events.at(-1) as { type: string; message?: string; needsReconciliation?: boolean };
+    expect(last.type).toBe("error");
+    expect(last.message).toMatch(/codex stopped: process tree uses 300 MB, limit 100 MB/);
+    expect(last.needsReconciliation).toBe(true);
+  }, 20_000);
+
+  it("an unmeasurable tree is treated as over the limit after 5 failures (fail closed)", async () => {
+    const e = env();
+    const a = make(e, [{ hang: true }], {
+      treeMemoryLimitMb: 100,
+      memoryPollMs: 10,
+      memorySampler: () => Promise.reject(new Error("no")),
+    });
+    const events = await run(a, task(e));
+    expect(JSON.stringify(events.at(-1))).toContain("cannot measure the memory");
+  }, 20_000);
+
+  it("under the limit the turn completes normally", async () => {
+    const e = env();
+    const a = make(e, [], {
+      treeMemoryLimitMb: 100,
+      memoryPollMs: 20,
+      memorySampler: () => Promise.resolve(10 * 1024 * 1024),
+    });
+    expect((await run(a, task(e))).at(-1)?.type).toBe("completed");
+  });
+});
+
 describe("command approvals", () => {
   it("accepts a command the policy allows, with a plain accept (never a session/execpolicy grant)", async () => {
     const e = env();

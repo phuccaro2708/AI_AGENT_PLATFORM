@@ -1,6 +1,6 @@
 /** `0`/`off`/`false` turns the Claude permission gate off (default: ON). */
 export const CLAUDE_GATE_ENV = "AGENT_STUDIO_CLAUDE_GATE";
-/** `0`/`off`/`false` stops registering the gated `codex-app-server` agent (default: ON). */
+/** `0`/`off`/`false` turns the Codex gate off: `codex` goes back to `codex exec` and `codex-app-server` is not registered (default: ON). */
 export const CODEX_GATE_ENV = "AGENT_STUDIO_CODEX_GATE";
 
 const isOff = (v: string | undefined): boolean =>

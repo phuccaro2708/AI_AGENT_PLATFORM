@@ -233,7 +233,7 @@ describe("T12: the native allowlist and the UI's reach", () => {
     // Every contract method NOT in the allowlist is on this list on purpose. Adding a method to the contract makes
     // this fail until someone decides whether the webview may call it (and updates ALLOWED_METHODS or this list).
     const notReachable = allMethods.filter((m) => !allowed.includes(m)).sort();
-    expect(notReachable).toEqual(["runStub", "shutdown", "system.activeTasks"]);
+    expect(notReachable).toEqual(["confirm.describe", "runStub", "shutdown", "system.activeTasks"]);
   });
 
   it("does not let the UI choose where an agent runs: a `cwd` in the parameters is ignored", async () => {

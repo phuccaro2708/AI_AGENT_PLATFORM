@@ -543,6 +543,89 @@ export class SidecarService {
     return next;
   }
 
+  /**
+   * Text for the native confirmation dialog (T12). Everything shown comes from validated parameters and the
+   * stored state, masked by the redactor and shortened; a request that could not succeed (unknown or already
+   * answered approval, unknown task) throws, so the shell shows no dialog for it.
+   */
+  private async describeForConfirmation(
+    req: SidecarRequest,
+  ): Promise<{ title: string; message: string }> {
+    // Free text may be shortened, but never silently: the dialog says how much is not shown.
+    const clip = (t: string, n: number) =>
+      t.length > n ? `${t.slice(0, n)} [\u2026 ${t.length - n} more characters NOT shown]` : t;
+    const text = (t: string, n: number) => clip(this.redactor.text(t), n);
+    // For what decides WHICH program runs, a shortened view could hide the dangerous part: refuse instead.
+    const whole = (what: string, t: string, n: number) => {
+      if (t.length > n)
+        throw new Error(`${what} is too long to confirm safely (over ${n} characters)`);
+      return this.redactor.text(t);
+    };
+    switch (req.method) {
+      case "approvals.resolve": {
+        const a = this.repo.getApproval(req.params.approvalId);
+        if (!a) throw new Error(`Unknown approval: ${req.params.approvalId}`);
+        if (a.state !== "pending") throw new Error(`Approval is already ${a.state}: ${a.id}`);
+        const verb = req.params.decision === "approved" ? "APPROVE" : "DENY";
+        return {
+          title: `${verb} a task's request?`,
+          message:
+            `Decision: ${verb}\nTask: ${a.taskId}\nScope: ${req.params.scope}\n` +
+            `Request: ${text(a.requestJson, 1200)}\n` +
+            (req.params.note ? `Note: ${text(req.params.note, 300)}\n` : "") +
+            "\nThe agent will act on this answer.",
+        };
+      }
+      case "tasks.resolveReconciliation": {
+        const state = this.repo.getTaskState(req.params.taskId);
+        if (state === undefined) throw new Error(`Unknown task: ${req.params.taskId}`);
+        const rerun = req.params.decision === "requeue" ? "\nThe task will run again." : "";
+        return {
+          title: "Settle a task with unknown side effects?",
+          message:
+            `Task: ${req.params.taskId} (now ${state})\nDecision: ${req.params.decision}\n` +
+            `Note: ${text(req.params.note, 600)}${rerun}\n\nOnly confirm if you checked what the task changed.`,
+        };
+      }
+      case "recovery.resolve": {
+        const report = await this.recoveryReport(req.params.taskId);
+        if (!report) throw new Error(`Unknown task: ${req.params.taskId}`);
+        const decision = planResolution(report, req.params.action, req.params.confirmUnverified);
+        const e = report.evidence;
+        return {
+          title: "Recover a stopped task?",
+          message:
+            `Task: ${report.taskId} (${report.state}, attempt ${report.attempt})\n` +
+            `Action: ${req.params.action} (stored as: ${decision})\n` +
+            `Evidence: ${report.classification}; tool calls ${e.toolCalls}, unfinished ${e.unfinishedToolCalls}, ` +
+            `worktree ${!e.hasWorktree ? "none" : e.worktreeChanged === null ? "unreadable" : e.worktreeChanged ? "changed" : "clean"}\n` +
+            `Checked by the person: ${req.params.confirmUnverified ? "yes" : "no"}\n` +
+            `Note: ${text(req.params.note, 600)}`,
+        };
+      }
+      case "agents.setSettings": {
+        const { provider, settings } = req.params;
+        if (settings === null) {
+          return {
+            title: `Reset the ${provider} CLI settings?`,
+            message: `The ${provider} agent goes back to its default program and arguments.`,
+          };
+        }
+        const envNames = Object.keys(settings.env);
+        return {
+          title: `Change the program the ${provider} agent runs?`,
+          message:
+            `Provider: ${provider}\nProgram: ${whole("The program", settings.command, 400)}\n` +
+            `Arguments: ${whole("The arguments", JSON.stringify(settings.args), 600)}\n` +
+            `Environment variables set: ${envNames.length === 0 ? "none" : whole("The environment variable names", envNames.join(", "), 300)}\n` +
+            "\nTasks for this agent will launch this program.",
+        };
+      }
+      default:
+        throw new Error(`No confirmation is defined for ${req.method}`);
+    }
+  }
+
   private spikeWorkflow(): string {
     this.spikeWorkflowId ??= this.repo.createWorkflow(
       this.repo.createProject(`spike-${process.pid}`, `spike://${process.pid}-${Date.now()}`),
@@ -656,6 +739,16 @@ export class SidecarService {
             )
             .get() as { n: number };
           return ok(req.id, { count: Math.max(row.n, this.active.size) });
+        }
+        case "confirm.describe": {
+          // The inner call must be exactly what the real call would accept; anything else is refused.
+          const inner = SidecarRequest.safeParse({
+            id: 0,
+            method: req.params.method,
+            params: req.params.params,
+          });
+          if (!inner.success) return fail(req.id, `invalid ${req.params.method} request`);
+          return ok(req.id, await this.describeForConfirmation(inner.data));
         }
         case "agents.getSettings":
           return ok(req.id, { settings: this.repo.getAgentSettings(req.params.provider) ?? null });

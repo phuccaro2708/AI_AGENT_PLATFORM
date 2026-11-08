@@ -613,3 +613,8 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - Thêm 3 test hành vi mất nguồn đo (lần đầu, quá hạn cũ + phục hồi + callback, giữ `paused`). `packages/resource-monitor`: vitest 23 qua. Gate sau thay đổi: lint, format, typecheck, build thoát 0; `pnpm test` 95 file, 916 qua, 6 expected fail, 56 bỏ qua.
 - `docs/ASSUMPTIONS.md` (agy): bỏ câu quá tuyệt đối, ghi rõ `policy-gate` vẫn có thể phát `needsReconciliation: true` và phần side effect không thấy qua diff CHƯA có.
 - `docs/PHASE_PLANS.md`: thêm khối đối chiếu cuối file trỏ tới các quyết định đã duyệt trong `NEXT_PLAN.md`, ghi rõ đó là bằng chứng tài liệu, chưa phải triển khai.
+
+### 2026-11-08: sửa CI `docs-sync` đỏ trên PR #3
+
+- Nguyên nhân thật (đọc log run `42492925553`): `DRIFT HANDOFF is dated 2026-11-07 but PROGRESS has an entry dated 2026-11-08`. Check hoạt động đúng; mục PROGRESS 2026-11-08 của `fd6b767` chưa có HANDOFF tương ứng.
+- Sửa: HANDOFF cập nhật ngày 2026-11-08, head, PR #3 và dòng về `fd6b767`. Chạy lại `node scripts/docs-sync-check.mjs` cục bộ trước khi push.

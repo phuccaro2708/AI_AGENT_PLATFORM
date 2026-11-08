@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DiagnosticsCard } from "./DiagnosticsCard";
+import { ResourceLimitsCard } from "./ResourceLimitsCard";
 import { AgentsSettings } from "./AgentsSettings";
 import { PresetsSettings } from "./PresetsSettings";
 import type { usePresets } from "./presets";
@@ -97,6 +98,8 @@ export function SettingsView({
           </li>
         </ul>
       </div>
+
+      <ResourceLimitsCard />
 
       <DiagnosticsCard />
 

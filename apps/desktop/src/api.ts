@@ -40,6 +40,35 @@ export interface DiagnosticsExport {
   limits: string;
 }
 
+export interface Band {
+  reduceAt: number;
+  pauseAt: number;
+}
+/** Load limits kept in the settings table (P3-4, P3-5). Percentages 0-100, concurrency 1-8. */
+export interface ResourceSettings {
+  concurrency: number;
+  thresholds: { cpu: Band; memory: Band; releaseMarginPercent: number };
+}
+export interface ResourceReport {
+  settings: ResourceSettings;
+  defaults: ResourceSettings;
+  status: {
+    concurrency: number;
+    /** What the scheduler may start at once right now: the ceiling, halved or zero under load. */
+    effectiveConcurrency: number;
+    running: number;
+    queued: number;
+    monitor: {
+      level: "normal" | "reduced" | "paused";
+      reasons: string[];
+      measured: boolean;
+      cpuPercent?: number;
+      memoryPercent?: number;
+      trackedRssBytes?: number;
+    } | null;
+  };
+}
+
 export type RecoveryAction = "resume" | "retry" | "abandon";
 /** What `recovery.inspect` found out about a task that stopped with unknown side effects. */
 export interface RecoveryReport {
@@ -212,6 +241,9 @@ export const api = {
     call<{ state: TaskState }>("recovery.resolve", { taskId, action, note, confirmUnverified }),
   /** A redacted support bundle written next to the database; the UI cannot choose where. */
   exportDiagnostics: () => call<DiagnosticsExport>("diagnostics.export"),
+  getResources: () => call<ResourceReport>("resources.get"),
+  /** Validated by the backend; a bad value is rejected and nothing changes. Applies to later tasks at once. */
+  setResources: (settings: ResourceSettings) => call<ResourceReport>("resources.set", { settings }),
   cancel: (taskId: string) =>
     call<{ requested: boolean; state: TaskState }>("tasks.cancel", { taskId }),
   task: (taskId: string) => call<{ state: TaskState | null }>("queryTask", { taskId }),

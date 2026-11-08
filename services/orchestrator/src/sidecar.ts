@@ -496,6 +496,13 @@ export class SidecarService {
       this.resourceMonitor = new ResourceMonitor({
         source: opts.resourceSource,
         thresholds: DEFAULT_THRESHOLDS,
+        onHealthChange: (healthy, d) =>
+          healthy
+            ? this.log.info("resource monitor measuring again")
+            : this.log.warn(
+                { failures: d.consecutiveFailures, err: this.redactor.text(String(d.error)) },
+                "resource monitor cannot read the source: concurrency is reduced until it recovers",
+              ),
       });
       this.resourceMonitor.start(opts.resourceSampleMs);
     }

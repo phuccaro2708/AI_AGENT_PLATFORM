@@ -137,6 +137,8 @@ Gate: E2E người dùng mới; mọi phê duyệt hiển thị đủ lệnh/đ�
 
 ## Danh sách quyết định của người dùng (một chỗ)
 
+> **Đối chiếu 2026-11-08.** Danh sách bên dưới là bản gốc 2026-11-05 (giữ nguyên để truy vết). Người dùng đã trả lời các mục 1–9 và 12 sau đó; câu trả lời nằm ở `docs/NEXT_PLAN.md`, mục "Quyết định của người dùng (2026-11-05)": mục 1 duyệt cả ba probe; mục 2 phạm vi hẹp (đường dẫn con trong worktree); mục 3 ngưỡng và concurrency lưu trong settings, sửa ở Settings; mục 4 cài Ollama và đo VRAM bằng `nvidia-smi` (Ollama vẫn chưa có trên máy); mục 5 cho phép probe `agy` lần 3 (chưa chạy); mục 6 duyệt Tailwind/shadcn và Playwright, chưa duyệt `node-pty`; mục 7 Job Object làm bằng Rust, AppContainer chỉ tài liệu hoá; mục 8 làm trong Phase 4. Mục 12: push và PR #3 làm 2026-11-08 theo yêu cầu. **Đây là bằng chứng tài liệu về quyết định, KHÔNG phải bằng chứng đã triển khai**: trạng thái triển khai từng mục xem `HANDOFF.md` và `PROGRESS.md`; ví dụ ngưỡng/concurrency trong settings (P3-4, P3-5) chưa có method IPC, probe `agy` lần 3 chưa chạy, Ollama chưa cài.
+
 1. Duyệt probe cho P4-1 (c)/(d): `--permission-prompt-tool` của claude, app-server/MCP của codex, cờ sandbox của CLI.
 2. Phạm vi grant 7C-2 (P7-1).
 3. Ngưỡng tài nguyên có cấu hình/hiển thị không; concurrency đọc từ settings không (P3-4, P3-5).

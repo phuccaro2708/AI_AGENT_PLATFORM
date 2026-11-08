@@ -8,6 +8,16 @@ export interface ResourceMonitorOptions {
   /** Pids whose RSS/CPU are summed into the decision and the snapshot (e.g. running CLI children). */
   trackedPids?: () => number[];
   clock?: () => number;
+  /**
+   * Consecutive failed samples tolerated after at least one good sample before the monitor stops trusting the
+   * old level and degrades to `reduced`. Default 3. With no good sample yet, the first failure degrades.
+   */
+  maxStaleSamples?: number;
+  /** Called when the measurement health flips (`true` = source working). For logs/UI; must not throw. */
+  onHealthChange?: (
+    healthy: boolean,
+    detail: { error?: unknown; consecutiveFailures: number },
+  ) => void;
 }
 
 export interface Snapshot extends Decision {
@@ -15,14 +25,22 @@ export interface Snapshot extends Decision {
   /** Percent CPU per tracked pid over the last interval (one core = 100). Pids that cannot be read are absent. */
   childCpuPercent: Record<number, number>;
   sampledAtMs: number;
+  /**
+   * False while the source cannot be read: before the first good sample, or after more than `maxStaleSamples`
+   * failures in a row. The level is then at least `reduced` and `reasons` says why.
+   */
+  measured: boolean;
 }
 
 /**
  * Samples a {@link ResourceSource} and keeps the latest {@link Decision}. `maxConcurrency` does no I/O,
  * so a scheduler can call it on every tick. Implements the scheduler's small admission interface.
  *
- * Failure policy: if the source throws, the previous level is kept (not "all clear") and `lastError`
- * is set; a metric that cannot be measured never raises pressure.
+ * Failure policy (whole source): a single metric that cannot be measured never raises pressure, but a source
+ * that throws is different. Until the first good sample, and after more than `maxStaleSamples` failures in a
+ * row, the monitor is "unmeasured": the level is raised to at least `reduced` (half the concurrency, min 1,
+ * never `paused`: a broken probe must not stop the product) and `snapshot().measured` is false. In between,
+ * the previous level is kept. `lastError`, `consecutiveFailures` and `onHealthChange` expose it.
  */
 export class ResourceMonitor {
   private readonly source: ResourceSource;
@@ -34,6 +52,11 @@ export class ResourceMonitor {
   private snap: Snapshot;
   private timer: NodeJS.Timeout | undefined;
   lastError?: unknown;
+  consecutiveFailures = 0;
+  private readonly maxStaleSamples: number;
+  private readonly onHealthChange: ResourceMonitorOptions["onHealthChange"];
+  private hadGoodSample = false;
+  private healthy = true;
 
   constructor(opts: ResourceMonitorOptions) {
     validateThresholds(opts.thresholds);
@@ -41,12 +64,15 @@ export class ResourceMonitor {
     this.thresholds = opts.thresholds;
     this.trackedPids = opts.trackedPids ?? (() => []);
     this.clock = opts.clock ?? Date.now;
+    this.maxStaleSamples = opts.maxStaleSamples ?? 3;
+    this.onHealthChange = opts.onHealthChange;
     this.snap = {
       level: "normal",
       reasons: [],
       metrics: {},
       childCpuPercent: {},
       sampledAtMs: this.clock(),
+      measured: false,
     };
   }
 
@@ -102,12 +128,42 @@ export class ResourceMonitor {
       if (readable > 0) metrics.trackedRssBytes = rss;
 
       const d = decide(metrics, this.thresholds, this.snap.level);
-      this.snap = { ...d, metrics, childCpuPercent, sampledAtMs: now };
+      this.snap = { ...d, metrics, childCpuPercent, sampledAtMs: now, measured: true };
       this.lastError = undefined;
+      this.consecutiveFailures = 0;
+      this.hadGoodSample = true;
+      this.setHealth(true);
     } catch (err) {
       this.lastError = err;
+      this.consecutiveFailures++;
+      const tolerated = this.hadGoodSample && this.consecutiveFailures <= this.maxStaleSamples;
+      if (!tolerated) {
+        const why = `resource source unreadable (${this.consecutiveFailures} failed sample(s) in a row): no measurement`;
+        const raised: PressureLevel = this.snap.level === "paused" ? "paused" : "reduced";
+        if (this.snap.measured || this.snap.level !== raised) {
+          this.snap = {
+            ...this.snap,
+            level: raised,
+            reasons: this.snap.reasons
+              .filter((r) => !r.startsWith("resource source unreadable"))
+              .concat(why),
+            measured: false,
+          };
+        }
+        this.setHealth(false, err);
+      }
     }
     return this.snap;
+  }
+
+  private setHealth(healthy: boolean, error?: unknown): void {
+    if (healthy === this.healthy) return;
+    this.healthy = healthy;
+    try {
+      this.onHealthChange?.(healthy, { error, consecutiveFailures: this.consecutiveFailures });
+    } catch {
+      /* a logging callback must never break sampling */
+    }
   }
 
   /** Samples now, then every `intervalMs` (unref'd). The CPU figure needs two samples. */

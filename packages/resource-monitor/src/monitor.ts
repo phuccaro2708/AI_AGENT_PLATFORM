@@ -1,5 +1,5 @@
 import { concurrencyFor, decide, type Decision, type Metrics } from "./decide.js";
-import type { ResourceSource } from "./source.js";
+import type { GpuReading, ResourceSource } from "./source.js";
 import { validateThresholds, type PressureLevel, type Thresholds } from "./thresholds.js";
 
 export interface ResourceMonitorOptions {
@@ -25,6 +25,8 @@ export interface Snapshot extends Decision {
   /** Percent CPU per tracked pid over the last interval (one core = 100). Pids that cannot be read are absent. */
   childCpuPercent: Record<number, number>;
   sampledAtMs: number;
+  /** The GPU reading behind `metrics.vramPercent`; absent when there is none. */
+  gpu?: GpuReading;
   /**
    * False while the source cannot be read: before the first good sample, or after more than `maxStaleSamples`
    * failures in a row. The level is then at least `reduced` and `reasons` says why.
@@ -152,8 +154,26 @@ export class ResourceMonitor {
       this.prevProc = nextProc; // pids no longer tracked are forgotten
       if (readable > 0) metrics.trackedRssBytes = rss;
 
+      // GPU is optional and must never fail the whole sample: no reading = no VRAM metric, no pressure from it.
+      let gpu: GpuReading | undefined;
+      try {
+        this.source.refreshGpu?.().catch(() => undefined);
+        gpu = this.source.gpu?.();
+      } catch {
+        gpu = undefined;
+      }
+      if (gpu && gpu.totalBytes > 0)
+        metrics.vramPercent = clampPercent((gpu.usedBytes / gpu.totalBytes) * 100);
+
       const d = decide(metrics, this.thresholds, this.snap.level);
-      this.snap = { ...d, metrics, childCpuPercent, sampledAtMs: now, measured: true };
+      this.snap = {
+        ...d,
+        metrics,
+        childCpuPercent,
+        sampledAtMs: now,
+        measured: true,
+        ...(gpu ? { gpu } : {}),
+      };
       this.lastError = undefined;
       this.consecutiveFailures = 0;
       this.hadGoodSample = true;

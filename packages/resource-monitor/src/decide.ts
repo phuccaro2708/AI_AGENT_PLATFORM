@@ -4,6 +4,8 @@ import type { PressureLevel, Thresholds } from "./thresholds.js";
 export interface Metrics {
   cpuPercent?: number;
   memoryPercent?: number;
+  /** Whole-GPU memory used percent (nvidia-smi). Undefined when there is no NVIDIA GPU or it could not be read. */
+  vramPercent?: number;
   trackedRssBytes?: number;
 }
 
@@ -44,6 +46,7 @@ export function decide(m: Metrics, t: Thresholds, previous: PressureLevel = "nor
   };
   band("cpu", m.cpuPercent, t.cpu.reduceAt, t.cpu.pauseAt);
   band("memory", m.memoryPercent, t.memory.reduceAt, t.memory.pauseAt);
+  if (t.vram) band("vram", m.vramPercent, t.vram.reduceAt, t.vram.pauseAt);
 
   if (t.trackedRssReduceBytes !== undefined && m.trackedRssBytes !== undefined) {
     const limit = t.trackedRssReduceBytes;

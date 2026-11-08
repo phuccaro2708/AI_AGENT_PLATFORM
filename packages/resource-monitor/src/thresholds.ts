@@ -11,6 +11,11 @@ export interface Thresholds {
   cpu: Band;
   /** System memory used percent (`(total - free) / total`). */
   memory: Band;
+  /**
+   * Whole-GPU memory used percent as `nvidia-smi` reports it (every process on the machine, not only ours).
+   * Omit to ignore VRAM. Off by default: a desktop GPU is often busy with other programs.
+   */
+  vram?: Band;
   /** Sum of RSS of tracked child processes, bytes; reaching it reduces concurrency. Omit to ignore. */
   trackedRssReduceBytes?: number;
   /**
@@ -33,10 +38,12 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
 
 export function validateThresholds(t: Thresholds): void {
   const pct = (n: number) => Number.isFinite(n) && n >= 0 && n <= 100;
-  for (const [name, b] of [
+  const bands: [string, Band][] = [
     ["cpu", t.cpu],
     ["memory", t.memory],
-  ] as const) {
+  ];
+  if (t.vram) bands.push(["vram", t.vram]);
+  for (const [name, b] of bands) {
     if (!pct(b.reduceAt) || !pct(b.pauseAt) || b.reduceAt >= b.pauseAt) {
       throw new RangeError(`${name}: need 0 <= reduceAt < pauseAt <= 100`);
     }

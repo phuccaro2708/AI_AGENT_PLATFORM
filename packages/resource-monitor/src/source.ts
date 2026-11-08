@@ -10,6 +10,14 @@ export interface SystemReading {
   freeMemBytes: number;
 }
 
+/** GPU memory in bytes for one GPU (the fullest one when there are several). */
+export interface GpuReading {
+  usedBytes: number;
+  totalBytes: number;
+  /** When it was measured (ms, the source's clock). */
+  atMs: number;
+}
+
 /** One process at one instant: resident set in bytes and cumulative CPU time (user+system) in ms. */
 export interface ProcessReading {
   rssBytes: number;
@@ -33,6 +41,10 @@ export interface ResourceSource {
    * Must not reject for an ordinary failure; it may be a no-op when called again too soon.
    */
   refresh?(pids: readonly number[]): Promise<void>;
+  /** Optional: the last GPU memory reading, `undefined` when there is none (no NVIDIA GPU, too old, unreadable). */
+  gpu?(): GpuReading | undefined;
+  /** Optional: re-measures the GPU in the background. Same rules as `refresh`. */
+  refreshGpu?(): Promise<void>;
 }
 
 export interface NodeResourceSourceDeps {
@@ -53,6 +65,8 @@ export interface NodeResourceSourceDeps {
   minRefreshMs?: number;
   /** Windows: a reading older than this is not served (the process may be gone). Default 10000. */
   maxReadingAgeMs?: number;
+  /** Least time between two `nvidia-smi` runs. Default 5000. */
+  minGpuRefreshMs?: number;
 }
 
 /** Linux `USER_HZ`. Assumed 100 (true on every mainstream build); see docs/ASSUMPTIONS.md. */
@@ -80,11 +94,17 @@ export class NodeResourceSource implements ResourceSource {
       nowMs: deps.nowMs ?? Date.now,
       minRefreshMs: deps.minRefreshMs ?? 2000,
       maxReadingAgeMs: deps.maxReadingAgeMs ?? 10_000,
+      minGpuRefreshMs: deps.minGpuRefreshMs ?? 5000,
     };
   }
 
   /** Windows only: what the last process-table query measured, per tracked root pid. */
   private winCache = new Map<number, ProcessReading>();
+  private gpuCache: GpuReading | undefined;
+  private gpuRefreshing = false;
+  private gpuLastStartMs = Number.NEGATIVE_INFINITY;
+  /** Set once `nvidia-smi` is not installed: it is then never started again. */
+  private gpuMissing = false;
   private winRefreshing = false;
   private winLastStartMs = Number.NEGATIVE_INFINITY;
 
@@ -127,6 +147,38 @@ export class NodeResourceSource implements ResourceSource {
     } finally {
       this.winRefreshing = false;
     }
+  }
+
+  /**
+   * GPU memory from `nvidia-smi --query-gpu=memory.used,memory.total` (argument array, no shell). This is the
+   * whole GPU (every program on the machine), not what one model uses. With no NVIDIA driver the program is
+   * absent: that is remembered and it is not started again; any other failure drops the cached reading.
+   */
+  async refreshGpu(): Promise<void> {
+    if (this.gpuMissing || this.gpuRefreshing) return;
+    const started = this.d.nowMs();
+    if (started - this.gpuLastStartMs < this.d.minGpuRefreshMs) return;
+    this.gpuRefreshing = true;
+    this.gpuLastStartMs = started;
+    try {
+      const out = await this.d.run("nvidia-smi", [
+        "--query-gpu=memory.used,memory.total",
+        "--format=csv,noheader,nounits",
+      ]);
+      const r = parseNvidiaSmi(out);
+      this.gpuCache = r ? { ...r, atMs: this.d.nowMs() } : undefined;
+    } catch (err) {
+      this.gpuCache = undefined;
+      if ((err as NodeJS.ErrnoException | undefined)?.code === "ENOENT") this.gpuMissing = true;
+    } finally {
+      this.gpuRefreshing = false;
+    }
+  }
+
+  gpu(): GpuReading | undefined {
+    const r = this.gpuCache;
+    if (!r) return undefined;
+    return this.d.nowMs() - r.atMs > this.d.maxReadingAgeMs ? undefined : r;
   }
 
   private windowsReading(pid: number): ProcessReading | undefined {
@@ -237,6 +289,25 @@ export function sumTree(
     for (const c of children.get(pid) ?? []) stack.push(c);
   }
   return { rssBytes, cpuTimeMs };
+}
+
+/**
+ * Parses `nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits` (MiB, one line per
+ * GPU) and returns the fullest GPU. `undefined` for anything that is not that shape, never a guess.
+ */
+export function parseNvidiaSmi(out: string): { usedBytes: number; totalBytes: number } | undefined {
+  let best: { usedBytes: number; totalBytes: number } | undefined;
+  for (const line of out.split(/\r?\n/)) {
+    const m = /^\s*(\d+)\s*,\s*(\d+)\s*$/.exec(line);
+    if (!m) continue;
+    const used = Number(m[1]) * 1024 * 1024;
+    const total = Number(m[2]) * 1024 * 1024;
+    if (total <= 0 || used > total) continue;
+    if (!best || used / total > best.usedBytes / best.totalBytes) {
+      best = { usedBytes: used, totalBytes: total };
+    }
+  }
+  return best;
 }
 
 function runProgram(file: string, args: string[]): Promise<string> {

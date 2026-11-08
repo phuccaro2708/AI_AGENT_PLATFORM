@@ -1,5 +1,6 @@
-export { NodeResourceSource, parseWindowsProcessTable, sumTree } from "./source.js";
+export { NodeResourceSource, parseNvidiaSmi, parseWindowsProcessTable, sumTree } from "./source.js";
 export type {
+  GpuReading,
   NodeResourceSourceDeps,
   ProcessReading,
   ResourceSource,

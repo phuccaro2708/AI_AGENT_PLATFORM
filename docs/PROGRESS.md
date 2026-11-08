@@ -600,3 +600,9 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 
 - Đối chiếu docs với git: HANDOFF cập nhật head `e201be8`, thêm tóm tắt nhóm A (A1–A7) và bỏ "TOCTOU/hard link" và "soak với CLI thật" khỏi mục chưa kiểm (đã có A6, A7 ở quy mô 10). TODO dòng recovery ghi lượt CLI thật vòng ≥ 2 (A5, PARTIAL).
 - Không thêm ADR, không đổi ROADMAP, không tick acceptance gate, không đóng Phase 4. Không chạy lại gate (chỉ đổi docs); prettier chạy trên các file docs đã sửa.
+
+### 2026-11-07: CI kiểm tra docs lệch git (`docs-sync`)
+
+- Thêm `scripts/docs-sync-check.mjs` (Node, không dependency mới) và `.github/workflows/docs-sync.yml` (chạy trên mọi PR và push lên `main`/`claude/loving-lovelace-32lh71`, `fetch-depth: 0`, action ghim SHA như `ci.yml`). Chỉ ĐỌC và báo đỏ, không tự sửa, không push, không gọi model: CI không chạy được `/save` nếu không có API key, nên phần sửa vẫn do người hoặc phiên Claude chạy `/save`.
+- Kiểm: ngày HANDOFF >= ngày mới nhất trong PROGRESS; PROGRESS không dừng trước commit mã mới nhất; tối đa 25 commit mã kể từ lần HANDOFF đổi (`--max-behind`); file `docs/*.md` được HANDOFF dẫn tồn tại; hash trong mục đầu HANDOFF tồn tại (chỉ cảnh báo).
+- Kết quả thật (cục bộ): `node scripts/docs-sync-check.mjs` → OK, exit 0; sửa tạm ngày HANDOFF về 2026-11-01 → `DRIFT`, exit 1 (đã hoàn tác); eslint và prettier trên 2 file mới thoát 0. Workflow CHƯA chạy trên GitHub (chưa push).

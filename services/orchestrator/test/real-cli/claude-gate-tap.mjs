@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import { appendFileSync, existsSync } from "node:fs";
 import process from "node:process";
 import { createInterface } from "node:readline";
+import { clearInterval, setInterval } from "node:timers";
 
 const [logFile, bundle, ...rest] = process.argv.slice(2);
 if (!logFile || !bundle) {

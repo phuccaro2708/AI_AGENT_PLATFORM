@@ -63,6 +63,8 @@ export const ResourceSettings = z
       .object({
         cpu: PercentBand,
         memory: PercentBand,
+        /** Whole-GPU memory (nvidia-smi). Absent = VRAM never limits anything. */
+        vram: PercentBand.optional(),
         releaseMarginPercent: z.number().min(0).max(50),
       })
       .strict(),
@@ -73,8 +75,12 @@ export const ResourceSettings = z
   .refine(
     (s) =>
       s.thresholds.releaseMarginPercent <
-      Math.min(s.thresholds.cpu.reduceAt, s.thresholds.memory.reduceAt),
-    { message: "releaseMarginPercent must be below both reduceAt values", path: ["thresholds"] },
+      Math.min(
+        s.thresholds.cpu.reduceAt,
+        s.thresholds.memory.reduceAt,
+        s.thresholds.vram?.reduceAt ?? 100,
+      ),
+    { message: "releaseMarginPercent must be below every reduceAt value", path: ["thresholds"] },
   );
 export type ResourceSettings = z.infer<typeof ResourceSettings>;
 

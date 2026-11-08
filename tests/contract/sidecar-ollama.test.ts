@@ -96,6 +96,52 @@ describe("the ollama agent inside the sidecar (S3)", () => {
   });
 });
 
+describe("Ollama's own VRAM figure in resources.get (S4)", () => {
+  it("lists the loaded models with the scope named, and keeps it apart from the GPU reading", async () => {
+    const s = await startFakeOllama("ok");
+    servers.push(s);
+    open({ baseUrl: s.url, model: "m" });
+    const r = (await call("resources.get")).result!;
+    expect(r.status.ollama).toEqual({
+      scope: "ollama-models",
+      models: [
+        {
+          name: "m:latest",
+          sizeBytes: 9_400_000_000,
+          sizeVramBytes: 6_000_000_000,
+          contextLength: 4096,
+        },
+      ],
+    });
+    expect(r.status.gpu).toBeNull(); // no resource source in this sidecar: the GPU is a separate reading
+  });
+
+  it("is null when Ollama is down, answers an error, or says something else; never throws", async () => {
+    open({ baseUrl: "http://127.0.0.1:1", model: "m" });
+    expect((await call("resources.get")).result!.status.ollama).toBeNull();
+    svc?.close();
+    const s = await startFakeOllama("ok");
+    servers.push(s);
+    s.ps = undefined; // HTTP 500
+    open({ baseUrl: s.url, model: "m" });
+    expect((await call("resources.get")).result!.status.ollama).toBeNull();
+    s.ps = { models: "nope" };
+    expect((await call("resources.get")).result!.status.ollama).toBeNull();
+    s.ps = { models: [{ name: "x" }, { name: "ok", size: 1, size_vram: 0 }] }; // the malformed row is skipped
+    expect((await call("resources.get")).result!.status.ollama).toEqual({
+      scope: "ollama-models",
+      models: [{ name: "ok", sizeBytes: 1, sizeVramBytes: 0 }],
+    });
+  });
+
+  it("is not asked at all when no model is configured (opt-in)", async () => {
+    const s = await startFakeOllama("ok");
+    servers.push(s);
+    open({ baseUrl: s.url });
+    expect((await call("resources.get")).result!.status.ollama).toBeNull();
+  });
+});
+
 /**
  * "Adding an adapter does not change the core" (ROADMAP Phase 3 gate). Two checks:
  *  1. timeless: no core file mentions Ollama; only the wiring (`sidecar.ts`, `sidecar-main.ts`,

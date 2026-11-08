@@ -25,7 +25,11 @@ import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAdapter, CodexAppServerAdapter } from "@agent-studio/adapter-codex";
 import type { CodexAppServerOptions } from "@agent-studio/adapter-codex";
 import { AntigravityAdapter } from "@agent-studio/adapter-antigravity";
-import { OllamaAdapter, type OllamaAdapterOptions } from "@agent-studio/adapter-ollama";
+import {
+  OllamaAdapter,
+  readOllamaPs,
+  type OllamaAdapterOptions,
+} from "@agent-studio/adapter-ollama";
 import {
   probeClaude,
   probeCodex,
@@ -785,8 +789,16 @@ export class SidecarService {
       .get() as number;
   }
 
+  /** Models Ollama has loaded, only when the person configured one (opt-in); `null` when not asked or unreachable. */
+  private async ollamaLoaded() {
+    const o = this.opts.ollama;
+    if (!o?.model) return null;
+    const models = await readOllamaPs({ ...(o.baseUrl ? { baseUrl: o.baseUrl } : {}) });
+    return models ? { scope: "ollama-models", models } : null;
+  }
+
   /** The limits in force and what the resource monitor says now (level and the reasons for it). */
-  private resourceReport() {
+  private async resourceReport() {
     const snap = this.resourceMonitor?.snapshot();
     const base = this.resourceSettings.concurrency;
     const queued = this.queuedCount();
@@ -809,6 +821,12 @@ export class SidecarService {
               sampledAtMs: snap.sampledAtMs,
             }
           : null,
+        // Two readings with different scope, never merged: `gpu` is the whole GPU as nvidia-smi sees it (every
+        // program; the only one that can raise pressure), `ollama` is what Ollama says its loaded models take.
+        gpu: snap?.gpu
+          ? { usedBytes: snap.gpu.usedBytes, totalBytes: snap.gpu.totalBytes, scope: "whole-gpu" }
+          : null,
+        ollama: await this.ollamaLoaded(),
       },
     };
   }
@@ -1166,7 +1184,7 @@ export class SidecarService {
         case "diagnostics.export":
           return ok(req.id, this.exportDiagnosticsBundle());
         case "resources.get":
-          return ok(req.id, this.resourceReport());
+          return ok(req.id, await this.resourceReport());
         case "resources.set": {
           const next = req.params.settings;
           // Monitor first: it re-validates and throws before anything is stored or applied.
@@ -1181,7 +1199,7 @@ export class SidecarService {
             this.scheduler.start(this.opts.schedulerIntervalMs);
             await this.scheduler.tick();
           }
-          return ok(req.id, this.resourceReport());
+          return ok(req.id, await this.resourceReport());
         }
         case "shutdown":
           return { response: { id: req.id, result: { ok: true } }, shutdown: true };

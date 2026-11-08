@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type ResourceReport, type ResourceSettings } from "./api";
+import { vramLines } from "./vramText";
 
 const LEVEL_TEXT = {
   normal: "Normal: tasks start up to the ceiling.",
@@ -101,6 +102,11 @@ export function ResourceLimitsCard() {
             The machine could not be read, so the level is lowered to be safe.
           </p>
         )}
+        {vramLines(status).map((line) => (
+          <p key={line} className="muted">
+            {line}
+          </p>
+        ))}
         {m && (m.cpuPercent !== undefined || m.memoryPercent !== undefined) && (
           <p className="muted">
             {m.cpuPercent !== undefined && <>CPU {m.cpuPercent.toFixed(0)}% </>}
@@ -155,6 +161,53 @@ export function ResourceLimitsCard() {
             })),
           100,
         )}
+        <label className="small">
+          <input
+            type="checkbox"
+            checked={t.vram !== undefined}
+            onChange={(e) =>
+              set((d) => {
+                const { vram: _drop, ...rest } = d.thresholds;
+                void _drop;
+                return {
+                  ...d,
+                  thresholds: e.target.checked
+                    ? { ...rest, vram: { reduceAt: 85, pauseAt: 95 } }
+                    : rest,
+                };
+              })
+            }
+          />{" "}
+          Limit by GPU memory (whole GPU, needs an NVIDIA driver)
+        </label>
+        {t.vram &&
+          field(
+            "GPU memory slow down at %",
+            t.vram.reduceAt,
+            (n) =>
+              set((d) => ({
+                ...d,
+                thresholds: {
+                  ...d.thresholds,
+                  vram: { reduceAt: n, pauseAt: d.thresholds.vram?.pauseAt ?? 95 },
+                },
+              })),
+            100,
+          )}
+        {t.vram &&
+          field(
+            "GPU memory pause at %",
+            t.vram.pauseAt,
+            (n) =>
+              set((d) => ({
+                ...d,
+                thresholds: {
+                  ...d.thresholds,
+                  vram: { reduceAt: d.thresholds.vram?.reduceAt ?? 85, pauseAt: n },
+                },
+              })),
+            100,
+          )}
         {field(
           "Release margin %",
           t.releaseMarginPercent,

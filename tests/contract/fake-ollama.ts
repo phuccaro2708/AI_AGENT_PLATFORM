@@ -31,6 +31,8 @@ export interface FakeOllama {
   /** Parsed bodies of the `/api/chat` requests, in order. */
   chats: Record<string, unknown>[];
   script: ScriptStep[];
+  /** Body of `GET /api/ps`; `undefined` answers HTTP 500. Default: one partly-loaded model, as measured in S0. */
+  ps: unknown;
   close(): Promise<void>;
 }
 
@@ -58,6 +60,11 @@ export async function startFakeOllama(mode: FakeMode = "ok"): Promise<FakeOllama
     mode,
     chats: [],
     script: [],
+    ps: {
+      models: [
+        { name: "m:latest", size: 9_400_000_000, size_vram: 6_000_000_000, context_length: 4096 },
+      ],
+    },
     close: () => new Promise((res) => server.close(() => res())),
   };
   const sockets = new Set<import("node:net").Socket>();
@@ -66,6 +73,16 @@ export async function startFakeOllama(mode: FakeMode = "ok"): Promise<FakeOllama
       if (req.url === "/api/version") {
         res.setHeader("content-type", "application/json");
         res.end(JSON.stringify({ version: "0.40.14" }));
+        return;
+      }
+      if (req.url === "/api/ps") {
+        if (state.ps === undefined) {
+          res.statusCode = 500;
+          res.end();
+          return;
+        }
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify(state.ps));
         return;
       }
       if (req.url !== "/api/chat" || req.method !== "POST") {

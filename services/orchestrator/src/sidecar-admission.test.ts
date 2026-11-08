@@ -38,6 +38,13 @@ class FakeSource implements ResourceSource {
   process() {
     return undefined;
   }
+  /** Whole-GPU memory used percent; `undefined` = no NVIDIA GPU. */
+  vramPercent: number | undefined = undefined;
+  gpu() {
+    return this.vramPercent === undefined
+      ? undefined
+      : { usedBytes: this.vramPercent * 100, totalBytes: 10_000, atMs: 0 };
+  }
   refreshed: (readonly number[])[] = [];
   async refresh(pids: readonly number[]) {
     this.refreshed.push(pids);
@@ -379,6 +386,39 @@ describe("load limits saved in Settings (P3-4, P3-5)", () => {
     expect(again.defaults.thresholds.memory).toEqual({ reduceAt: 80, pauseAt: 90 });
     sample();
     expect((await call("resources.get")).result!.status.monitor.level).toBe("normal"); // still 85%
+  });
+
+  it("VRAM is off until a band is saved; then it limits concurrency and is reported as the whole GPU (S4)", async () => {
+    source.vramPercent = 97;
+    sample();
+    const before = (await call("resources.get")).result!;
+    expect(before.status.monitor.level).toBe("normal"); // no vram band: never limits
+    expect(before.status.gpu).toEqual({ usedBytes: 9700, totalBytes: 10_000, scope: "whole-gpu" });
+    expect(before.status.ollama).toBeNull(); // no Ollama model configured: not asked
+
+    const mine = settings({ vram: { reduceAt: 80, pauseAt: 95 } });
+    const saved = (await save(mine)).result!;
+    expect(saved.settings).toEqual(mine);
+    expect(saved.status.monitor).toMatchObject({ level: "paused", vramPercent: 97 });
+    expect(saved.status.effectiveConcurrency).toBe(0);
+    expect(saved.status.monitor.reasons.join()).toMatch(/vram/);
+
+    source.vramPercent = 85;
+    sample();
+    expect((await call("resources.get")).result!.status.monitor.level).toBe("reduced");
+    source.vramPercent = undefined; // nvidia-smi went away: no reading, no pressure
+    sample();
+    const gone = (await call("resources.get")).result!;
+    expect(gone.status.monitor.level).toBe("normal");
+    expect(gone.status.gpu).toBeNull();
+
+    reopen();
+    expect((await call("resources.get")).result!.settings).toEqual(mine); // survives a restart
+  });
+
+  it("a margin at or above the vram reduceAt is refused", async () => {
+    const r = await save(settings({ vram: { reduceAt: 4, pauseAt: 90 }, releaseMarginPercent: 5 }));
+    expect(r.error?.message).toBe("invalid request");
   });
 
   it("refuses values out of bounds and keeps what was saved", async () => {

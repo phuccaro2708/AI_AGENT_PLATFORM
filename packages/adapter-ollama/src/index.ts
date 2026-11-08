@@ -7,3 +7,5 @@ export {
   MAX_LIST_ENTRIES,
   runReadOnlyTool,
 } from "./tools.js";
+export { readOllamaPs } from "./ps.js";
+export type { OllamaLoadedModel, OllamaPsOptions } from "./ps.js";

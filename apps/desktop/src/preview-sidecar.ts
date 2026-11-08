@@ -151,6 +151,8 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
             cpuPercent: 12,
             memoryPercent: 48,
           },
+          gpu: null,
+          ollama: null,
         },
       };
     }

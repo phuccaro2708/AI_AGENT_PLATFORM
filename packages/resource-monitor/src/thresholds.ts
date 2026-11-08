@@ -15,7 +15,7 @@ export interface Thresholds {
    * Whole-GPU memory used percent as `nvidia-smi` reports it (every process on the machine, not only ours).
    * Omit to ignore VRAM. Off by default: a desktop GPU is often busy with other programs.
    */
-  vram?: Band;
+  vram?: Band | undefined;
   /** Sum of RSS of tracked child processes, bytes; reaching it reduces concurrency. Omit to ignore. */
   trackedRssReduceBytes?: number;
   /**

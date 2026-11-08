@@ -47,7 +47,8 @@ export interface Band {
 /** Load limits kept in the settings table (P3-4, P3-5). Percentages 0-100, concurrency 1-8. */
 export interface ResourceSettings {
   concurrency: number;
-  thresholds: { cpu: Band; memory: Band; releaseMarginPercent: number };
+  /** `vram` is optional: absent = GPU memory never limits anything. */
+  thresholds: { cpu: Band; memory: Band; vram?: Band; releaseMarginPercent: number };
 }
 export interface ResourceReport {
   settings: ResourceSettings;
@@ -64,7 +65,21 @@ export interface ResourceReport {
       measured: boolean;
       cpuPercent?: number;
       memoryPercent?: number;
+      /** Whole-GPU memory used (nvidia-smi); only present when there is an NVIDIA GPU. */
+      vramPercent?: number;
       trackedRssBytes?: number;
+    } | null;
+    /** The whole GPU as nvidia-smi sees it (every program). `null` when there is no NVIDIA GPU. */
+    gpu: { usedBytes: number; totalBytes: number; scope: "whole-gpu" } | null;
+    /** What Ollama says its loaded models take. Only asked when an Ollama model is configured. */
+    ollama: {
+      scope: "ollama-models";
+      models: {
+        name: string;
+        sizeBytes: number;
+        sizeVramBytes: number;
+        contextLength?: number;
+      }[];
     } | null;
   };
 }

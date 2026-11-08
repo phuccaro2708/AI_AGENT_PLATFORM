@@ -25,6 +25,7 @@ import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAdapter, CodexAppServerAdapter } from "@agent-studio/adapter-codex";
 import type { CodexAppServerOptions } from "@agent-studio/adapter-codex";
 import { AntigravityAdapter } from "@agent-studio/adapter-antigravity";
+import { OllamaAdapter, type OllamaAdapterOptions } from "@agent-studio/adapter-ollama";
 import {
   probeClaude,
   probeCodex,
@@ -69,6 +70,8 @@ export interface SidecarOptions {
   migrationsFolder?: string;
   /** Test seam: adapters to register in addition to the stub. */
   extraAdapters?: AgentAdapter[];
+  /** The local Ollama agent (`ollama`): model, loopback URL, opt-in tools. Without a model it is registered but unavailable. */
+  ollama?: OllamaAdapterOptions;
   /** Receives server-pushed events (the transport decides how to deliver / drop them). */
   onEvent?: (event: SidecarEvent) => void;
   /** Test seam: replaces the real CLI probes. */
@@ -467,6 +470,7 @@ export class SidecarService {
     this.registry.register(this.buildCliAdapter("claude", this.repo.getAgentSettings("claude")));
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
     this.registry.register(this.gate.wrap(new AntigravityAdapter()));
+    this.registry.register(this.gate.wrap(new OllamaAdapter(opts.ollama ?? {})));
     if (opts.codexAppServer !== false) {
       this.registry.register(this.buildAppServerAdapter(this.repo.getAgentSettings("codex")));
     }

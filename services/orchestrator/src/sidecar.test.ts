@@ -283,6 +283,7 @@ describe("D1 IPC", () => {
       "claude",
       "codex",
       "agy",
+      "ollama", // registered unavailable until AGENT_STUDIO_OLLAMA_MODEL is set (S3)
       "codex-app-server", // registered by default since Q3 (2026-11-07)
     ]);
     expect(list.result?.cli).toHaveLength(2);

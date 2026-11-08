@@ -119,7 +119,9 @@ export class OllamaAdapter implements AgentAdapter {
     this.fetchImpl = opts.fetch ?? fetch;
   }
 
+  /** Available = a model is configured AND the server answers; without a model no task could run. */
   async detect(): Promise<boolean> {
+    if (!this.opts.model) return false;
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), this.opts.detectTimeoutMs ?? 3000);
     try {

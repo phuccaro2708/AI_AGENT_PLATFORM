@@ -264,7 +264,13 @@ describe("codex-app-server agent, default ON (Q3)", () => {
   it("is registered by default (and `codex` itself is the gated app-server adapter, see below)", async () => {
     open();
     const { adapters } = await call<{ adapters: { id: string }[] }>("agents.list");
-    expect(adapters.map((a) => a.id)).toEqual(["claude", "codex", "agy", "codex-app-server"]);
+    expect(adapters.map((a) => a.id)).toEqual([
+      "claude",
+      "codex",
+      "agy",
+      "ollama",
+      "codex-app-server",
+    ]);
   });
 
   it("the `codex` agent is the gated app-server adapter by default (declares approval) and codex exec when the gate is off", async () => {

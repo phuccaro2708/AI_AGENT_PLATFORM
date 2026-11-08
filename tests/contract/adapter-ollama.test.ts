@@ -147,6 +147,8 @@ describe("OllamaAdapter", () => {
   it("detect() is true for a live server and false when nothing listens", async () => {
     const s = await fake();
     expect(await make(s).detect()).toBe(true);
+    // a live server is not enough: without a configured model nothing could run
+    expect(await new OllamaAdapter({ baseUrl: s.url }).detect()).toBe(false);
     const dead = new OllamaAdapter({ baseUrl: "http://127.0.0.1:1", model: "m" });
     expect(await dead.detect()).toBe(false);
     const events = await run(dead, task());

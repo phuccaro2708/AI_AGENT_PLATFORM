@@ -73,6 +73,25 @@ describe("treeMemoryLimitMb", () => {
     expect(r.detail).toMatch(/cannot measure/);
   });
 
+  it("ignores a sample that returns AFTER the child exited (pid may be reused): nothing is killed", async () => {
+    const killed: number[] = [];
+    const r = await runProcess({
+      command: NODE,
+      args: ["-e", "setTimeout(()=>{},150)"],
+      treeMemoryLimitMb: 100,
+      memoryPollMs: 20,
+      // answers over the limit, but only after the child is long gone
+      memorySampler: () => new Promise((res) => setTimeout(() => res(500 * MB), 600)),
+      killImpl: (pid) => {
+        killed.push(pid);
+        return Promise.resolve({ status: "killed" as const });
+      },
+    });
+    await new Promise((res) => setTimeout(res, 900)); // let the late sample come back
+    expect(r.outcome).toBe("exited");
+    expect(killed).toEqual([]);
+  });
+
   it("rejects a limit that is not a positive integer without starting the program", async () => {
     for (const bad of [0, -5, 2.5]) {
       const r = await runProcess({ command: NODE, args: ["-e", "1"], treeMemoryLimitMb: bad });

@@ -67,7 +67,15 @@ export const ResourceSettings = z
       })
       .strict(),
   })
-  .strict();
+  .strict()
+  // Recovery needs the metric to fall below `reduceAt - margin`; a margin at or above `reduceAt` makes that
+  // level negative, so the monitor could never leave reduced/paused even at 0%.
+  .refine(
+    (s) =>
+      s.thresholds.releaseMarginPercent <
+      Math.min(s.thresholds.cpu.reduceAt, s.thresholds.memory.reduceAt),
+    { message: "releaseMarginPercent must be below both reduceAt values", path: ["thresholds"] },
+  );
 export type ResourceSettings = z.infer<typeof ResourceSettings>;
 
 export const TaskPermissions = z.enum(["read-only", "workspace-write"]);

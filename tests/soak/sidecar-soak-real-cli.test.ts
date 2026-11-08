@@ -327,6 +327,14 @@ CLI processes alive after svc.close(): ${finalSurvivors.length}; descendants see
         );
       }
       expect(after, "handles after close vs before").toBeLessThanOrEqual(before + 2);
+      expect(
+        finalSurvivors.map((p) => p.name),
+        "CLI processes still alive after svc.close()",
+      ).toEqual([]);
+      expect(
+        rows.filter((r) => r.orphansAfter > 0).map((r) => r.n),
+        "workflows that left CLI processes behind",
+      ).toEqual([]);
     },
     N * 300_000 + 60_000,
   );

@@ -40,6 +40,11 @@ export function validateThresholds(t: Thresholds): void {
     if (!pct(b.reduceAt) || !pct(b.pauseAt) || b.reduceAt >= b.pauseAt) {
       throw new RangeError(`${name}: need 0 <= reduceAt < pauseAt <= 100`);
     }
+    if (t.releaseMarginPercent >= b.reduceAt) {
+      throw new RangeError(
+        `${name}: releaseMarginPercent must be below reduceAt (else it never recovers)`,
+      );
+    }
   }
   if (!Number.isFinite(t.releaseMarginPercent) || t.releaseMarginPercent < 0) {
     throw new RangeError("releaseMarginPercent must be >= 0");

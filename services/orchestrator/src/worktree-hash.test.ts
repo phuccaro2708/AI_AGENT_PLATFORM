@@ -48,6 +48,11 @@ describe("digestInsideWorktree", () => {
     expect(digestInsideWorktree(wt, "d/f.txt")).toEqual({ kind: "ok", sha256: sha("inside") });
   });
 
+  it("a file whose NAME starts with two dots is inside the root, not an escape", () => {
+    writeFileSync(join(wt, "..notes"), "dots");
+    expect(digestInsideWorktree(wt, "..notes")).toEqual({ kind: "ok", sha256: sha("dots") });
+  });
+
   it("refuses a hard link to a file outside the worktree (realpath cannot see it)", () => {
     try {
       linkSync(join(outside, "f.txt"), join(wt, "h.txt"));

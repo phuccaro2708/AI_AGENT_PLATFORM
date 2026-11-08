@@ -9,7 +9,7 @@ import {
   realpathSync,
   statSync,
 } from "node:fs";
-import { isAbsolute, join, relative } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 
 export type WorktreeFileDigest =
   | { kind: "ok"; sha256: string }
@@ -35,7 +35,8 @@ const escapes = (text: string): WorktreeFileDigest => ({
 
 const insideRoot = (realRoot: string, real: string): boolean => {
   const r = relative(realRoot, real);
-  return r !== "" && !r.startsWith("..") && !isAbsolute(r);
+  // A file NAMED "..notes" is inside the root; only a real ".." path segment leaves it.
+  return r !== "" && r !== ".." && !r.startsWith(`..${sep}`) && !isAbsolute(r);
 };
 
 /**

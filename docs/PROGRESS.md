@@ -640,3 +640,13 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - Chạy tuần tự trên HEAD `e78fa37` (cây sạch): `pnpm lint` exit 0; `pnpm format` exit 0; `pnpm typecheck` exit 0; `pnpm test` exit 0 (97 file pass, 3 skip; 952 test pass, 6 expected fail, 62 skip); `pnpm build` exit 0. `node scripts/docs-sync-check.mjs` OK.
 - Secret scan sau `e78fa37`: `findings: 0 (accepted fixture hits: 850)`; dòng thô trên cây làm việc còn đúng 2 (`docs/SECURITY.md:37`, `sidecar-permission-gates.test.ts:170`).
 - Không push, không PR. Phase 3 chưa đóng; chờ người dùng: Ollama, VRAM, kiểm giao diện thật, đóng Phase 3.
+
+### 2026-11-08: sửa 5 phát hiện review trên `e78fa37`
+
+- P1 `process.ts`: watchdog RAM bỏ kết quả `sample()` trả về muộn khi con đã thoát/đang bị kill (tránh kill nhầm PID tái dùng). Test mới với sampler trả muộn.
+- P2 `sidecar.ts`: khi khởi động, scheduler cũng chạy nếu còn task `queued` (task đơn giữ lại lúc paused). Test khởi động lại mới.
+- P2 `contracts` + `resource-monitor/thresholds.ts`: `releaseMarginPercent` phải nhỏ hơn cả hai `reduceAt` (nếu không `paused` không bao giờ hồi phục). Test qua `resources.set`.
+- P2 soak thật: assert 0 tiến trình CLI còn sống và 0 orphan mỗi workflow (chưa chạy lại soak thật: cần CLI thật).
+- P3 `worktree-hash.ts`: kiểm tra đoạn `..` thật thay vì `startsWith("..")`; test file `..notes`.
+- 4 test mới đều đỏ trên code cũ, xanh sau sửa. Test PID thật trên Windows (`sampleTreeBytes`) pass ở máy này: lỗi review không tái hiện, nguyên nhân chưa xác định.
+- Gate tuần tự: lint/format/typecheck/test/build exit 0; test: 955 pass, 6 expected fail, 62 skipped. Không đụng src-tauri nên không chạy cargo. Secret scan chưa chạy lại sau lần sửa này.

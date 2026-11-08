@@ -247,12 +247,16 @@ export function startProcess(opts: RunOptions): RunningProcess {
       busy = true;
       try {
         const bytes = await sample(rootPid);
+        // The sample may return after the child exited (its pid can already belong to another process):
+        // an exited child, or one already being terminated, must never be killed from a stale result.
+        if (child.exitCode !== null || child.signalCode !== null || killing) return;
         failures = 0;
         if (bytes > limit) {
           detail = `process tree uses ${Math.round(bytes / 1048576)} MB, limit ${opts.treeMemoryLimitMb} MB`;
           void terminate("memory_limit");
         }
       } catch {
+        if (child.exitCode !== null || child.signalCode !== null || killing) return;
         // Cannot measure: after MAX_SAMPLE_FAILURES in a row the limit is treated as exceeded (fail closed).
         if (++failures >= MAX_SAMPLE_FAILURES) {
           detail = "cannot measure the memory of the process tree";

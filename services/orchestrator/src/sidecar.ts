@@ -528,7 +528,8 @@ export class SidecarService {
       },
     });
     // Workflows left `running` by a previous exit need the scheduler again (it starts lazily otherwise).
-    if (this.repo.listWorkflowIdsByState("running").length > 0) {
+    // Single tasks held by admission stay `queued` in a `pending` workflow, so they need it too.
+    if (this.repo.listWorkflowIdsByState("running").length > 0 || this.queuedCount() > 0) {
       this.scheduler.start(opts.schedulerIntervalMs);
     }
     void this.engine

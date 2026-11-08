@@ -389,6 +389,9 @@ describe("load limits saved in Settings (P3-4, P3-5)", () => {
       settings({ cpu: { reduceAt: 50, pauseAt: 101 } }),
       settings({ cpu: { reduceAt: -1, pauseAt: 50 } }),
       settings({ releaseMarginPercent: 80 }),
+      // margin >= reduceAt: recovery level would be negative and `paused` could never end
+      settings({ cpu: { reduceAt: 10, pauseAt: 20 }, releaseMarginPercent: 30 }),
+      settings({ memory: { reduceAt: 5, pauseAt: 20 }, releaseMarginPercent: 5 }),
       { ...settings(), concurrency: 0 },
       { ...settings(), concurrency: 9 },
       { ...settings(), concurrency: 1.5 },
@@ -401,6 +404,24 @@ describe("load limits saved in Settings (P3-4, P3-5)", () => {
     expect((await call("resources.get")).result!.settings).toEqual(good);
     reopen();
     expect((await call("resources.get")).result!.settings).toEqual(good);
+  });
+
+  it("a single task queued while paused still runs after a restart under normal load", async () => {
+    source.memoryPercent = 95;
+    sample();
+    const r = await call("runStub", { prompt: "hi" });
+    expect(r.result?.finalState).toBe("queued");
+    const taskId = r.result?.taskId as string;
+
+    source.memoryPercent = 40; // the load is normal when the service comes back
+    reopen(); // no workflow is `running`: only the queued task tells the scheduler to start
+    sample();
+    await waitFor(
+      () =>
+        svc.db.$client.prepare("select state from tasks where id = ?").pluck().get(taskId) ===
+        "completed",
+      "the queued task to run after the restart",
+    );
   });
 
   it("falls back to the defaults, with a warning, when the stored value is damaged", async () => {

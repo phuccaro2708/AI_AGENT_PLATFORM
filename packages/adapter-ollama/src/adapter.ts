@@ -1,6 +1,7 @@
 import type { AgentCapability, AgentEvent } from "@agent-studio/contracts";
 import type { AgentAdapter, AgentTask } from "@agent-studio/agent-core";
 import { READ_ONLY_TOOLS, runReadOnlyTool } from "./tools.js";
+import { slotFor } from "./model-slot.js";
 
 export const DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434";
 
@@ -170,7 +171,10 @@ export class OllamaAdapter implements AgentAdapter {
     };
 
     let final: AgentEvent;
+    let releaseSlot: (() => void) | undefined;
     try {
+      // One model at a time on this server. Waiting is not "Ollama is silent": the idle timer starts after.
+      releaseSlot = await slotFor(this.baseUrl).acquire(model, ctl.signal);
       arm();
       const toolsOn = this.opts.tools === "read-only";
       const maxRounds = this.opts.maxToolRounds ?? 4;
@@ -247,6 +251,7 @@ export class OllamaAdapter implements AgentAdapter {
       } else final = { type: "error", message: this.describeError(err) };
     } finally {
       if (timer) clearTimeout(timer);
+      releaseSlot?.();
       task.signal.removeEventListener("abort", onAbort);
       this.running.delete(task.id);
     }

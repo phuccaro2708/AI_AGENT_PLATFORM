@@ -169,3 +169,62 @@ describe("OllamaAdapter", () => {
     expect(assertLoopbackUrl("http://[::1]:11434")).toBe("http://[::1]:11434");
   });
 });
+
+describe("one model at a time per server (S5)", () => {
+  const settle = () => new Promise((r) => setTimeout(r, 60));
+  const start = (a: OllamaAdapter, id: string) => {
+    const ac = new AbortController();
+    const done = run(a, task("x", ac.signal, id));
+    return { ac, done };
+  };
+
+  it("a second model waits for the first to finish; its request is not sent meanwhile", async () => {
+    const s = await fake("hang");
+    const a = start(make(s, { model: "a", idleTimeoutMs: 5000 }), "ta");
+    await settle();
+    const b = start(make(s, { model: "b", idleTimeoutMs: 5000 }), "tb");
+    await settle();
+    expect(s.chats.map((c) => c["model"])).toEqual(["a"]); // b is queued, nothing sent
+    a.ac.abort();
+    expect((await a.done).at(-1)).toEqual({ type: "error", message: "cancelled" });
+    await settle();
+    expect(s.chats.map((c) => c["model"])).toEqual(["a", "b"]); // the slot passed to b
+    b.ac.abort();
+    await b.done;
+  });
+
+  it("runs of the same model go at the same time", async () => {
+    const s = await fake("hang");
+    const a1 = start(make(s, { model: "a", idleTimeoutMs: 5000 }), "t1");
+    const a2 = start(make(s, { model: "a", idleTimeoutMs: 5000 }), "t2");
+    await settle();
+    expect(s.chats.map((c) => c["model"])).toEqual(["a", "a"]);
+    a1.ac.abort();
+    a2.ac.abort();
+    await Promise.all([a1.done, a2.done]);
+  });
+
+  it("waiting for the slot is not counted as Ollama being silent, and a waiting run can be cancelled", async () => {
+    const s = await fake("hang");
+    const a = start(make(s, { model: "a", idleTimeoutMs: 5000 }), "ta");
+    await settle();
+    const b = start(make(s, { model: "b", idleTimeoutMs: 100 }), "tb"); // shorter than the wait below
+    await new Promise((r) => setTimeout(r, 250));
+    b.ac.abort();
+    expect((await b.done).at(-1)).toEqual({ type: "error", message: "cancelled" }); // not "sent nothing"
+    expect(s.chats.map((c) => c["model"])).toEqual(["a"]);
+    a.ac.abort();
+    await a.done;
+  });
+
+  it("a finished run frees the slot for another model", async () => {
+    const s = await fake("ok");
+    expect((await run(make(s, { model: "a" }), task("1", undefined, "t1"))).at(-1)).toEqual({
+      type: "completed",
+    });
+    expect((await run(make(s, { model: "b" }), task("2", undefined, "t2"))).at(-1)).toEqual({
+      type: "completed",
+    });
+    expect(s.chats.map((c) => c["model"])).toEqual(["a", "b"]);
+  });
+});

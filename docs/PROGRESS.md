@@ -578,3 +578,7 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - Review ngoài (snapshot `f0f2a10`) báo `env.NODE_OPTIONS` và `apiKeyHelper` trong `.claude/settings.local.json` chạy mã dù `disableAllHooks`. Chưa tự tái hiện với claude thật. Đã thêm `assertSafeLocalSettings` (chỉ cho `$schema`/`model`/`permissions`, còn lại từ chối task), 5 test mới trong `sidecar-permission-gates.test.ts` (18/18 qua). ASSUMPTIONS d14, SECURITY và THREAT_MODEL T4 cập nhật.
 - Đã chạy claude thật (được cho phép): 5 ca `claude-settings-keys` pass; marker KHÔNG xuất hiện ở các ca tái hiện (env, env+Bash, apiKeyHelper, apiKeyHelper ở thư mục cha), biện pháp từ chối chặn đúng. Chi tiết ASSUMPTIONS d14.
 - NOT_RUN/chưa rõ: điều kiện để tái hiện báo cáo của review; thư mục cha/gốc git; verdict an toàn toàn bộ vẫn FAIL cho tới khi có lượt đo đó.
+
+## 2026-11-07: /save (lần 2)
+
+- Commit từ lần save trước: `8cf8206` (từ chối task khi `settings.local.json` có khóa ngoài `$schema`/`model`/`permissions`), `baf26fc` (docs d14), `22eb433` (probe claude thật `claude-settings-keys`), `a12fe15` (kết quả: không tái hiện được marker). Gate đầy đủ sau `8cf8206`: 907 test qua. HANDOFF cập nhật head và gate. ROADMAP/TODO không đổi.

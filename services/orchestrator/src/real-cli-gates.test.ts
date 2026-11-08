@@ -1847,3 +1847,83 @@ describe.skipIf(MODE !== "claude-scope")(
     }, 300_000);
   },
 );
+
+// A3: the REAL bundled sidecar (optionally inside an outer agent-job-wrap standing in for the desktop app's Job Object)
+// runs ONE real claude/codex task; then a real console Ctrl+C (the driver runs in its own hidden console, so only its
+// own tree gets it) or a hard kill hits the sidecar / the outer wrapper. The driver reports which processes of the
+// captured tree survive. Observations go to the report; the assertion is only that the driver finished.
+describe.skipIf(MODE !== "claude-signals" || process.platform !== "win32")(
+  "REAL sidecar + REAL claude/codex, Ctrl+C and kill (opt-in: AGENT_STUDIO_REAL_CLI_GATES=claude-signals)",
+  () => {
+    const driver = join(here, "../test/real-cli/sidecar-signal-driver.mjs");
+    const jobWrapExe = join(repoRoot, "apps/desktop/src-tauri/target/debug/agent-job-wrap.exe");
+    const only = process.env["AGENT_STUDIO_SIGNAL_CASES"]; // e.g. "claude:ctrlc,codex:kill-bare"
+    const CASES = [
+      ["claude", "ctrlc", false],
+      ["claude", "kill-bare", false],
+      ["claude", "kill-job", true],
+      ["codex", "ctrlc", false],
+      ["codex", "kill-bare", false],
+      ["codex", "kill-job", true],
+    ] as const;
+    for (const [cli, mode, wrapped] of CASES) {
+      const name = `${cli}:${mode}`;
+      it.skipIf((only && !only.split(",").includes(name)) || (wrapped && !existsSync(jobWrapExe)))(
+        `${name}`,
+        async () => {
+          const bundle = join(scratch, "sidecar-signals.mjs");
+          if (!existsSync(bundle)) {
+            const mod = (await import(
+              pathToFileURL(join(repoRoot, "scripts/sidecar-bundle.mjs")).href
+            )) as { bundleSidecar: (outfile: string) => Promise<void> };
+            await mod.bundleSidecar(bundle);
+          }
+          const { createRequire } = await import("node:module");
+          const sqliteBinding = join(
+            dirname(
+              createRequire(join(repoRoot, "packages/storage/package.json")).resolve(
+                "better-sqlite3/package.json",
+              ),
+            ),
+            "build/Release/better_sqlite3.node",
+          );
+          const dir = join(scratch, `sig-${cli}-${mode}`);
+          mkdirSync(dir, { recursive: true });
+          const out = join(dir, "result.json");
+          const cfg = {
+            bundle,
+            sqliteBinding,
+            migrations: join(repoRoot, "packages/storage/drizzle"),
+            outerWrap: wrapped ? jobWrapExe : undefined,
+            jobWrap: existsSync(jobWrapExe) ? jobWrapExe : undefined,
+            dir,
+            cli,
+            mode: mode === "ctrlc" ? "ctrlc" : "kill",
+            out,
+            procTools,
+          };
+          const cfgFile = join(dir, "cfg.json");
+          writeFileSync(cfgFile, JSON.stringify(cfg));
+          // Own hidden console: `Start-Process` creates a new console for the launcher, which re-enables Ctrl+C there
+          // (the harness that started this test may have disabled it, and children inherit that) and runs the driver.
+          const proc = spawn(
+            "pwsh",
+            [
+              "-NoProfile",
+              "-Command",
+              `Start-Process -FilePath 'pwsh' -ArgumentList @('-NoProfile','-File','"${procTools}"','launch','"${process.execPath}"','"${driver}"','"${cfgFile}"') -WindowStyle Hidden`,
+            ],
+            { shell: false, stdio: "ignore" },
+          );
+          await new Promise<void>((r) => proc.once("exit", () => r()));
+          for (let i = 0; i < 200 && !existsSync(out); i++) await sleep(1000);
+          expect(existsSync(out)).toBe(true);
+          const result = JSON.parse(readFileSync(out, "utf8")) as Record<string, unknown>;
+          report[`signals-${cli}-${mode}`] = result;
+          expect(result["error"]).toBeUndefined();
+        },
+        240_000,
+      );
+    }
+  },
+);

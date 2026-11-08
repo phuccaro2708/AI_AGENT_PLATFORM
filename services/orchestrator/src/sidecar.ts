@@ -1,5 +1,6 @@
 import {
   canTransitionWorkflow,
+  ResourceSettings,
   SidecarRequest,
   type AgentCapability,
   type SidecarEvent,
@@ -163,6 +164,9 @@ const fail = (id: number, message: string) => ({
   shutdown: false,
 });
 
+/** Where the load limits are stored (the `settings` table); the value is the JSON of a `ResourceSettings`. */
+const RESOURCE_SETTINGS_KEY = "resources.v1";
+
 /** Transport-independent request handler (unit-testable). */
 /** ~120 characters of stored payload around the first (case-insensitive) match. */
 function snippetAround(payloadJson: string, query: string): string {
@@ -201,6 +205,8 @@ export class SidecarService {
   private readonly artifacts: ArtifactRegistry;
   /** Phase 0 spike workflow for `runStub`; created on first use so a normal start adds no project. */
   private spikeWorkflowId: string | undefined;
+  /** The limits in force (P3-4, P3-5): what Settings saved, else the defaults. */
+  private resourceSettings!: ResourceSettings;
   private readonly recoveredTasks: number;
   private readonly secrets: ProviderSecrets;
   private readonly redactor: SecretRedactor;
@@ -492,10 +498,11 @@ export class SidecarService {
       board: new ContextBoard(this.repo),
       workspaces,
     });
+    this.resourceSettings = this.loadResourceSettings();
     if (opts.resourceSource) {
       this.resourceMonitor = new ResourceMonitor({
         source: opts.resourceSource,
-        thresholds: DEFAULT_THRESHOLDS,
+        thresholds: this.resourceSettings.thresholds,
         trackedPids: liveChildPids, // the CLI agents' root pids (P3-2)
         onHealthChange: (healthy, d) =>
           healthy
@@ -510,9 +517,7 @@ export class SidecarService {
     this.scheduler = new Scheduler({
       repo: this.repo,
       orchestrator: this.orchestrator,
-      ...(opts.schedulerConcurrency !== undefined
-        ? { concurrency: opts.schedulerConcurrency }
-        : {}),
+      concurrency: this.resourceSettings.concurrency,
       ...(this.resourceMonitor ? { admission: this.resourceMonitor } : {}),
       onStarted: (id) => opts.onEvent?.({ event: "task.state", taskId: id, state: "running" }),
       onSettled: (id, result) => {
@@ -742,6 +747,65 @@ export class SidecarService {
     this.scheduler.start(this.opts.schedulerIntervalMs);
     await this.scheduler.tick();
     return { taskId, settled };
+  }
+
+  /** Defaults: the monitor's own default thresholds and the embedding's concurrency (2 when it names none). */
+  private defaultResourceSettings(): ResourceSettings {
+    const { cpu, memory, releaseMarginPercent } = DEFAULT_THRESHOLDS;
+    return {
+      concurrency: this.opts.schedulerConcurrency ?? 2,
+      thresholds: { cpu: { ...cpu }, memory: { ...memory }, releaseMarginPercent },
+    };
+  }
+
+  /** What Settings saved earlier. Anything unreadable or out of bounds falls back to the defaults, with a warning. */
+  private loadResourceSettings(): ResourceSettings {
+    const text = this.repo.getSetting(RESOURCE_SETTINGS_KEY);
+    if (text === undefined) return this.defaultResourceSettings();
+    try {
+      return ResourceSettings.parse(JSON.parse(text));
+    } catch (err) {
+      this.log.warn(
+        { err: this.redactor.text(String(err)) },
+        "stored load limits are invalid: using the defaults",
+      );
+      return this.defaultResourceSettings();
+    }
+  }
+
+  private queuedCount(): number {
+    return this.db.$client
+      .prepare("select count(*) from tasks where state = 'queued'")
+      .pluck()
+      .get() as number;
+  }
+
+  /** The limits in force and what the resource monitor says now (level and the reasons for it). */
+  private resourceReport() {
+    const snap = this.resourceMonitor?.snapshot();
+    const base = this.resourceSettings.concurrency;
+    const queued = this.queuedCount();
+    return {
+      settings: this.resourceSettings,
+      defaults: this.defaultResourceSettings(),
+      status: {
+        concurrency: base,
+        effectiveConcurrency: this.resourceMonitor
+          ? this.resourceMonitor.maxConcurrency(base)
+          : base,
+        running: this.scheduler.runningCount,
+        queued,
+        monitor: snap
+          ? {
+              level: snap.level,
+              reasons: snap.reasons,
+              measured: snap.measured,
+              ...snap.metrics,
+              sampledAtMs: snap.sampledAtMs,
+            }
+          : null,
+      },
+    };
   }
 
   private spikeWorkflow(): string {
@@ -1096,6 +1160,24 @@ export class SidecarService {
           return ok(req.id, { worktrees: this.repo.listWorktrees(req.params.workflowId) });
         case "diagnostics.export":
           return ok(req.id, this.exportDiagnosticsBundle());
+        case "resources.get":
+          return ok(req.id, this.resourceReport());
+        case "resources.set": {
+          const next = req.params.settings;
+          // Monitor first: it re-validates and throws before anything is stored or applied.
+          this.resourceMonitor?.setThresholds(next.thresholds);
+          this.scheduler.setConcurrency(next.concurrency);
+          this.repo.setSetting(RESOURCE_SETTINGS_KEY, JSON.stringify(next));
+          this.resourceSettings = next;
+          this.resourceMonitor?.sample(); // decide with the new numbers now, not a second later
+          this.log.info({ concurrency: next.concurrency }, "load limits changed");
+          // A raised ceiling (or looser brakes) may free a slot for tasks that were being held back.
+          if (this.queuedCount() > 0) {
+            this.scheduler.start(this.opts.schedulerIntervalMs);
+            await this.scheduler.tick();
+          }
+          return ok(req.id, this.resourceReport());
+        }
         case "shutdown":
           return { response: { id: req.id, result: { ok: true } }, shutdown: true };
       }

@@ -12,6 +12,7 @@ import type { StudioDb } from "./db.js";
 import {
   agents,
   agentSettings,
+  settings,
   approvals,
   artifacts,
   contextItems,
@@ -507,6 +508,19 @@ export class Repo {
       .limit(limit)
       .all()
       .map((r) => AgentMessage.parse(JSON.parse(r.payloadJson)));
+  }
+
+  /** A free-form app setting (the `settings` table); the caller owns the key and validates the text. */
+  getSetting(key: string): string | undefined {
+    return this.db.select().from(settings).where(eq(settings.key, key)).get()?.value;
+  }
+
+  setSetting(key: string, value: string): void {
+    this.db
+      .insert(settings)
+      .values({ key, value })
+      .onConflictDoUpdate({ target: settings.key, set: { value } })
+      .run();
   }
 
   /** Settings that passed a probe; `undefined` means "launch the CLI with its defaults". */

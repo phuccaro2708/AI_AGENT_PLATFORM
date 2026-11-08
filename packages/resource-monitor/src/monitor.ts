@@ -44,7 +44,7 @@ export interface Snapshot extends Decision {
  */
 export class ResourceMonitor {
   private readonly source: ResourceSource;
-  private readonly thresholds: Thresholds;
+  private thresholds: Thresholds;
   private readonly trackedPids: () => number[];
   private readonly clock: () => number;
   private prevSystem?: { busy: number; total: number };
@@ -74,6 +74,23 @@ export class ResourceMonitor {
       sampledAtMs: this.clock(),
       measured: false,
     };
+  }
+
+  /**
+   * Replaces the thresholds (validated: a bad set throws and changes nothing). When a measurement exists the
+   * level is decided again at once from the last metrics (starting from the current level for hysteresis), so a
+   * change in Settings takes effect without waiting for the next sample.
+   */
+  setThresholds(t: Thresholds): void {
+    validateThresholds(t);
+    this.thresholds = t;
+    if (this.snap.measured) {
+      this.snap = { ...this.snap, ...decide(this.snap.metrics, t, this.snap.level) };
+    }
+  }
+
+  getThresholds(): Thresholds {
+    return this.thresholds;
   }
 
   get level(): PressureLevel {

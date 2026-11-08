@@ -47,7 +47,7 @@ export class Scheduler {
   private readonly repo: Repo;
   private readonly orchestrator: Orchestrator;
   private readonly clock: () => Date;
-  private readonly concurrency: number;
+  private concurrency: number;
   private readonly leaseMs: number;
   private readonly admission: SchedulerAdmission | undefined;
   private readonly onSettled: SchedulerOptions["onSettled"];
@@ -59,11 +59,29 @@ export class Scheduler {
     this.repo = opts.repo;
     this.orchestrator = opts.orchestrator;
     this.clock = opts.clock ?? (() => new Date());
-    this.concurrency = opts.concurrency ?? 2;
+    this.concurrency = 2;
+    if (opts.concurrency !== undefined) this.setConcurrency(opts.concurrency);
     this.leaseMs = opts.leaseMs ?? 60_000;
     this.admission = opts.admission;
     this.onSettled = opts.onSettled;
     this.onStarted = opts.onStarted;
+  }
+
+  /**
+   * Changes the ceiling. Tasks already running are never touched: when it goes below the number running,
+   * nothing new starts until enough of them have ended.
+   */
+  setConcurrency(n: number): void {
+    if (!Number.isInteger(n) || n < 1) throw new RangeError("concurrency must be an integer >= 1");
+    this.concurrency = n;
+  }
+
+  getConcurrency(): number {
+    return this.concurrency;
+  }
+
+  get runningCount(): number {
+    return this.running.size;
   }
 
   private leaseUntil(): string {

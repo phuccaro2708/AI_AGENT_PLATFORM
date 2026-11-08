@@ -323,3 +323,170 @@ describe("SidecarService resource admission", () => {
     expect(vi.getTimerCount()).toBe(base);
   });
 });
+
+describe("load limits saved in Settings (P3-4, P3-5)", () => {
+  const T0 = {
+    cpu: { reduceAt: 85, pauseAt: 95 },
+    memory: { reduceAt: 80, pauseAt: 90 },
+    releaseMarginPercent: 5,
+  };
+  const settings = (over: Record<string, unknown> = {}) => ({
+    concurrency: CONCURRENCY,
+    thresholds: { ...T0, ...over },
+  });
+  const save = (v: unknown) => call("resources.set", { settings: v });
+  const startOne = () =>
+    call("workflows.start", { workflowId: wfId, agentId: "parked", prompt: "p" });
+  const reopen = () => {
+    svc.close();
+    svc = new SidecarService(
+      {
+        dbPath: join(dir, "s.db"),
+        extraAdapters: [adapter],
+        resourceSource: source,
+        resourceSampleMs: SAMPLE_MS,
+        schedulerConcurrency: CONCURRENCY,
+      },
+      quiet,
+    );
+  };
+
+  it("reports the defaults, which are the monitor's own defaults, when nothing was saved", async () => {
+    const r = (await call("resources.get")).result!;
+    expect(r.settings).toEqual({ concurrency: CONCURRENCY, thresholds: T0 });
+    expect(r.defaults).toEqual(r.settings);
+    expect(r.status).toMatchObject({
+      concurrency: CONCURRENCY,
+      effectiveConcurrency: CONCURRENCY,
+      running: 0,
+    });
+    expect(r.status.monitor).toMatchObject({ level: "normal", measured: true });
+  });
+
+  it("saves, applies at once, and restores the same values after a restart", async () => {
+    // memory 85% is `reduced` with the defaults (reduceAt 80): with reduceAt 95 / pauseAt 99 it is `normal` (hysteresis releases 5 points below).
+    source.memoryPercent = 85;
+    sample();
+    expect((await call("resources.get")).result!.status.monitor.level).toBe("reduced");
+    const mine = settings({ memory: { reduceAt: 95, pauseAt: 99 } });
+    const saved = (await save(mine)).result!;
+    expect(saved.settings).toEqual(mine);
+    expect(saved.status.monitor.level).toBe("normal"); // decided with the new numbers immediately
+
+    reopen();
+    const again = (await call("resources.get")).result!;
+    expect(again.settings).toEqual(mine);
+    expect(again.defaults.thresholds.memory).toEqual({ reduceAt: 80, pauseAt: 90 });
+    sample();
+    expect((await call("resources.get")).result!.status.monitor.level).toBe("normal"); // still 85%
+  });
+
+  it("refuses values out of bounds and keeps what was saved", async () => {
+    const good = settings({ memory: { reduceAt: 70, pauseAt: 90 } });
+    await save(good);
+    for (const bad of [
+      settings({ memory: { reduceAt: 90, pauseAt: 90 } }), // reduceAt must be below pauseAt
+      settings({ cpu: { reduceAt: 50, pauseAt: 101 } }),
+      settings({ cpu: { reduceAt: -1, pauseAt: 50 } }),
+      settings({ releaseMarginPercent: 80 }),
+      { ...settings(), concurrency: 0 },
+      { ...settings(), concurrency: 9 },
+      { ...settings(), concurrency: 1.5 },
+      { ...settings(), extra: true },
+      { concurrency: 2 },
+    ]) {
+      const r = await save(bad);
+      expect(r.error?.message).toBe("invalid request");
+    }
+    expect((await call("resources.get")).result!.settings).toEqual(good);
+    reopen();
+    expect((await call("resources.get")).result!.settings).toEqual(good);
+  });
+
+  it("falls back to the defaults, with a warning, when the stored value is damaged", async () => {
+    new Repo(svc.db).setSetting("resources.v1", '{"concurrency": 99, "thresholds": 3}');
+    reopen();
+    expect((await call("resources.get")).result!.settings).toEqual({
+      concurrency: CONCURRENCY,
+      thresholds: T0,
+    });
+  });
+
+  it("explains why tasks are held back: level, reasons and how many are queued", async () => {
+    source.memoryPercent = 95;
+    sample();
+    await startOne();
+    const s = (await call("resources.get")).result!.status;
+    expect(s).toMatchObject({ effectiveConcurrency: 0, running: 0, queued: 1 });
+    expect(s.monitor.level).toBe("paused");
+    expect(s.monitor.reasons.join(" ")).toMatch(/memory/i);
+  });
+
+  it("applies a new thresholds set to the admission of later tasks", async () => {
+    await save(settings({ memory: { reduceAt: 20, pauseAt: 30 } })); // very strict
+    source.memoryPercent = 35;
+    sample();
+    await startOne();
+    expect(adapter.active).toBe(0); // paused at 35% under the new thresholds
+    source.memoryPercent = 5;
+    sample();
+    await waitFor(() => adapter.active === 1, "the held task to start after recovery");
+  });
+
+  it("lowering the ceiling aborts nothing and holds new tasks until enough have ended", async () => {
+    for (let i = 0; i < 4; i++) await startOne();
+    await waitFor(() => adapter.active === 4, "four tasks running");
+    await save({ ...settings(), concurrency: 2 });
+    expect(adapter.active).toBe(4); // running tasks are not touched
+    await startOne();
+    await startOne();
+    await scheduler().tick();
+    expect(adapter.active).toBe(4); // 4 running >= ceiling 2: nothing new starts
+    adapter.releaseAll(); // all four finish
+    await waitFor(() => adapter.active === 0, "the four tasks to end");
+    await scheduler().tick();
+    await waitFor(() => adapter.active === 2, "two held tasks to start under the new ceiling of 2");
+    await scheduler().tick();
+    expect(adapter.active).toBe(2);
+    expect(adapter.maxActive).toBe(4); // the four from before; never more than the old ceiling
+  });
+
+  it("raising the ceiling lets held tasks start without waiting for the timer", async () => {
+    await save({ ...settings(), concurrency: 1 });
+    for (let i = 0; i < 3; i++) await startOne();
+    await waitFor(() => adapter.active === 1, "one task running");
+    expect(adapter.active).toBe(1);
+    await save({ ...settings(), concurrency: 3 });
+    await waitFor(() => adapter.active === 3, "three tasks running");
+    expect(adapter.active).toBe(3);
+  });
+
+  it("never starts more than the saved ceiling while the load and the ceiling both change", async () => {
+    for (let i = 0; i < 10; i++) await startOne();
+    let ceiling = CONCURRENCY;
+    for (const [mem, c] of [
+      [10, 3],
+      [85, 3],
+      [95, 2],
+      [30, 2],
+      [85, 4],
+      [10, 1],
+      [99, 1],
+      [10, 5],
+    ] as const) {
+      source.memoryPercent = mem;
+      if (c !== ceiling) {
+        ceiling = c;
+        await save({ ...settings(), concurrency: c });
+      }
+      sample();
+      const before = adapter.active;
+      await scheduler().tick();
+      await new Promise((res) => setImmediate(res));
+      // A tick starts tasks only while running < min(ceiling, admission); it never aborts any.
+      const limit = mem >= 90 ? 0 : mem >= 80 ? Math.max(1, Math.floor(c / 2)) : c;
+      expect(adapter.active).toBeGreaterThanOrEqual(before);
+      expect(adapter.active).toBeLessThanOrEqual(Math.max(before, limit));
+    }
+  });
+});

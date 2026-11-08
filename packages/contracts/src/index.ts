@@ -47,6 +47,29 @@ export type AgentCapability = z.infer<typeof AgentCapability>;
  * What a task may do to its working directory. Passed to the CLI as flags where the CLI supports it,
  * but it is advisory: neither CLI confines writes to `cwd` (docs/ASSUMPTIONS.md), so it is not a sandbox.
  */
+/**
+ * Load limits the person can change in Settings (P3-4, P3-5). Bounds are hard: 1-8 tasks at once, percentages
+ * 0-100 with `reduceAt < pauseAt`. The values are only a ceiling and two brakes; the resource monitor can still
+ * lower the number of tasks, never raise it above `concurrency`.
+ */
+const PercentBand = z
+  .object({ reduceAt: z.number().min(0).max(100), pauseAt: z.number().min(0).max(100) })
+  .strict()
+  .refine((b) => b.reduceAt < b.pauseAt, { message: "reduceAt must be below pauseAt" });
+export const ResourceSettings = z
+  .object({
+    concurrency: z.number().int().min(1).max(8),
+    thresholds: z
+      .object({
+        cpu: PercentBand,
+        memory: PercentBand,
+        releaseMarginPercent: z.number().min(0).max(50),
+      })
+      .strict(),
+  })
+  .strict();
+export type ResourceSettings = z.infer<typeof ResourceSettings>;
+
 export const TaskPermissions = z.enum(["read-only", "workspace-write"]);
 export type TaskPermissions = z.infer<typeof TaskPermissions>;
 
@@ -355,6 +378,13 @@ export const SidecarRequest = z.discriminatedUnion("method", [
   }),
   // ---- Phase 4 (P4-6): a redacted support bundle. No params: the UI never chooses where it is written. ----
   z.object({ id: z.number().int(), method: z.literal("diagnostics.export") }),
+  // ---- Phase 3 (P3-4, P3-5): load limits. `resources.get` also reports the live pressure level and why. ----
+  z.object({ id: z.number().int(), method: z.literal("resources.get") }),
+  z.object({
+    id: z.number().int(),
+    method: z.literal("resources.set"),
+    params: z.object({ settings: ResourceSettings }),
+  }),
   z.object({ id: z.number().int(), method: z.literal("shutdown") }),
 ]);
 export type SidecarRequest = z.infer<typeof SidecarRequest>;

@@ -19,6 +19,7 @@ export default defineConfig({
       "@agent-studio/policy-engine": src("packages/policy-engine"),
       "@agent-studio/resource-monitor": src("packages/resource-monitor"),
       "@agent-studio/adapter-antigravity": src("packages/adapter-antigravity"),
+      "@agent-studio/adapter-ollama": src("packages/adapter-ollama"),
       "@agent-studio/orchestrator": src("services/orchestrator"),
     },
   },

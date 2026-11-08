@@ -100,6 +100,15 @@ importers:
         specifier: workspace:*
         version: link:../process-manager
 
+  packages/adapter-ollama:
+    dependencies:
+      '@agent-studio/agent-core':
+        specifier: workspace:*
+        version: link:../agent-core
+      '@agent-studio/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/agent-core:
     dependencies:
       '@agent-studio/contracts':
@@ -182,6 +191,9 @@ importers:
       '@agent-studio/adapter-codex':
         specifier: workspace:*
         version: link:../../packages/adapter-codex
+      '@agent-studio/adapter-ollama':
+        specifier: workspace:*
+        version: link:../../packages/adapter-ollama
       '@agent-studio/agent-core':
         specifier: workspace:*
         version: link:../../packages/agent-core

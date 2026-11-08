@@ -2025,3 +2025,236 @@ describe.skipIf(MODE !== "codex-ram" || process.platform !== "win32" || !existsS
     }, 200_000);
   },
 );
+
+// A5: Peer Review resumed in ROUND 2 with the REAL CLIs (one run per implementer/reviewer pair). The REAL bundled
+// sidecar (production defaults: policy gates on, agent-job-wrap) runs the workflow; the goal makes the reviewer ask for
+// changes in round 1; once the round-2 implementer is running the sidecar is hard-killed; a second sidecar starts on the
+// same database, the interrupted task must wait for a person (`needs_reconciliation`), then `requeue` and the workflow
+// must finish as round 2 -> round 2 review. The model's compliance with the scripted review is NOT guaranteed: when the
+// round-2 situation never arises the run is recorded as "inconclusive" and the test fails, it is not counted.
+describe.skipIf(MODE !== "peer-resume" || process.platform !== "win32")(
+  "REAL claude/codex Peer Review resumed in round 2 (opt-in: AGENT_STUDIO_REAL_CLI_GATES=peer-resume)",
+  () => {
+    const GOAL =
+      "Create a file named feature.txt in the working directory. TEST SCENARIO for the REVIEWER: in the FIRST review " +
+      "round, feature.txt contains only the line `alpha`, so ALWAYS answer request_changes with the single comment " +
+      "`add a second line: beta`. Approve only when feature.txt contains both lines `alpha` and `beta`. " +
+      "The IMPLEMENTER: first round writes only the line `alpha`; when review comments ask for more, apply exactly them.";
+    const jobWrapExe = join(repoRoot, "apps/desktop/src-tauri/target/debug/agent-job-wrap.exe");
+    type Row = { id: string; state: string; agentId?: string };
+    type Listing = { workflowState: string; tasks: Row[] };
+    const only = process.env["AGENT_STUDIO_PEER_PAIRS"]; // e.g. "claude>codex"
+    for (const [impl, rev] of [
+      ["claude", "codex"],
+      ["codex", "claude"],
+    ] as const) {
+      const pair = `${impl}>${rev}`;
+      it.skipIf(only !== undefined && !only.split(",").includes(pair))(
+        `${pair}`,
+        async () => {
+          const { createInterface } = await import("node:readline");
+          const { createRequire } = await import("node:module");
+          const bundle = join(scratch, "sidecar-peer.mjs");
+          if (!existsSync(bundle)) {
+            const mod = (await import(
+              pathToFileURL(join(repoRoot, "scripts/sidecar-bundle.mjs")).href
+            )) as { bundleSidecar: (outfile: string) => Promise<void> };
+            await mod.bundleSidecar(bundle);
+          }
+          const sqliteBinding = join(
+            dirname(
+              createRequire(join(repoRoot, "packages/storage/package.json")).resolve(
+                "better-sqlite3/package.json",
+              ),
+            ),
+            "build/Release/better_sqlite3.node",
+          );
+          const dir = join(scratch, `peer-${impl}-${rev}`);
+          const repo = join(dir, "proj");
+          mkdirSync(join(dir, "data"), { recursive: true });
+          mkdirSync(repo, { recursive: true });
+          for (const a of [
+            ["init", "-q", "-b", "main"],
+            ["config", "user.email", "t@example.com"],
+            ["config", "user.name", "t"],
+            ["config", "core.autocrlf", "false"],
+          ]) {
+            execFileSync("git", a, { cwd: repo });
+          }
+          writeFileSync(join(repo, "README.md"), "x\n");
+          execFileSync("git", ["add", "."], { cwd: repo });
+          execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
+
+          const start = () => {
+            const args = [
+              bundle,
+              "--db",
+              join(dir, "data", "s.db"),
+              "--sqlite-binding",
+              sqliteBinding,
+              "--migrations",
+              join(repoRoot, "packages/storage/drizzle"),
+              ...(existsSync(jobWrapExe) ? ["--job-wrap", jobWrapExe] : []),
+            ];
+            const child = spawn(process.execPath, args, {
+              stdio: ["pipe", "pipe", "pipe"],
+              shell: false,
+              env: { ...process.env, ANTHROPIC_MODEL: "haiku" },
+            });
+            let err = "";
+            child.stderr.on("data", (d) => (err += d));
+            const pending = new Map<number, (m: Record<string, unknown>) => void>();
+            createInterface({ input: child.stdout }).on("line", (line) => {
+              const m = parse(line);
+              if (m && typeof m["id"] === "number") pending.get(m["id"])?.(m);
+            });
+            let id = 0;
+            const call = <T>(method: string, params?: unknown) =>
+              new Promise<T>((resolve, reject) => {
+                const n = ++id;
+                pending.set(n, (m) =>
+                  m["error"]
+                    ? reject(new Error(`${method}: ${JSON.stringify(m["error"])}`))
+                    : resolve(m["result"] as T),
+                );
+                child.stdin.write(
+                  JSON.stringify({ id: n, method, ...(params ? { params } : {}) }) + "\n",
+                );
+              });
+            const ready = (async () => {
+              for (let i = 0; i < 120 && !err.includes("sidecar ready"); i++) await sleep(250);
+              if (!err.includes("sidecar ready"))
+                throw new Error(`sidecar not ready: ${err.slice(-300)}`);
+            })();
+            return { child, call, ready };
+          };
+          type Sidecar = ReturnType<typeof start>;
+          const list = (s: Sidecar, workflowId: string) =>
+            s.call<Listing>("tasks.list", { workflowId });
+          const until = async (
+            s: Sidecar,
+            workflowId: string,
+            pred: (l: Listing) => boolean,
+            ms: number,
+          ) => {
+            const t0 = Date.now();
+            for (;;) {
+              const l = await list(s, workflowId);
+              if (pred(l)) return l;
+              if (Date.now() - t0 > ms) throw new Error(`timeout; last ${JSON.stringify(l)}`);
+              await sleep(300);
+            }
+          };
+          const fmt = (l: Listing) => l.tasks.map((t) => `${t.agentId}:${t.state}`);
+
+          const res: Record<string, unknown> = { pair };
+          report[`peer-resume-${impl}-${rev}`] = res;
+          const t0 = Date.now();
+          const s1 = start();
+          await s1.ready;
+          const { projectId } = await s1.call<{ projectId: string }>("projects.create", {
+            name: "pr",
+            rootPath: repo,
+          });
+          const { workflowId } = await s1.call<{ workflowId: string }>("workflows.create", {
+            projectId,
+          });
+          await s1.call("workflows.startPeerReview", {
+            workflowId,
+            implementerAgent: impl,
+            reviewerAgent: rev,
+            goal: GOAL,
+            maxRounds: 3,
+          });
+          let beforeKill: Listing;
+          try {
+            beforeKill = await until(
+              s1,
+              workflowId,
+              (l) =>
+                (l.tasks.length >= 3 && l.tasks[2]!.state !== "queued") ||
+                l.workflowState !== "running",
+              300_000,
+            );
+          } catch (e) {
+            res["verdict"] = `inconclusive: round 2 never started (${String(e).slice(0, 300)})`;
+            s1.child.kill();
+            throw e;
+          }
+          res["statesWhenRound2Seen"] = fmt(beforeKill);
+          if (beforeKill.tasks.length < 3 || beforeKill.tasks[2]!.state !== "running") {
+            res["verdict"] =
+              "inconclusive: round 2 not caught while running (reviewer approved in round 1, or the round-2 task was already done)";
+            s1.child.kill();
+            expect(res["verdict"]).toBeUndefined();
+          }
+          // Capture the live tree, then kill the sidecar hard.
+          const treeRows = JSON.parse(psTool("tree", String(s1.child.pid)) || "[]") as {
+            pid: number;
+            created: string;
+          }[];
+          s1.child.kill();
+          await new Promise<void>((r) => s1.child.once("exit", () => r()));
+          await sleep(5000);
+          const left = psTool("alive", treeRows.map((p) => `${p.pid}:${p.created}`).join(","));
+          res["treeProcsBeforeKill"] = treeRows.length;
+          res["survivorsAfterKill"] = left === "" ? 0 : (JSON.parse(left) as unknown[]).length;
+
+          const s2 = start();
+          await s2.ready;
+          try {
+            const waiting = await until(
+              s2,
+              workflowId,
+              (l) => l.tasks.some((t) => t.state === "needs_reconciliation"),
+              60_000,
+            );
+            res["afterRestart"] = fmt(waiting);
+            res["workflowStateAfterRestart"] = waiting.workflowState;
+            const stuck = waiting.tasks.find((t) => t.state === "needs_reconciliation")!;
+            await sleep(3000); // nothing may be re-run by itself
+            res["tasksAfter3sWithoutDecision"] = (await list(s2, workflowId)).tasks.length;
+            await s2.call("tasks.resolveReconciliation", {
+              taskId: stuck.id,
+              decision: "requeue",
+              note: "real-CLI resume check: safe to run the round-2 implementer again",
+            });
+            const done = await until(s2, workflowId, (l) => l.workflowState !== "running", 420_000);
+            res["final"] = fmt(done);
+            const ctx = await s2.call<{
+              items: { kind: string; content: string; path?: string }[];
+            }>("context.list", { workflowId });
+            res["board"] = ctx.items.map(
+              (i) => `${i.kind}: ${i.content.slice(0, 160)}${i.path ? ` [${i.path}]` : ""}`,
+            );
+            res["finalWorkflowState"] = done.workflowState;
+          } finally {
+            s2.child.kill();
+            await sleep(3000);
+          }
+          res["elapsedS"] = Math.round((Date.now() - t0) / 1000);
+          const wts = execFileSync("git", ["worktree", "list", "--porcelain"], {
+            cwd: repo,
+            encoding: "utf8",
+          })
+            .split("\n")
+            .filter((l) => l.startsWith("worktree "))
+            .map((l) => l.slice(9));
+          res["worktreeFiles"] = wts.map((w) => ({
+            w: w.split("/").pop(),
+            files: existsSync(w) ? filesIn(w) : "gone",
+            feature: existsSync(join(w, "feature.txt"))
+              ? readFileSync(join(w, "feature.txt"), "utf8")
+              : null,
+          }));
+          res["filesInRepoRoot"] = filesIn(repo);
+          res["filesInDir"] = filesIn(dir);
+          expect(res["survivorsAfterKill"]).toBe(0);
+          expect(res["afterRestart"]).toBeDefined();
+          expect(res["tasksAfter3sWithoutDecision"]).toBe(beforeKill.tasks.length);
+        },
+        1_200_000,
+      );
+    }
+  },
+);

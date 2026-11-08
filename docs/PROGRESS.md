@@ -650,3 +650,10 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - P3 `worktree-hash.ts`: kiểm tra đoạn `..` thật thay vì `startsWith("..")`; test file `..notes`.
 - 4 test mới đều đỏ trên code cũ, xanh sau sửa. Test PID thật trên Windows (`sampleTreeBytes`) pass ở máy này: lỗi review không tái hiện, nguyên nhân chưa xác định.
 - Gate tuần tự: lint/format/typecheck/test/build exit 0; test: 955 pass, 6 expected fail, 62 skipped. Không đụng src-tauri nên không chạy cargo. Secret scan chưa chạy lại sau lần sửa này.
+
+### 2026-11-08: /save — kế hoạch đóng Phase 3 (chưa thực hiện)
+
+- Đối chiếu điều kiện đóng Phase 3 với 3 gate trong ROADMAP: chưa đủ (thiếu `adapter-ollama` và tool loop, VRAM chưa đo, quy tắc một model Ollama một lúc chưa có, thẻ "Load limits" chưa xem trong app thật). Không chạy lại test hay gate trong lượt này.
+- Soạn kế hoạch S0–S7 (xem HANDOFF, "Việc tiếp theo"); người dùng đã chọn: làm cả tool loop, VRAM từ `/api/ps` + `nvidia-smi`, gate "không sửa core" chứng minh bằng diff + test, dò model nhỏ nhất đã pull.
+- Ghi nhận: `ollama list` (chạy qua shell) treo quá 120 giây trên máy này trong lúc soạn kế hoạch; chưa tìm hiểu nguyên nhân. Chưa gọi HTTP `/api/version` nào, nên chưa biết server Ollama có chạy không.
+- Không có thay đổi mã. Không push, không PR.

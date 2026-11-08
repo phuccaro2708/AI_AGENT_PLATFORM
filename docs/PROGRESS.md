@@ -657,3 +657,13 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - Soạn kế hoạch S0–S7 (xem HANDOFF, "Việc tiếp theo"); người dùng đã chọn: làm cả tool loop, VRAM từ `/api/ps` + `nvidia-smi`, gate "không sửa core" chứng minh bằng diff + test, dò model nhỏ nhất đã pull.
 - Ghi nhận: `ollama list` (chạy qua shell) treo quá 120 giây trên máy này trong lúc soạn kế hoạch; chưa tìm hiểu nguyên nhân. Chưa gọi HTTP `/api/version` nào, nên chưa biết server Ollama có chạy không.
 - Không có thay đổi mã. Không push, không PR.
+
+### 2026-11-08: S0 probe Ollama thật (chỉ đọc + 2 lượt chat nhỏ)
+
+- Máy này: Ollama 0.40.14 tại `127.0.0.1:11434`; GPU RTX 5060 Laptop 8151 MiB. Không chạy `ollama list`; chỉ HTTP có timeout.
+- `/api/version` và `/api/tags` trả JSON như tài liệu. Chỉ có đúng 1 model đã pull: `eriktonon/qwen3.8-uncensored:latest` (9.2B, Q4_K_M, ~6.4 GB; capabilities `tools, thinking, completion, vision`). Chưa có model nhỏ hơn để dò.
+- `/api/chat` (`stream:false`, `think:false`, `num_predict:24`): trả `"ok"`, `done_reason:stop`; tải model lần đầu ~13 giây (`load_duration`), tổng ~13,8 giây.
+- `/api/ps` khi đang nạp: `size` 8,75 GB, `size_vram` 5,64 GB (nạp một phần vào GPU, phần còn lại ở CPU/RAM), `context_length` 65536, `expires_at` ~5 phút sau. `nvidia-smi`: đã dùng 7333 MiB, còn trống 567 MiB (trước khi nạp: dùng 1276, trống 6624). Hai nguồn VRAM khớp theo hướng nhưng không cùng đơn vị/phạm vi (`/api/ps` chỉ tính model, `nvidia-smi` tính cả máy).
+- Tool calling (1 lượt, `get_weather`): model KHÔNG trả `tool_calls`; nó bịa thẳng câu trả lời thời tiết bằng văn bản. Mới 1 mẫu: chưa kết luận model không hỗ trợ tool, nhưng `capabilities` có `tools` không bảo đảm nó gọi tool thật. Adapter/tool loop không được giả định `tool_calls` luôn xuất hiện.
+- Dọn: `keep_alive:0` gỡ model, `/api/ps` cuối trả `[]`.
+- Chưa đo: model khác, streaming, `think:true`, lỗi khi model chưa pull, Ollama không chạy. Chưa viết adapter (S1). Không push, không tick gate, Phase 3 chưa đóng.

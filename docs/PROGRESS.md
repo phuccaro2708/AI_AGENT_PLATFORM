@@ -618,3 +618,8 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 
 - Nguyên nhân thật (đọc log run `42492925553`): `DRIFT HANDOFF is dated 2026-11-07 but PROGRESS has an entry dated 2026-11-08`. Check hoạt động đúng; mục PROGRESS 2026-11-08 của `fd6b767` chưa có HANDOFF tương ứng.
 - Sửa: HANDOFF cập nhật ngày 2026-11-08, head, PR #3 và dòng về `fd6b767`. Chạy lại `node scripts/docs-sync-check.mjs` cục bộ trước khi push.
+
+### 2026-11-08: /save (lần 4) — kiểm tra nhánh, CI PR #3
+
+- Lệnh: `git rev-list/cherry/merge-base --is-ancestor` cho từng nhánh so với `claude/loving-lovelace-32lh71` và `worktree-p4-close-prep`; `gh pr checks 3`; đọc log job ubuntu. Kết quả thật: 19 nhánh local + `fix-pm-abort-flaky` đã nằm trong `worktree-p4-close-prep`; `phase-2-kickoff` tụt 204, không ghép; chưa ghép/xoá gì.
+- CI ubuntu đỏ ở 3 file test (xem HANDOFF); chưa sửa, chưa xác định nguyên nhân. Auto-fix đang bật cho PR #3.

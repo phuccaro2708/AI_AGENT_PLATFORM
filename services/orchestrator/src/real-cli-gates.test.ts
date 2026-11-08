@@ -1350,7 +1350,7 @@ describe.skipIf(MODE !== "claude-settings-keys")(
           : () => [
               "--setting-sources",
               "local",
-              ...(withBash ? ["--permission-mode", "bypassPermissions"] : []),
+              ...(withBash ? ["--allowedTools", "Bash(node:*)"] : []),
             ],
       });
       const events: AgentEvent[] = [];

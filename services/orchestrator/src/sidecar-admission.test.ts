@@ -257,25 +257,25 @@ describe("SidecarService resource admission", () => {
       expect(adapter.active).toBe(CONCURRENCY / 2);
     });
 
-    it("runStub waits while paused and completes after recovery", async () => {
+    it("runStub does not block IPC while paused: it answers `queued`, and the task runs after recovery", async () => {
       source.memoryPercent = 95;
       sample();
-      let done = false;
-      const pending = call("runStub", { prompt: "hi" }).then((r) => {
-        done = true;
-        return r;
-      });
-      await waitFor(
-        () => (svc.db.$client.prepare("select count(*) from tasks").pluck().get() as number) === 1,
-        "the stub task to be queued",
-      );
-      await tick();
-      expect(done).toBe(false);
+      const r = await call("runStub", { prompt: "hi" }); // returns at once: IPC is served one request at a time
+      expect(r.result?.finalState).toBe("queued");
+      const taskId = r.result?.taskId as string;
 
       source.memoryPercent = 40;
-      sample();
-      await scheduler().tick();
-      const r = await pending;
+      sample(); // the fake clock also fires the scheduler interval that runStub started
+      await waitFor(
+        () =>
+          svc.db.$client.prepare("select state from tasks where id = ?").pluck().get(taskId) ===
+          "completed",
+        "the stub task to complete",
+      );
+    });
+
+    it("runStub still answers with the final state when admission lets it run", async () => {
+      const r = await call("runStub", { prompt: "hi" });
       expect(r.result?.finalState).toBe("completed");
     });
   });

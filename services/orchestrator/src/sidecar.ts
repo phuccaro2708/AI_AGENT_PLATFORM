@@ -786,7 +786,18 @@ export class SidecarService {
             prompt: req.params.prompt,
             cwd: process.cwd(),
           });
-          const r = await settled; // waits for admission too: paused load keeps it queued
+          // IPC requests are served one at a time (sidecar-main), so a task that admission is holding back must
+          // not be awaited here: it would block `tasks.cancel` and everything behind it. It stays queued.
+          if (this.repo.getTaskState(taskId) === "queued") {
+            this.settleWaiters.delete(taskId);
+            return ok(req.id, {
+              taskId,
+              finalState: "queued",
+              eventCount: 0,
+              messageCount: this.repo.listMessages(taskId).length,
+            });
+          }
+          const r = await settled;
           const finalState = r?.finalState ?? this.repo.getTaskState(taskId) ?? "failed";
           return {
             response: {

@@ -19,7 +19,8 @@ import {
 /**
  * MANUAL, OPT-IN small soak with the REAL `claude` and `codex` through the real SidecarService (P4-10, item 7b).
  * Skipped unless `AGENT_STUDIO_REAL_CLI_SOAK` is set (a number 1..5 = how many workflows, `1` is just one). It spends
- * model usage, so it is HARD-CAPPED at 5 workflows: a larger value is clamped, never expanded. Run:
+ * model usage, so it is HARD-CAPPED at 5 workflows (10 with AGENT_STUDIO_REAL_CLI_SOAK_PLAN=peer, all Peer Review): a
+ * larger value is clamped, never expanded. Run:
  *
  *   AGENT_STUDIO_REAL_CLI_SOAK=5 pnpm exec vitest run tests/soak/sidecar-soak-real-cli.test.ts
  *   (PowerShell: $env:AGENT_STUDIO_REAL_CLI_SOAK = "5"; …)
@@ -36,7 +37,11 @@ import {
  * (same pid AND creation time). A process that starts and dies between two samples is not seen.
  */
 const RAW = Number(process.env["AGENT_STUDIO_REAL_CLI_SOAK"] ?? 0);
-const N = Math.min(5, Math.max(0, Number.isFinite(RAW) ? Math.floor(RAW) : 0));
+// `AGENT_STUDIO_REAL_CLI_SOAK_PLAN=peer` (2026-11-07, A7): every workflow is a Peer Review, alternating
+// claude-implements/codex-reviews and codex-implements/claude-reviews; hard cap 10. Without it: the mixed plan, cap 5.
+const PEER_PLAN = process.env["AGENT_STUDIO_REAL_CLI_SOAK_PLAN"] === "peer";
+const CAP = PEER_PLAN ? 10 : 5;
+const N = Math.min(CAP, Math.max(0, Number.isFinite(RAW) ? Math.floor(RAW) : 0));
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -86,7 +91,7 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
-describe.skipIf(N === 0)("real-CLI soak (opt-in, at most 5 workflows)", () => {
+describe.skipIf(N === 0)("real-CLI soak (opt-in, at most 5 workflows; 10 with PLAN=peer)", () => {
   it(
     `runs ${N} real workflow(s); tasks terminal, DB consistent, no leaks, no secret in logs`,
     async () => {
@@ -156,13 +161,20 @@ describe.skipIf(N === 0)("real-CLI soak (opt-in, at most 5 workflows)", () => {
       };
 
       const PROMPT = "Reply with exactly the word: ok. Do not use any tools.";
-      const plan: { kind: "plain" | "review"; agent?: string }[] = [
-        { kind: "plain", agent: "rclaude" },
-        { kind: "plain", agent: "rcodex" },
-        { kind: "plain", agent: "rclaude" },
-        { kind: "plain", agent: "rcodex" },
-        { kind: "review" },
-      ];
+      const plan: { kind: "plain" | "review"; agent?: string; impl?: string; rev?: string }[] =
+        PEER_PLAN
+          ? Array.from({ length: 10 }, (_, k) =>
+              k % 2 === 0
+                ? { kind: "review" as const, impl: "rclaude-impl", rev: "rcodex" }
+                : { kind: "review" as const, impl: "rcodex", rev: "rclaude" },
+            )
+          : [
+              { kind: "plain", agent: "rclaude" },
+              { kind: "plain", agent: "rcodex" },
+              { kind: "plain", agent: "rclaude" },
+              { kind: "plain", agent: "rcodex" },
+              { kind: "review", impl: "rclaude-impl", rev: "rcodex" },
+            ];
 
       const observed: Record<string, unknown>[] = [];
       const rows: WorkflowRow[] = [];
@@ -187,8 +199,8 @@ describe.skipIf(N === 0)("real-CLI soak (opt-in, at most 5 workflows)", () => {
         } else {
           await call("workflows.startPeerReview", {
             workflowId,
-            implementerAgent: "rclaude-impl",
-            reviewerAgent: "rcodex",
+            implementerAgent: step.impl,
+            reviewerAgent: step.rev,
             goal: "Create a file named hello.txt containing the single word hi. Nothing else.",
           });
         }
@@ -223,7 +235,7 @@ describe.skipIf(N === 0)("real-CLI soak (opt-in, at most 5 workflows)", () => {
           n: i + 1,
           workflowId,
           kind: step.kind,
-          agent: step.agent ?? "rclaude-impl+rcodex",
+          agent: step.agent ?? `${step.impl}+${step.rev}`,
           workflowState: wfState,
           ms,
           taskCount: tasks.length,
@@ -233,7 +245,7 @@ describe.skipIf(N === 0)("real-CLI soak (opt-in, at most 5 workflows)", () => {
         observed.push({
           i,
           kind: step.kind,
-          agent: step.agent ?? "rclaude-impl+rcodex",
+          agent: step.agent ?? `${step.impl}+${step.rev}`,
           workflow: wfState,
           tasks: tasks.map((t) => t.state),
           seconds: Math.round((Date.now() - started) / 100) / 10,

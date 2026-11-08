@@ -582,3 +582,10 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 ## 2026-11-07: /save (lần 2)
 
 - Commit từ lần save trước: `8cf8206` (từ chối task khi `settings.local.json` có khóa ngoài `$schema`/`model`/`permissions`), `baf26fc` (docs d14), `22eb433` (probe claude thật `claude-settings-keys`), `a12fe15` (kết quả: không tái hiện được marker). Gate đầy đủ sau `8cf8206`: 907 test qua. HANDOFF cập nhật head và gate. ROADMAP/TODO không đổi.
+
+## 2026-11-07: Phase 4 nhóm A với CLI thật (A1–A7), nhánh `worktree-p4-close-prep`
+
+- A1 `claude-hang`: cổng thật bị suspend, `ClaudeAdapter.timeoutMs` kết thúc task, không retry, không tệp đích, không mồ côi (ASSUMPTIONS d12). A2 `claude-scope`: claude chỉ đọc `settings.local.json` ở cwd; tái hiện được `apiKeyHelper`, d14 đã sửa kết luận cũ (lần "không tái hiện" trước do lỗi quote); chưa tuyên bố xử lý toàn bộ.
+- A3 `claude-signals`: sidecar thật + claude/codex thật, Ctrl+C và kill cứng (trần và bọc wrapper ngoài): 6/6 ca 0 tiến trình sót (d9). A4 `codex-ram`: đỉnh cây codex 1286 MB; trần 50 MB giết sau ~1,5 giây; trần 950 MB giết giữa turn kèm `needsReconciliation` (d10).
+- A5 `peer-resume`: resume vòng 2 đúng cơ chế ở cả 2 cặp; claude>codex kết thúc `failed`, codex>claude `completed` ở vòng 3 (d8). A6: `worktree-hash.ts` đọc một handle, chặn hard link/khác volume, 6 test (d8). A7: 10/10 Peer Review `completed`, 0 mồ côi, chi phí không đo được (d8).
+- Lệnh đã chạy: các chế độ `AGENT_STUDIO_REAL_CLI_GATES=claude-hang|claude-scope|claude-signals|codex-ram|peer-resume` và `AGENT_STUDIO_REAL_CLI_SOAK=10 AGENT_STUDIO_REAL_CLI_SOAK_PLAN=peer`. Chưa tick ROADMAP, chưa đóng Phase 4, không PHASE4_REPORT.

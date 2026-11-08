@@ -144,6 +144,19 @@ pm`, `%LOCALAPPDATA%ProgramsOllama`, `%USERPROFILE%.localin`) là phỏng đoá
 - **Cùng quy tắc, hai nơi:** capability của claude/codex còn nằm ở `claudeCapabilitiesFromHelp`/`codexCapabilitiesFromHelp` (dùng bởi adapter probe) và ở dữ liệu ứng viên; test so sánh hai bên trên fixture thật để không lệch.
 - **Scan chạy mọi `--version`/`--help` song song, timeout 8s mỗi lệnh.** CLI có adapter (claude/codex) đi qua probe nhận biết settings của `agents.detect` chứ không quét lại.
 
+## Phase 3 (P3-6): `agy` thật chạy qua adapter (2026-11-08, Windows 11, agy 1.4.8, đã đăng nhập)
+
+Probe: `packages/adapter-antigravity/src/real-agy.test.ts` (chỉ chạy khi `AGENT_STUDIO_REAL_AGY=1`; `shell:false`, thư mục tạm rỗng NGOÀI repo cho mỗi ca; mọi prompt có câu "không dùng tool" — đó là lời đề nghị, KHÔNG phải ép quyền: adapter vẫn từ chối `task.permissions`). Tổng 4 lượt gọi model nhỏ (~25,7k token vào mỗi lượt thành công, do prompt hệ thống), không ca nào gặp lỗi hết hạn mức. Số liệu thô nằm ngoài repo; fixture đã lọc: `tests/contracts/fixtures/agy/1.4.8/print-multiline.stream-json.ndjson` (đã thay conversation id, cwd, danh sách tool).
+
+- **Output: ĐÃ KIỂM.** Adapter phát `text` (delta của `agent_response`), một `usage` (số token từ `result`) rồi `completed`; ~25 giây cả lượt.
+- **cwd: ĐÃ KIỂM.** `init.cwd` của `agy` đúng bằng `cwd` đặt cho tiến trình con (so sánh không phân biệt hoa thường, đường dẫn thật). Đây là bằng chứng agy tôn trọng cwd của tiến trình cha; không có nghĩa agy bị giới hạn trong thư mục đó (xem dưới).
+- **Prompt nhiều dòng: ĐÃ KIỂM.** Prompt hai dòng có `"`, `&`, `|`, `%`, `$HOME` là MỘT phần tử argv, đến nguyên vẹn (agy trả lại đúng chuỗi, `$HOME` không bị mở rộng), cả khi chạy thẳng lẫn qua adapter.
+- **Lỗi: ĐÃ KIỂM MỘT PHẦN.** `--model no-such-model-xyz` → `result.status` = ERROR, `num_turns` 0, 0 token, sau ~2,7 s; adapter báo `error` ("agy reported status ERROR"), không phải thành công. cwd không tồn tại → `error` "could not start agy: spawn …agy.EXE ENOENT" (thông báo gọi tên agy.EXE dù nguyên nhân là cwd: dễ gây hiểu nhầm). **Chưa kiểm:** thông báo lỗi thật của agy (parser bỏ mất nội dung lỗi trong `result`, nên người dùng chỉ thấy "status ERROR"), trường hợp chưa đăng nhập, hết hạn mức, exit code thật (không ghi lại cho ca lỗi).
+- **Timeout: ĐÃ KIỂM MỘT PHẦN.** `--print-timeout 1s` kết thúc sau ~3,5 s với `status` = ERROR, 0 token, adapter báo `error`. Khác với bẫy `--mode plan` ở trên (SUCCESS + rỗng): ca này agy tự báo ERROR. Chỉ thử với 1 s; chưa thử mốc giữa chừng khi đã có một phần output (hành vi "returning partial output" của `--mode plan` vẫn chỉ quan sát được ở đó).
+- **Cancel: ĐÃ KIỂM.** Abort sau 4 s → adapter trả `error` "cancelled" sau ~4,2 s, không còn `agy.exe` nào (đếm bằng `tasklist` trước 0, sau 0). Chưa kiểm cây tiến trình con do tool của agy sinh ra (lượt không gọi tool).
+- **Quyền: KHÔNG kiểm chứng được.** `init.permission_mode` = `proceed-in-sandbox` và danh sách ~59 tool gồm cả tool ghi/browser; không có bằng chứng agy chặn ghi hay đọc ngoài cwd. Giữ nguyên: `task.permissions` bị từ chối (fail-closed) và agy chưa dùng được cho workflow đặt quyền.
+- **Lỗi dọn dẹp:** sau mỗi ca thư mục tạm có lúc báo EPERM khi xoá ngay (agy còn giữ handle một lúc); test dọn theo kiểu best-effort.
+
 ## Phase 4: Policy Engine (`packages/policy-engine`, phần mã thuần, 2026-11-05)
 
 - **Chỉ là hàm quyết định, chưa được nối vào đâu.** `evaluate(policy, request, ctx)` trả `allow | ask | deny`. Chưa có nơi nào trong orchestrator, sidecar, IPC hay UI gọi nó; chưa có gì ép một agent CLI phải đi qua nó. Việc ép buộc (Job Object, allowlist executable/env, sandbox của từng CLI) vẫn là phần còn lại của Phase 4 và cần máy Windows. Theo ADR-002 đây KHÔNG phải sandbox cấp OS và approval không thay sandbox.

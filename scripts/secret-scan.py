@@ -171,6 +171,11 @@ ACCEPTED_ANYWHERE = {
     ("docs/reports/phase0-windows/spike-report.json", "Base64 High Entropy String", 28),
     # Line 42 asserts the namespaced branch name for fake ids (agent-studio/abc12345/def67890).
     ("packages/git-worktrees/src/git-worktrees.test.ts", "Base64 High Entropy String", 42),
+    # Reviewed by hand (2026-11-07): docs/SECURITY.md line 37 is prose that mentions a secret keyword, no value;
+    # sidecar-permission-gates.test.ts line 170 is the FAKE literal "SECRET-HELPER" used by a test. Both predate
+    # the Phase 4 close-prep goal (commits 8cf8206, baf26fc) and recur in every later snapshot.
+    ("docs/SECURITY.md", "Secret Keyword", 37),
+    ("services/orchestrator/src/sidecar-permission-gates.test.ts", "Secret Keyword", 170),
 }
 
 EXCLUDE = r"(pnpm-lock\.yaml|Cargo\.lock|\.png|\.ico|\.icns)$"
@@ -254,7 +259,8 @@ def main():
             json.dump(sorted(map(list, findings)), fh)
 
     def is_accepted(f):
-        return f in ACCEPTED_HISTORY or f[1:] in ACCEPTED_ANYWHERE
+        norm = (f[0], f[1].replace("\\", "/")) + tuple(f[2:])  # Windows worktree paths use backslashes
+        return norm in ACCEPTED_HISTORY or norm[1:] in ACCEPTED_ANYWHERE
 
     accepted = [f for f in findings if is_accepted(f)]
     findings = [f for f in findings if not is_accepted(f)]

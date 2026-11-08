@@ -590,3 +590,8 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - A5 `peer-resume`: resume vòng 2 đúng cơ chế ở cả 2 cặp; claude>codex kết thúc `failed`, codex>claude `completed` ở vòng 3 (d8). A6: `worktree-hash.ts` đọc một handle, chặn hard link/khác volume, 6 test (d8). A7: 10/10 Peer Review `completed`, 0 mồ côi, chi phí không đo được (d8).
 - Lệnh đã chạy: các chế độ `AGENT_STUDIO_REAL_CLI_GATES=claude-hang|claude-scope|claude-signals|codex-ram|peer-resume` và `AGENT_STUDIO_REAL_CLI_SOAK=10 AGENT_STUDIO_REAL_CLI_SOAK_PLAN=peer`. Chưa tick ROADMAP, chưa đóng Phase 4, không PHASE4_REPORT.
 - Gate cuối nhóm A (chạy tuần tự, thật): `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm build` thoát 0; `pnpm test`: 95 file qua, 913 test qua, 6 expected fail, 56 bỏ qua, thoát 0. Secret scan (venv tạm, `scripts/secret-scan.py`): 25 phát hiện, KHÔNG phải "chỉ 2 phát hiện cũ": ngoài 2 phát hiện worktree cũ (`spike-report.json:28`, `git-worktrees.test.ts:42`, đường dẫn `\`) còn `docs/SECURITY.md:37` và `sidecar-permission-gates.test.ts:170` (chuỗi giả `SECRET-HELPER`) do commit `8cf8206`/`baf26fc` TRƯỚC goal này, lặp lại ở mọi commit sau. Không sửa danh sách chấp nhận (cần người dùng đồng ý).
+
+### 2026-11-07 — secret scan: chấp nhận 2 phát hiện giả (theo yêu cầu người dùng)
+
+- `scripts/secret-scan.py`: thêm `docs/SECURITY.md:37` (văn xuôi nhắc từ khoá, không có giá trị) và `sidecar-permission-gates.test.ts:170` (literal giả `SECRET-HELPER`) vào `ACCEPTED_ANYWHERE`; chuẩn hoá `\` → `/` khi so khớp đường dẫn worktree trên Windows (trước đó 2 mục cũ cũng không khớp ở worktree).
+- Lệnh: `python scripts/secret-scan.py` (PowerShell, venv `%TEMP%\secscan-venv`). Kết quả thật: `findings: 0 (accepted fixture hits: 800)`, exit 0.

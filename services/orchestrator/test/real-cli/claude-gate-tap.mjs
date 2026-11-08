@@ -5,7 +5,7 @@
 // {t, dir: "c2s"|"s2c", line} to <logFile>. The log path comes from argv, not env: whether an MCP server started by
 // claude inherits env was never probed (docs/ASSUMPTIONS.md).
 import { spawn } from "node:child_process";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import process from "node:process";
 import { createInterface } from "node:readline";
 
@@ -22,8 +22,21 @@ const child = spawn(process.execPath, [bundle, ...rest], {
   windowsHide: true,
   stdio: ["pipe", "pipe", "inherit"],
 });
+// Optional hold (A1, gate-hang check): when `<logFile>.hold` exists, the FIRST `tools/call` is logged and withheld
+// until `<logFile>.go` exists, so the test can freeze the real gate process BEFORE it receives the request.
+let held = false;
 createInterface({ input: process.stdin }).on("line", (line) => {
   tap("c2s", line);
+  if (!held && existsSync(logFile + ".hold") && line.includes('"tools/call"')) {
+    held = true;
+    tap("held", "");
+    const timer = setInterval(() => {
+      if (!existsSync(logFile + ".go")) return;
+      clearInterval(timer);
+      child.stdin.write(line + "\n");
+    }, 50);
+    return;
+  }
   child.stdin.write(line + "\n");
 });
 createInterface({ input: child.stdout }).on("line", (line) => {

@@ -1347,7 +1347,11 @@ describe.skipIf(MODE !== "claude-settings-keys")(
               isolateSettings: true,
               requireLauncher: true,
             })
-          : () => ["--setting-sources", "local", ...(withBash ? ["--allowedTools", "Bash"] : [])],
+          : () => [
+              "--setting-sources",
+              "local",
+              ...(withBash ? ["--permission-mode", "bypassPermissions"] : []),
+            ],
       });
       const events: AgentEvent[] = [];
       const ac = new AbortController();
@@ -1384,8 +1388,7 @@ describe.skipIf(MODE !== "claude-settings-keys")(
       mkdirSync(join(dir, ".claude"), { recursive: true });
       writeFileSync(join(dir, ".claude", "settings.local.json"), JSON.stringify(s));
     };
-    const nodeWrite = (file: string) =>
-      `node -e "require('fs').appendFileSync(${JSON.stringify(file)},'x')"`;
+    const nodeWrite = (file: string) => `node -e "require('fs').appendFileSync('${file}','x')"`;
 
     it("1: env.NODE_OPTIONS preload, no check (reproduction)", async () => {
       await run(
@@ -1452,6 +1455,57 @@ describe.skipIf(MODE !== "claude-settings-keys")(
       expect(JSON.stringify(r)).toMatch(/settings\.local\.json/);
     }, 150_000);
 
+    it("6: env.NODE_OPTIONS preload with the REAL gate launched by claude (the gate is a Node process): does the preload run inside it?", async () => {
+      const bundle = join(scratch, "sidecar-keys6.mjs");
+      const mod = (await import(
+        pathToFileURL(join(repoRoot, "scripts/sidecar-bundle.mjs")).href
+      )) as { bundleSidecar: (outfile: string) => Promise<void> };
+      await mod.bundleSidecar(bundle);
+      const { root, repo } = freshRepo("settings-keys-gate-node");
+      const pre = join(repo, "pre.cjs");
+      const fwd = (p: string) => p.split(String.fromCharCode(92)).join("/");
+      writeFileSync(
+        pre,
+        `require('fs').appendFileSync(${JSON.stringify(fwd(join(repo, "env-ran.txt")))},'x')`,
+      );
+      writeSettings(repo, { env: { NODE_OPTIONS: `--require ${fwd(pre)}` } });
+      const gateConfig = join(root, "gate-config");
+      mkdirSync(gateConfig, { recursive: true });
+      const gateArgs = claudeGateTaskArgs({
+        configDir: gateConfig,
+        launcher: {
+          command: process.execPath,
+          args: [gateTapScript, join(gateConfig, "tap.jsonl"), bundle],
+        },
+        askEveryTool: true,
+        requireLauncher: true,
+      });
+      const adapter = new ClaudeAdapter({
+        safeMode: false,
+        extraArgs: MODEL_ARGS,
+        taskArgs: (t) => [...gateArgs(t), "--setting-sources", "local"],
+      });
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 120_000);
+      const types: string[] = [];
+      try {
+        for await (const e of adapter.execute({
+          id: "real-keys6",
+          prompt: "Use the Write tool to create a.txt containing ok. Then say done.",
+          cwd: repo,
+          signal: ac.signal,
+        })) {
+          types.push(e.type);
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+      report["settings-keys-gate-node"] = {
+        envMarkerInGateNode: existsSync(join(repo, "env-ran.txt")),
+        eventTypes: types,
+      };
+    }, 150_000);
+
     it("4: settings.local.json with apiKeyHelper in the PARENT of the task folder: is it read?", async () => {
       await run(
         "settings-keys-parent",
@@ -1465,5 +1519,331 @@ describe.skipIf(MODE !== "claude-settings-keys")(
         false,
       );
     }, 150_000);
+  },
+);
+
+// ---- Phase 4 group A (2026-11-07 goal) helpers and checks, Windows only -------------------------------------------
+const procTools = join(here, "../test/real-cli/proc-tools.ps1");
+interface ProcRow {
+  pid: number;
+  ppid: number;
+  name: string;
+  cmd: string;
+}
+function psTool(action: string, arg: string): string {
+  return execFileSync("pwsh", ["-NoProfile", "-File", procTools, action, arg], {
+    encoding: "utf8",
+    shell: false,
+    timeout: 60_000,
+  }).trim();
+}
+/** Processes whose command line contains `needle` (the PowerShell helper's own process is excluded). */
+function listProcs(needle: string): ProcRow[] {
+  const out = psTool("list", needle);
+  if (out === "") return [];
+  const v = JSON.parse(out) as ProcRow | ProcRow[];
+  return Array.isArray(v) ? v : [v];
+}
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+// A1: a REAL claude + the REAL gate process (bundled sidecar behind the logging tap), the gate is SUSPENDED once
+// claude's first `tools/call` reached it. The host's only clock is ClaudeAdapter.timeoutMs (the gate's own
+// evaluateTimeoutMs lives inside the frozen process). Expect: task ends with a timeout error, no retry, no target
+// file, no process of the run left behind.
+describe.skipIf(MODE !== "claude-hang" || process.platform !== "win32")(
+  "REAL claude + REAL gate process suspended (opt-in: AGENT_STUDIO_REAL_CLI_GATES=claude-hang)",
+  () => {
+    it("suspended gate: ClaudeAdapter.timeoutMs ends the task, no retry, no file, no orphan", async () => {
+      const bundle = join(scratch, "sidecar-hang.mjs");
+      const mod = (await import(
+        pathToFileURL(join(repoRoot, "scripts/sidecar-bundle.mjs")).href
+      )) as { bundleSidecar: (outfile: string) => Promise<void> };
+      await mod.bundleSidecar(bundle);
+      const { root, repo } = freshRepo("claude-hang");
+      const gateConfig = join(root, "gate-config");
+      mkdirSync(gateConfig, { recursive: true });
+      const tapLog = join(gateConfig, "gate-tap.jsonl");
+      writeFileSync(`${tapLog}.hold`, "");
+      const TIMEOUT_MS = 45_000;
+      const adapter = new ClaudeAdapter({
+        safeMode: false,
+        timeoutMs: TIMEOUT_MS,
+        extraArgs: [
+          "--model",
+          "haiku",
+          "--no-session-persistence",
+          "--max-budget-usd",
+          "0.3",
+          "--disable-slash-commands",
+          "--tools",
+          ASK_ALL_TOOLS,
+        ],
+        taskArgs: claudeGateTaskArgs({
+          configDir: gateConfig,
+          launcher: { command: process.execPath, args: [gateTapScript, tapLog, bundle] },
+          askEveryTool: true,
+          isolateSettings: true,
+          requireLauncher: true,
+        }),
+      });
+      const events: AgentEvent[] = [];
+      const started = Date.now();
+      const ac = new AbortController();
+      let suspended: ProcRow | undefined;
+      let suspendedAt = 0;
+      const watcher = (async () => {
+        for (let i = 0; i < 600 && suspended === undefined && !ac.signal.aborted; i++) {
+          await sleep(250);
+          const seen = existsSync(tapLog) ? readFileSync(tapLog, "utf8") : "";
+          if (!seen.includes('"dir":"held"')) continue;
+          const gate = listProcs(bundle).find((p) => /--permission-gate/.test(p.cmd));
+          if (!gate) continue;
+          psTool("suspend", String(gate.pid));
+          suspended = gate;
+          suspendedAt = Date.now();
+          writeFileSync(`${tapLog}.go`, ""); // the frozen gate now receives the request and can never answer
+        }
+      })();
+      try {
+        for await (const e of adapter.execute({
+          id: "real-claude-hang",
+          prompt: WRITE_W,
+          cwd: repo,
+          signal: ac.signal,
+        })) {
+          events.push(e);
+        }
+      } finally {
+        ac.abort();
+        await watcher;
+      }
+      const ended = Date.now();
+      let left: ProcRow[] = [];
+      for (let i = 0; i < 20; i++) {
+        left = listProcs(scratch);
+        if (left.length === 0) break;
+        await sleep(500);
+      }
+      const starts = existsSync(tapLog)
+        ? readFileSync(tapLog, "utf8")
+            .split("\n")
+            .filter((l) => l.includes('"dir":"start"')).length
+        : 0;
+      const last = events[events.length - 1];
+      report["claude-hang"] = {
+        timeoutMs: TIMEOUT_MS,
+        gateSuspended: suspended !== undefined,
+        suspendedAfterMs: suspendedAt ? suspendedAt - started : undefined,
+        endedAfterMs: ended - started,
+        endedAfterSuspendMs: suspendedAt ? ended - suspendedAt : undefined,
+        lastEvent: last ? JSON.stringify(last).slice(0, 300) : undefined,
+        eventTypes: events.map((e) => e.type),
+        gateStarts: starts,
+        filesInRepo: filesIn(repo),
+        leftoverProcesses: left.map((p) => `${p.pid}:${p.name}`),
+      };
+      // Safety net for the test itself: never leave a frozen process behind.
+      for (const p of left) {
+        try {
+          process.kill(p.pid);
+        } catch {
+          /* already gone */
+        }
+      }
+      expect(suspended).toBeDefined();
+      expect(last?.type).toBe("error");
+      expect(ended - started).toBeLessThan(TIMEOUT_MS + 20_000);
+      expect(starts).toBe(1);
+      expect(filesIn(repo)).not.toContain("w.txt");
+      expect(left).toEqual([]);
+    }, 200_000);
+  },
+);
+
+// A2 (2026-11-07 goal, docs/ASSUMPTIONS.md d14): WHERE does claude look for `.claude/settings.local.json`, do other
+// code-running keys fire, and what happens to tools outside the six `askEveryTool` covers? A hook is the detector for
+// "is this file read at all" (a PreToolUse hook is measured to run, d11). All claude runs: `--model haiku`, tiny
+// prompt, temp repo, no CLI configuration changed; the markers live under the temp root.
+describe.skipIf(MODE !== "claude-scope")(
+  "REAL claude, settings.local.json location + more code-running keys + tools beyond the six (opt-in: AGENT_STUDIO_REAL_CLI_GATES=claude-scope)",
+  () => {
+    const fwd = (p: string) => p.split(String.fromCharCode(92)).join("/");
+    const nodeAppend = (file: string) =>
+      `node -e "require('fs').appendFileSync('${fwd(file)}','x')"`;
+    const hookSettings = (marker: string) => ({
+      hooks: {
+        PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: nodeAppend(marker) }] }],
+      },
+    });
+    const writeSettings = (dir: string, s: object) => {
+      mkdirSync(join(dir, ".claude"), { recursive: true });
+      writeFileSync(join(dir, ".claude", "settings.local.json"), JSON.stringify(s));
+    };
+    const BASE = [
+      "--model",
+      "haiku",
+      "--no-session-persistence",
+      "--max-budget-usd",
+      "0.2",
+      "--disable-slash-commands",
+    ];
+
+    async function runPlain(name: string, cwd: string, prompt: string, extra: string[]) {
+      const adapter = new ClaudeAdapter({
+        safeMode: false,
+        extraArgs: BASE,
+        taskArgs: () => ["--setting-sources", "local", ...extra],
+      });
+      const events: AgentEvent[] = [];
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 120_000);
+      try {
+        for await (const e of adapter.execute({
+          id: `real-${name}`,
+          prompt,
+          cwd,
+          signal: ac.signal,
+        })) {
+          events.push(e);
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+      return events;
+    }
+
+    const WRITE_A = "Use the Write tool to create a.txt containing ok. Then say done.";
+    const PLAIN = ["--permission-mode", "acceptEdits", "--tools", "Write"];
+
+    it("S1..S4: is settings.local.json read from the cwd, the git root above the cwd, an intermediate folder, a folder above the git root?", async () => {
+      const cases: Record<string, boolean> = {};
+      for (const where of ["cwd", "gitroot", "intermediate", "above-gitroot"] as const) {
+        const { root, repo } = freshRepo(`scope-${where}`);
+        const marker = join(root, `hook-${where}.txt`);
+        let cwd = repo;
+        if (where === "cwd") writeSettings(repo, hookSettings(marker));
+        if (where === "gitroot") {
+          mkdirSync(join(repo, "sub"));
+          cwd = join(repo, "sub");
+          writeSettings(repo, hookSettings(marker));
+        }
+        if (where === "intermediate") {
+          mkdirSync(join(repo, "sub", "deep"), { recursive: true });
+          cwd = join(repo, "sub", "deep");
+          writeSettings(join(repo, "sub"), hookSettings(marker));
+        }
+        if (where === "above-gitroot") writeSettings(root, hookSettings(marker));
+        await runPlain(`scope-${where}`, cwd, WRITE_A, PLAIN);
+        cases[where] = existsSync(marker);
+        report["claude-scope-location"] = cases;
+      }
+      // Control: the file in the cwd itself must be read (otherwise the detector is useless).
+      expect(cases["cwd"]).toBe(true);
+    }, 600_000);
+
+    it("K: statusLine, awsAuthRefresh, awsCredentialExport, otelHeadersHelper (with telemetry on, local endpoint): does any run?", async () => {
+      const { root, repo } = freshRepo("scope-keys");
+      const m = (n: string) => join(root, `${n}.txt`);
+      writeSettings(repo, {
+        statusLine: { type: "command", command: nodeAppend(m("statusline")) },
+        awsAuthRefresh: nodeAppend(m("awsauthrefresh")),
+        awsCredentialExport: nodeAppend(m("awscredexport")),
+        otelHeadersHelper: nodeAppend(m("otelheaders")),
+        env: {
+          CLAUDE_CODE_ENABLE_TELEMETRY: "1",
+          OTEL_METRICS_EXPORTER: "otlp",
+          OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:9",
+        },
+      });
+      await runPlain("scope-keys", repo, WRITE_A, PLAIN);
+      const ran = Object.fromEntries(
+        ["statusline", "awsauthrefresh", "awscredexport", "otelheaders"].map((n) => [
+          n,
+          existsSync(m(n)),
+        ]),
+      );
+      report["claude-scope-keys"] = ran;
+      expect(typeof ran["statusline"]).toBe("boolean");
+    }, 200_000);
+
+    it("T: production gate configuration but NO --tools restriction: do WebFetch / Task / NotebookEdit / TodoWrite reach the gate or take effect?", async () => {
+      const http = await import("node:http");
+      let hits = 0;
+      const server = http.createServer((_req, res) => {
+        hits++;
+        res.end("probe-page");
+      });
+      await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+      const port = (server.address() as { port: number }).port;
+      const bundle = join(scratch, "sidecar-scope.mjs");
+      const mod = (await import(
+        pathToFileURL(join(repoRoot, "scripts/sidecar-bundle.mjs")).href
+      )) as { bundleSidecar: (outfile: string) => Promise<void> };
+      await mod.bundleSidecar(bundle);
+      const { root, repo } = freshRepo("scope-tools");
+      const gateConfig = join(root, "gate-config");
+      mkdirSync(gateConfig, { recursive: true });
+      const tapLog = join(gateConfig, "gate-tap.jsonl");
+      const gateArgs = claudeGateTaskArgs({
+        configDir: gateConfig,
+        launcher: { command: process.execPath, args: [gateTapScript, tapLog, bundle] },
+        askEveryTool: true,
+        isolateSettings: true,
+        requireLauncher: true,
+      });
+      const adapter = new ClaudeAdapter({
+        safeMode: false,
+        extraArgs: BASE,
+        // `claudeGateTaskArgs` adds `--tools <six>` when the task has no permissions; strip it to ask the question.
+        taskArgs: (task) => {
+          const a = gateArgs(task);
+          const i = a.indexOf("--tools");
+          if (i >= 0) a.splice(i, 2);
+          return a;
+        },
+      });
+      const events: AgentEvent[] = [];
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 150_000);
+      try {
+        for await (const e of adapter.execute({
+          id: "real-scope-tools",
+          prompt: `Do these steps in order, continuing even if one fails: (1) use the WebFetch tool on http://127.0.0.1:${port}/ and report the page text; (2) use the TodoWrite tool to add one todo called probe; (3) use the NotebookEdit tool to create n.ipynb; (4) use the Task tool to start a subagent that says hi. Then say done.`,
+          cwd: repo,
+          signal: ac.signal,
+        })) {
+          events.push(e);
+        }
+      } finally {
+        clearTimeout(timer);
+        await new Promise<void>((r) => server.close(() => r()));
+      }
+      const lines = existsSync(tapLog)
+        ? readFileSync(tapLog, "utf8")
+            .split("\n")
+            .filter(Boolean)
+            .map((l) => JSON.parse(l) as { dir: string; line: string })
+        : [];
+      const gateCalls = lines
+        .filter((l) => l.dir === "c2s" && l.line.includes('"tools/call"'))
+        .map((l) => {
+          const a = (parse(l.line)?.["params"] as { arguments?: Record<string, unknown> })
+            ?.arguments;
+          return String(a?.["tool_name"]);
+        });
+      report["claude-scope-tools"] = {
+        gateCalls,
+        webFetchHitsOnLocalServer: hits,
+        toolCalls: events
+          .filter((e) => e.type === "tool_call")
+          .map((e) => JSON.stringify(e).slice(0, 140)),
+        denied: events
+          .filter((e) => e.type === "permission_denied")
+          .map((e) => JSON.stringify(e).slice(0, 200)),
+        filesInRepo: filesIn(repo),
+        filesInRoot: filesIn(root),
+      };
+      expect(filesIn(root).filter((f) => f !== "repo" && f !== "gate-config")).toEqual([]);
+    }, 300_000);
   },
 );

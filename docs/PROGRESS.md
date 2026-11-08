@@ -576,4 +576,5 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 ## 2026-11-07: review ngoài — settings.local.json chạy mã ngoài cổng
 
 - Review ngoài (snapshot `f0f2a10`) báo `env.NODE_OPTIONS` và `apiKeyHelper` trong `.claude/settings.local.json` chạy mã dù `disableAllHooks`. Chưa tự tái hiện với claude thật. Đã thêm `assertSafeLocalSettings` (chỉ cho `$schema`/`model`/`permissions`, còn lại từ chối task), 5 test mới trong `sidecar-permission-gates.test.ts` (18/18 qua). ASSUMPTIONS d14, SECURITY và THREAT_MODEL T4 cập nhật.
-- NOT_RUN: đo lại bằng claude thật sau biện pháp; thư mục cha/gốc git; verdict an toàn toàn bộ vẫn FAIL cho tới khi có lượt đo đó.
+- Đã chạy claude thật (được cho phép): 5 ca `claude-settings-keys` pass; marker KHÔNG xuất hiện ở các ca tái hiện (env, env+Bash, apiKeyHelper, apiKeyHelper ở thư mục cha), biện pháp từ chối chặn đúng. Chi tiết ASSUMPTIONS d14.
+- NOT_RUN/chưa rõ: điều kiện để tái hiện báo cáo của review; thư mục cha/gốc git; verdict an toàn toàn bộ vẫn FAIL cho tới khi có lượt đo đó.

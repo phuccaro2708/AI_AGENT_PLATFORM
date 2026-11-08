@@ -7,7 +7,7 @@ Cập nhật: 2026-11-07 (cuối ngày, đã đối chiếu với git). Việc P
 - Đã ghép vào nhánh này: cổng Codex/Claude (opt-in), `agent-job-wrap` (bật mặc định khi có binary), watchdog RAM cả cây, resume Peer Review, threat model (đã duyệt), T19 (vô hiệu hook repo), R3 (hộp thoại native, chưa kiểm trong app thật), allowlist tuổi gói Cargo có hạn (hết hạn 2026-11-09…14 thì CI đỏ). Gate gần nhất (2026-11-07, sau `4de2832`): lint, format, typecheck, build, test (902 qua, 6 expected fail, 35 bỏ qua) thoát 0; secret scan còn 2 phát hiện cũ; cargo không chạy lại (`src-tauri` không đổi).
 - Quyết định Q3 (2026-11-07): bật mặc định hai cổng quyền, nối `jobMemLimitMb`; ĐÃ làm trong mã (ADR-007, ADR-008: `codex` chạy bằng app-server, ASSUMPTIONS d10, d13; codex thật qua wrapper đã đo); CÒN kiểm lại với claude thật (NOT_RUN).
 - Chưa kiểm/BLOCKED: CI thật, installer thật (thiếu NSIS/WiX), hộp thoại native trong app Tauri thật, Low IL đăng nhập/gọi model, soak 100 workflow với CLI thật, TOCTOU/hard link/mount point của artifact.
-- Review ngoài 2026-11-07: settings.local.json (`env`, `apiKeyHelper`) chạy mã ngoài cổng; đã chặn bằng từ chối task (ASSUMPTIONS d14), chưa đo lại với claude thật.
+- Review ngoài 2026-11-07: settings.local.json (`env`, `apiKeyHelper`) chạy mã ngoài cổng; đã chặn bằng từ chối task (ASSUMPTIONS d14), tự đo với claude thật không tái hiện được marker (xem d14), biện pháp từ chối giữ.
 - Chờ người dùng: ghép `worktree-p4-close-prep` vào nhánh chính (từ thư mục gốc repo) và đồng ý push; Q2 duyệt 5 bước recovery; cho phép chạy CLI thật cho C1/C5; cài NSIS/WiX cho C2; xác nhận đóng Phase 4 (`PHASE4_REPORT.md` chưa viết).
 
 ## Vị trí (lịch sử đến 2026-11-06)

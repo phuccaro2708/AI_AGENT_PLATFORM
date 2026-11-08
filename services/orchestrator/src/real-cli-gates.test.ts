@@ -16,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AgentEvent, TaskPermissions } from "@agent-studio/contracts";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAppServerAdapter } from "@agent-studio/adapter-codex";
-import { resolveExecutable, unwrapNpmShim } from "@agent-studio/process-manager";
+import { resolveExecutable, sampleTreeBytes, unwrapNpmShim } from "@agent-studio/process-manager";
 import { evaluate, type Policy } from "@agent-studio/policy-engine";
 import { appServerPolicy } from "./codex-app-server-gate.js";
 import { createLogger } from "@agent-studio/shared-utils";
@@ -121,6 +121,9 @@ async function runCodex(o: {
   /** Run the server inside the REAL `agent-job-wrap` (2026-11-07 follow-up). */
   jobWrap?: { path: string; jobMemLimitMb?: number };
   approvalTimeoutMs?: number;
+  /** A4: whole-tree RAM watchdog of the adapter (and an optional sampler to record what it measures). */
+  treeMemoryLimitMb?: number;
+  memorySampler?: (rootPid: number) => Promise<number>;
   /** Called before the policy answers; may stall (timeout case) or kill the connection (lost-connection case). */
   beforeEvaluate?: () => Promise<void>;
 }): Promise<CodexRun & { repo: string; root: string }> {
@@ -141,6 +144,8 @@ async function runCodex(o: {
     envAllow: ["CODEX_TAP_LOG", "CODEX_TAP_TARGET"],
     approvalTimeoutMs: o.approvalTimeoutMs ?? 30_000,
     ...(o.jobWrap ? { jobWrap: o.jobWrap } : {}),
+    ...(o.treeMemoryLimitMb === undefined ? {} : { treeMemoryLimitMb: o.treeMemoryLimitMb }),
+    ...(o.memorySampler ? { memorySampler: o.memorySampler, memoryPollMs: 500 } : {}),
     evaluate: async (request, ctx) => {
       await o.beforeEvaluate?.();
       const base = appServerPolicy(ctx);
@@ -1925,5 +1930,98 @@ describe.skipIf(MODE !== "claude-signals" || process.platform !== "win32")(
         240_000,
       );
     }
+  },
+);
+
+// A4: the adapter's whole-tree RAM watchdog (`treeMemoryLimitMb`) on the REAL `codex app-server` inside the REAL
+// `agent-job-wrap` (the production shape). Two runs: (1) a roomy limit with a recording sampler, to learn what the real
+// tree weighs; (2) a limit far below that, to see what the watchdog does to a live task (error text, reconciliation
+// flag, processes left). The sampler wraps the production `sampleTreeBytes`, only recording its readings.
+describe.skipIf(MODE !== "codex-ram" || process.platform !== "win32" || !existsSync(wrapperExe))(
+  "REAL codex app-server in the REAL agent-job-wrap + treeMemoryLimitMb (opt-in: AGENT_STUDIO_REAL_CLI_GATES=codex-ram)",
+  () => {
+    const jobWrap = { path: wrapperExe, jobMemLimitMb: 8192 };
+    const recorder = () => {
+      const readings: number[] = [];
+      return {
+        readings,
+        sampler: async (pid: number) => {
+          const b = await sampleTreeBytes(pid);
+          readings.push(Math.round(b / 1048576));
+          return b;
+        },
+      };
+    };
+    it("roomy limit (4096 MB): task completes; the tree's real size is recorded", async () => {
+      const before = codexProcessCount();
+      const rec = recorder();
+      const r = await runCodex({
+        name: "codex-ram-baseline",
+        permissions: "read-only",
+        jobWrap,
+        treeMemoryLimitMb: 4096,
+        memorySampler: rec.sampler,
+        prompt: "Write about 150 words on rivers. Do not run any command.",
+      });
+      (report["codex-ram-baseline"] as Record<string, unknown>)["treeMb"] = {
+        readings: rec.readings,
+        peak: Math.max(0, ...rec.readings),
+      };
+      expect(r.events.at(-1)?.type).toBe("completed");
+      await sleep(1500);
+      expect(codexProcessCount()).toBeLessThanOrEqual(before);
+    }, 200_000);
+
+    it("low limit (50 MB, far below the real tree): the watchdog kills the tree, the task ends with an error, nothing left", async () => {
+      const before = codexProcessCount();
+      const rec = recorder();
+      const t0 = Date.now();
+      const r = await runCodex({
+        name: "codex-ram-low",
+        permissions: "read-only",
+        jobWrap,
+        treeMemoryLimitMb: 50,
+        memorySampler: rec.sampler,
+        prompt: "Write about 400 words on rivers. Do not run any command.",
+      });
+      const last = r.events.at(-1) as
+        { type: string; message?: string; needsReconciliation?: boolean } | undefined;
+      (report["codex-ram-low"] as Record<string, unknown>)["watchdog"] = {
+        elapsedMs: Date.now() - t0,
+        readings: rec.readings,
+        last,
+      };
+      expect(last?.type).toBe("error");
+      expect(last?.message ?? "").toContain("process tree uses");
+      await sleep(2000);
+      (report["codex-ram-low"] as Record<string, unknown>)["codexProcsBeforeAfter"] = [
+        before,
+        codexProcessCount(),
+      ];
+      expect(codexProcessCount()).toBeLessThanOrEqual(before);
+    }, 200_000);
+
+    it("limit between the start and the peak (950 MB): killed mid-turn; observe the reconciliation flag (model-dependent, recorded only)", async () => {
+      const before = codexProcessCount();
+      const rec = recorder();
+      const r = await runCodex({
+        name: "codex-ram-mid",
+        permissions: "read-only",
+        jobWrap,
+        treeMemoryLimitMb: 950,
+        memorySampler: rec.sampler,
+        prompt: "Write about 150 words on rivers. Do not run any command.",
+      });
+      const last = r.events.at(-1) as
+        { type: string; message?: string; needsReconciliation?: boolean } | undefined;
+      await sleep(2000);
+      (report["codex-ram-mid"] as Record<string, unknown>)["watchdog"] = {
+        readings: rec.readings,
+        last,
+        codexProcsBeforeAfter: [before, codexProcessCount()],
+      };
+      expect(["error", "completed"]).toContain(last?.type);
+      expect(codexProcessCount()).toBeLessThanOrEqual(before);
+    }, 200_000);
   },
 );

@@ -595,3 +595,8 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 
 - `scripts/secret-scan.py`: thêm `docs/SECURITY.md:37` (văn xuôi nhắc từ khoá, không có giá trị) và `sidecar-permission-gates.test.ts:170` (literal giả `SECRET-HELPER`) vào `ACCEPTED_ANYWHERE`; chuẩn hoá `\` → `/` khi so khớp đường dẫn worktree trên Windows (trước đó 2 mục cũ cũng không khớp ở worktree).
 - Lệnh: `python scripts/secret-scan.py` (PowerShell, venv `%TEMP%\secscan-venv`). Kết quả thật: `findings: 0 (accepted fixture hits: 800)`, exit 0.
+
+### 2026-11-07: /save (lần 3)
+
+- Đối chiếu docs với git: HANDOFF cập nhật head `e201be8`, thêm tóm tắt nhóm A (A1–A7) và bỏ "TOCTOU/hard link" và "soak với CLI thật" khỏi mục chưa kiểm (đã có A6, A7 ở quy mô 10). TODO dòng recovery ghi lượt CLI thật vòng ≥ 2 (A5, PARTIAL).
+- Không thêm ADR, không đổi ROADMAP, không tick acceptance gate, không đóng Phase 4. Không chạy lại gate (chỉ đổi docs); prettier chạy trên các file docs đã sửa.

@@ -24,6 +24,8 @@ export interface SchedulerOptions {
    * to its lease). A throwing listener never affects the scheduler. Used by the workflow engine to hand off.
    */
   onSettled?: (taskId: string, result: RunResult | undefined) => void | Promise<void>;
+  /** Right after a task was claimed (state `running`) and before its adapter starts. A throw is ignored. */
+  onStarted?: (taskId: string) => void;
 }
 
 export interface SchedulerTick {
@@ -49,6 +51,7 @@ export class Scheduler {
   private readonly leaseMs: number;
   private readonly admission: SchedulerAdmission | undefined;
   private readonly onSettled: SchedulerOptions["onSettled"];
+  private readonly onStarted: SchedulerOptions["onStarted"];
   private readonly running = new Map<string, { done: Promise<void>; abort: AbortController }>();
   private timers: NodeJS.Timeout[] = [];
 
@@ -60,6 +63,7 @@ export class Scheduler {
     this.leaseMs = opts.leaseMs ?? 60_000;
     this.admission = opts.admission;
     this.onSettled = opts.onSettled;
+    this.onStarted = opts.onStarted;
   }
 
   private leaseUntil(): string {
@@ -91,6 +95,11 @@ export class Scheduler {
     for (const id of this.repo.listReadyTasks(free)) {
       if (!this.repo.claimTask(id, this.leaseUntil())) continue; // another scheduler won it
       const abort = new AbortController();
+      try {
+        this.onStarted?.(id);
+      } catch {
+        // see SchedulerOptions.onStarted
+      }
       const done = this.orchestrator
         .execute(id, { signal: abort.signal })
         .catch(() => undefined) // execute settles task state itself; a throw leaves it for the lease

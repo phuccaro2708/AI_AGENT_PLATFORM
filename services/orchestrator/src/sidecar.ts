@@ -46,7 +46,7 @@ import { ApprovalService } from "./approvals.js";
 import { ArtifactRegistry } from "./artifacts.js";
 import { ContextBoard } from "./context-board.js";
 import { describeRouteFailure, selectAgent, snapshotAdapters } from "./capability-router.js";
-import { Orchestrator } from "./orchestrator.js";
+import { Orchestrator, type RunResult } from "./orchestrator.js";
 import { Scheduler } from "./scheduler.js";
 import { checkProjectRoot, duplicateOf } from "./project-policy.js";
 import { claudeGateTaskArgs, type ClaudeGateLauncher } from "./claude-permission-gate.js";
@@ -205,8 +205,8 @@ export class SidecarService {
   private readonly secrets: ProviderSecrets;
   private readonly redactor: SecretRedactor;
   private readonly probes: Record<"claude" | "codex", (o?: ProbeOptions) => Promise<ProbeResult>>;
-  /** Tasks currently executing in this process. */
-  private readonly active = new Map<string, { abort: AbortController; done: Promise<void> }>();
+  /** Callers of `runThroughScheduler` waiting for their task to settle. */
+  private readonly settleWaiters = new Map<string, (r: RunResult | undefined) => void>();
   /** Pre-run policy check and post-run scope check around every agent (P4-1 a + b). */
   private readonly gate: PolicyGate;
   private gateWorkspaces: ProjectWorkspaces | undefined;
@@ -513,7 +513,13 @@ export class SidecarService {
         ? { concurrency: opts.schedulerConcurrency }
         : {}),
       ...(this.resourceMonitor ? { admission: this.resourceMonitor } : {}),
-      onSettled: (id, result) => this.engine.onSettled(id, result),
+      onStarted: (id) => opts.onEvent?.({ event: "task.state", taskId: id, state: "running" }),
+      onSettled: (id, result) => {
+        const waiter = this.settleWaiters.get(id);
+        this.settleWaiters.delete(id);
+        waiter?.(result);
+        return this.engine.onSettled(id, result);
+      },
     });
     // Workflows left `running` by a previous exit need the scheduler again (it starts lazily otherwise).
     if (this.repo.listWorkflowIdsByState("running").length > 0) {
@@ -714,6 +720,29 @@ export class SidecarService {
     }
   }
 
+  /**
+   * Every single-task path goes through the scheduler, so the same admission (concurrency ceiling and the
+   * resource monitor's reduced/paused levels) applies. The task is queued first; when admission refuses, it
+   * stays `queued` and the scheduler timer starts it once the load drops. Returns the task id at once and
+   * `settled`, which resolves with the result when the task has run to its end.
+   */
+  private async runThroughScheduler(opts: {
+    workflowId: string;
+    agentId: string;
+    prompt: string;
+    cwd: string;
+  }): Promise<{ taskId: string; settled: Promise<RunResult | undefined> }> {
+    // `enqueue` stores the prompt as the task's `task.request` (and the UI receives it), so a secret the
+    // user typed is masked here, exactly as the Peer Review goal is; the agent then runs the masked prompt.
+    const taskId = this.orchestrator.enqueue({ ...opts, prompt: this.redactor.text(opts.prompt) });
+    const settled = new Promise<RunResult | undefined>((resolve) =>
+      this.settleWaiters.set(taskId, resolve),
+    );
+    this.scheduler.start(this.opts.schedulerIntervalMs);
+    await this.scheduler.tick();
+    return { taskId, settled };
+  }
+
   private spikeWorkflow(): string {
     this.spikeWorkflowId ??= this.repo.createWorkflow(
       this.repo.createProject(`spike-${process.pid}`, `spike://${process.pid}-${Date.now()}`),
@@ -751,20 +780,22 @@ export class SidecarService {
           };
         }
         case "runStub": {
-          const r = await this.orchestrator.runTask({
+          const { taskId, settled } = await this.runThroughScheduler({
             workflowId: this.spikeWorkflow(),
             agentId: "stub",
             prompt: req.params.prompt,
             cwd: process.cwd(),
           });
+          const r = await settled; // waits for admission too: paused load keeps it queued
+          const finalState = r?.finalState ?? this.repo.getTaskState(taskId) ?? "failed";
           return {
             response: {
               id: req.id,
               result: {
-                taskId: r.taskId,
-                finalState: r.finalState,
-                eventCount: r.events.length,
-                messageCount: this.repo.listMessages(r.taskId).length,
+                taskId,
+                finalState,
+                eventCount: r?.events.length ?? 0,
+                messageCount: this.repo.listMessages(taskId).length,
               },
             },
             shutdown: false,
@@ -819,7 +850,7 @@ export class SidecarService {
               "select count(*) as n from tasks where state in ('queued','running','waiting_approval')",
             )
             .get() as { n: number };
-          return ok(req.id, { count: Math.max(row.n, this.active.size) });
+          return ok(req.id, { count: row.n });
         }
         case "confirm.describe": {
           // The inner call must be exactly what the real call would accept; anything else is refused.
@@ -917,37 +948,18 @@ export class SidecarService {
           const bad = this.rootProblem(root.rootPath);
           if (bad) return fail(req.id, bad);
           // Runs in the background so `tasks.cancel` and other requests are served meanwhile.
-          const ac = new AbortController();
-          let taskId = "";
-          const run = this.orchestrator
-            .runTask({
-              workflowId: req.params.workflowId,
-              agentId: agentId,
-              prompt: req.params.prompt,
-              cwd: root.rootPath,
-              signal: ac.signal,
-              onCreated: (id) => {
-                taskId = id;
-                this.active.set(id, { abort: ac, done: Promise.resolve() });
-              },
-            })
-            .catch((err: unknown) =>
-              this.log.error({ err: this.redactor.text(String(err)) }, "background task failed"),
-            )
-            .finally(() => this.active.delete(taskId));
-          const entry = this.active.get(taskId);
-          if (entry) entry.done = run.then(() => undefined);
+          const { taskId } = await this.runThroughScheduler({
+            workflowId: req.params.workflowId,
+            agentId,
+            prompt: req.params.prompt,
+            cwd: root.rootPath,
+          });
           return ok(req.id, { taskId });
         }
         case "tasks.cancel": {
           const state = this.repo.getTaskState(req.params.taskId);
           if (state === undefined) return fail(req.id, `Unknown task: ${req.params.taskId}`);
           if (this.scheduler.cancel(req.params.taskId)) {
-            return ok(req.id, { requested: true, state });
-          }
-          const live = this.active.get(req.params.taskId);
-          if (live) {
-            live.abort.abort(); // the adapter reports "cancelled"; the orchestrator settles the state
             return ok(req.id, { requested: true, state });
           }
           if (state === "queued") {
@@ -1085,14 +1097,15 @@ export class SidecarService {
 
   /** Resolves when every background task has settled (tests, graceful shutdown). */
   async idle(): Promise<void> {
-    await Promise.all([...this.active.values()].map((a) => a.done));
+    await this.scheduler.idle();
   }
 
   close(): void {
     this.approvals.stopTimer();
     this.scheduler.stop();
     this.resourceMonitor?.stop();
-    for (const a of this.active.values()) a.abort.abort();
+    for (const resolve of this.settleWaiters.values()) resolve(undefined);
+    this.settleWaiters.clear();
     if (this.db.$client.open) this.db.$client.close();
   }
 }

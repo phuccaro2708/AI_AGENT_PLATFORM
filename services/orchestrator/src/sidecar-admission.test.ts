@@ -79,6 +79,13 @@ let source: FakeSource;
 let adapter: Parked;
 let svc: SidecarService;
 let enqueueOne: () => string;
+let wfId: string;
+let reqId = 0;
+/** A request through the real IPC entry point, as the desktop app sends it. */
+const call = async (method: string, params?: unknown) => {
+  const { response } = await svc.handle({ id: ++reqId, method, ...(params ? { params } : {}) });
+  return response as { result?: Record<string, any>; error?: { message: string } }; // eslint-disable-line @typescript-eslint/no-explicit-any
+};
 
 const scheduler = () => (svc as unknown as { scheduler: Scheduler }).scheduler;
 /** Moves the fake clock one sampling interval: the monitor takes a new reading. */
@@ -121,6 +128,7 @@ beforeEach(() => {
   const feeder = new Orchestrator(registry, repo, quiet);
   mkdirSync(join(dir, "p")); // the gate refuses a project folder that does not exist
   const wf = repo.createWorkflow(repo.createProject("demo", join(dir, "p")));
+  wfId = wf;
   enqueueOne = () => feeder.enqueue({ workflowId: wf, agentId: "parked", prompt: "p" });
 });
 afterEach(() => {
@@ -199,6 +207,77 @@ describe("SidecarService resource admission", () => {
     sample();
     enqueueOne();
     expect(await tick()).toBe(0);
+  });
+
+  describe("single tasks over IPC (workflows.start, runStub) use the same admission", () => {
+    const start = () =>
+      call("workflows.start", { workflowId: wfId, agentId: "parked", prompt: "p" });
+
+    it("does not start a task while paused, and runs it after the load recovers", async () => {
+      source.memoryPercent = 95; // paused
+      sample();
+      const r = await start();
+      const taskId = r.result?.taskId as string;
+      expect(taskId).toBeTruthy();
+      expect(adapter.active).toBe(0);
+      expect((await call("queryTask", { taskId })).result?.state).toBe("queued");
+      expect(await tick()).toBe(0); // still paused
+
+      source.memoryPercent = 40;
+      sample();
+      // advancing the fake clock also fired the scheduler's own interval (started by workflows.start)
+      await waitFor(() => adapter.active === 1, "the held-back task to start");
+      expect((await call("queryTask", { taskId })).result?.state).toBe("running");
+    });
+
+    it("can cancel a task that admission is still holding back", async () => {
+      source.memoryPercent = 95;
+      sample();
+      const taskId = (await start()).result?.taskId as string;
+      const c = await call("tasks.cancel", { taskId });
+      expect(c.result).toMatchObject({ requested: true, state: "cancelled" });
+      source.memoryPercent = 40;
+      sample();
+      expect(await tick()).toBe(0); // a cancelled task never starts
+      expect(adapter.active).toBe(0);
+    });
+
+    it("never runs more than `concurrency` direct tasks at once", async () => {
+      for (let i = 0; i < CONCURRENCY + 3; i++) await start();
+      await waitFor(() => adapter.active >= CONCURRENCY, "tasks to reach the adapter");
+      expect(adapter.active).toBe(CONCURRENCY);
+      expect(adapter.maxActive).toBe(CONCURRENCY);
+    });
+
+    it("applies the reduced limit to direct tasks too", async () => {
+      source.memoryPercent = 85; // reduced: half of 4
+      sample();
+      for (let i = 0; i < 4; i++) await start();
+      await waitFor(() => adapter.active >= CONCURRENCY / 2, "tasks to reach the adapter");
+      expect(adapter.active).toBe(CONCURRENCY / 2);
+    });
+
+    it("runStub waits while paused and completes after recovery", async () => {
+      source.memoryPercent = 95;
+      sample();
+      let done = false;
+      const pending = call("runStub", { prompt: "hi" }).then((r) => {
+        done = true;
+        return r;
+      });
+      await waitFor(
+        () => (svc.db.$client.prepare("select count(*) from tasks").pluck().get() as number) === 1,
+        "the stub task to be queued",
+      );
+      await tick();
+      expect(done).toBe(false);
+
+      source.memoryPercent = 40;
+      sample();
+      await scheduler().tick();
+      const r = await pending;
+      expect(r.result?.finalState).toBe("completed");
+    });
   });
 
   it("leaves no timer behind after close(), and starts the sampling timer only once", () => {

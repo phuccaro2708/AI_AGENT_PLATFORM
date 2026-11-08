@@ -60,4 +60,4 @@ Không chạy `agy` thật; không dùng lượt probe còn lại.
 | P3-6 `agy` thật qua adapter                  | PARTIAL                           | output, cwd, prompt nhiều dòng, lỗi (model sai, cwd sai), timeout 1 s, cancel đã kiểm; chưa kiểm: lỗi chưa đăng nhập/hết hạn mức, nội dung lỗi thật (parser bỏ), cây tiến trình con, ép quyền (KHÔNG kiểm chứng được) |
 | P3-1 Ollama, P3-3 VRAM                       | NOT_RUN                           | hoãn theo brief                                                                                                                                                                                                       |
 
-Gate: lint, format, typecheck, test (952 pass), build đều exit 0; secret scan 0 phát hiện mới. **Ba acceptance gate ROADMAP vẫn chưa đạt** (thiếu Ollama, VRAM, kiểm UI trong app thật); bản báo cáo này chưa được đóng.
+Gate (chạy tuần tự trên `e78fa37`): lint, format, typecheck, test (952 pass), build đều exit 0; secret scan `findings: 0`, dòng thô còn đúng 2 phát hiện đã biết. **Ba acceptance gate ROADMAP vẫn chưa đạt** (thiếu Ollama, VRAM, kiểm UI trong app thật); bản báo cáo này chưa được đóng.

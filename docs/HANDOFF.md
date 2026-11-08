@@ -1,6 +1,6 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-08 (đã đối chiếu với git). Việc Phase 4 hiện nằm ở nhánh `worktree-p4-close-prep` (head `574e643` lúc lưu, hơn nhánh chính `claude/loving-lovelace-32lh71` 104 commit, đã push, PR #3 đang mở vào nhánh chính, chưa ghép; CI trên PR: job TypeScript ubuntu ĐỎ, xem dưới). Nhánh chính vẫn ở `080adce`. Các mục "Vị trí" và CI bên dưới là lịch sử đến 2026-11-06 và nói về nhánh chính cũ; kế hoạch hiện hành nằm ở `docs/NEXT_PLAN.md` (C0–C13). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-08 (đã đối chiếu với git). Việc Phase 4 hiện nằm ở nhánh `worktree-p4-close-prep` (head `574e643` lúc lưu; Phase 3 còn lại làm xong ở `e78fa37`, gate cuối 5/5 exit 0, hơn nhánh chính `claude/loving-lovelace-32lh71` 104 commit, đã push, PR #3 đang mở vào nhánh chính, chưa ghép; CI trên PR: job TypeScript ubuntu ĐỎ, xem dưới). Nhánh chính vẫn ở `080adce`. Các mục "Vị trí" và CI bên dưới là lịch sử đến 2026-11-06 và nói về nhánh chính cũ; kế hoạch hiện hành nằm ở `docs/NEXT_PLAN.md` (C0–C13). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Phase 4 hiện tại (2026-11-07, nhánh `worktree-p4-close-prep`)
 

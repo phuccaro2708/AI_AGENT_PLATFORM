@@ -634,3 +634,9 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 - **Không làm:** Ollama (P3-1), VRAM (P3-3), đóng Phase 3, tick gate, push, PR. Sự kiện CI của PR #3 (head `574e643`, cũ hơn HEAD) được bỏ qua vì brief cấm push.
 
 - **Secret scan, xử lý 2 fixture cũ (theo yêu cầu người dùng 2026-11-08):** `spike-report.json:28` (ULID task id sinh tự động, nay `task_<id>`) và `git-worktrees.test.ts:42` (thêm `pragma: allowlist secret`, id giả). Chạy lại với `SECRET_SCAN_RAW_OUT`: `findings: 0 (accepted fixture hits: 850)`, exit 0; dòng thô trên cây làm việc còn đúng 2 (`docs/SECURITY.md:37`, `sidecar-permission-gates.test.ts:170`). Allowlist trong `scripts/secret-scan.py` giữ nguyên vì còn phủ lịch sử commit.
+
+### 2026-11-08: /save — gate cuối trên `e78fa37`
+
+- Chạy tuần tự trên HEAD `e78fa37` (cây sạch): `pnpm lint` exit 0; `pnpm format` exit 0; `pnpm typecheck` exit 0; `pnpm test` exit 0 (97 file pass, 3 skip; 952 test pass, 6 expected fail, 62 skip); `pnpm build` exit 0. `node scripts/docs-sync-check.mjs` OK.
+- Secret scan sau `e78fa37`: `findings: 0 (accepted fixture hits: 850)`; dòng thô trên cây làm việc còn đúng 2 (`docs/SECURITY.md:37`, `sidecar-permission-gates.test.ts:170`).
+- Không push, không PR. Phase 3 chưa đóng; chờ người dùng: Ollama, VRAM, kiểm giao diện thật, đóng Phase 3.

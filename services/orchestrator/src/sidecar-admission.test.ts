@@ -6,6 +6,7 @@ import { Writable } from "node:stream";
 import type { AgentEvent } from "@agent-studio/contracts";
 import { AdapterRegistry, type AgentAdapter, type AgentTask } from "@agent-studio/agent-core";
 import type { ResourceSource, SystemReading } from "@agent-studio/resource-monitor";
+import { trackLivePid } from "@agent-studio/process-manager";
 import { createLogger } from "@agent-studio/shared-utils";
 import { Repo } from "@agent-studio/storage";
 import { Orchestrator } from "./orchestrator.js";
@@ -36,6 +37,10 @@ class FakeSource implements ResourceSource {
   }
   process() {
     return undefined;
+  }
+  refreshed: (readonly number[])[] = [];
+  async refresh(pids: readonly number[]) {
+    this.refreshed.push(pids);
   }
 }
 
@@ -290,6 +295,21 @@ describe("SidecarService resource admission", () => {
     sample();
     expect(source.reads).toBe(reads); // sampling stopped
     svc.close(); // idempotent for the monitor
+  });
+
+  it("hands the running agents' pids to the resource source (P3-2)", () => {
+    sample();
+    expect(source.refreshed).toHaveLength(0); // nothing is running: nothing to measure
+    const untrack = trackLivePid(424242);
+    try {
+      sample();
+      expect(source.refreshed.at(-1)).toContain(424242);
+    } finally {
+      untrack();
+    }
+    const n = source.refreshed.length;
+    sample();
+    expect(source.refreshed).toHaveLength(n); // ended: no longer asked about
   });
 
   it("adds no sampling timer unless a resource source is given", () => {

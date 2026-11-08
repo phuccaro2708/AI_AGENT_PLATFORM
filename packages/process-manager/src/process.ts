@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { killTree, type KillResult } from "./kill-tree.js";
+import { trackLivePid } from "./live-pids.js";
 import { assertExecutableAllowed, filterEnv, type SpawnManifest } from "./manifest.js";
 import { sampleTreeBytes, type TreeMemorySampler } from "./tree-memory.js";
 import { UnsupportedShimError, resolveExecutable, unwrapNpmShim } from "./resolve.js";
@@ -209,6 +210,7 @@ export function startProcess(opts: RunOptions): RunningProcess {
     child.stdin.end(opts.stdin);
   }
 
+  const untrack = child.pid === undefined ? undefined : trackLivePid(child.pid);
   let outcome: RunOutcome = "exited";
   let killing: Promise<void> | undefined;
   let killError: string | undefined;
@@ -270,6 +272,7 @@ export function startProcess(opts: RunOptions): RunningProcess {
     const finish = (exitCode: number | null, signal: NodeJS.Signals | null, error?: string) => {
       if (settled) return;
       settled = true;
+      untrack?.();
       if (timer) clearTimeout(timer);
       stopWatch?.();
       opts.signal?.removeEventListener("abort", onAbort);

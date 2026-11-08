@@ -40,7 +40,7 @@ import {
 import { exportDiagnostics, verifyDiagnostics } from "@agent-studio/diagnostics";
 import { createLogger, type Logger } from "@agent-studio/shared-utils";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
-import type { JobWrapOptions } from "@agent-studio/process-manager";
+import { liveChildPids, type JobWrapOptions } from "@agent-studio/process-manager";
 import { dirname, join } from "node:path";
 import { ApprovalService } from "./approvals.js";
 import { ArtifactRegistry } from "./artifacts.js";
@@ -496,6 +496,7 @@ export class SidecarService {
       this.resourceMonitor = new ResourceMonitor({
         source: opts.resourceSource,
         thresholds: DEFAULT_THRESHOLDS,
+        trackedPids: liveChildPids, // the CLI agents' root pids (P3-2)
         onHealthChange: (healthy, d) =>
           healthy
             ? this.log.info("resource monitor measuring again")

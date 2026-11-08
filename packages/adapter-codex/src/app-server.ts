@@ -13,6 +13,7 @@ import {
   resolveExecutable,
   unwrapNpmShim,
   sampleTreeBytes,
+  trackLivePid,
   type JobWrapOptions,
   type SpawnManifest,
   type TreeMemorySampler,
@@ -522,7 +523,9 @@ export class CodexAppServerAdapter implements AgentAdapter {
     child.on("error", (e) => {
       spawnError = e.message;
     });
+    const untrack = child.pid === undefined ? undefined : trackLivePid(child.pid);
     child.on("close", () => {
+      untrack?.();
       splitter.end();
       closed = true;
       for (const w of waiters.values()) w({ error: { message: "connection closed" } });

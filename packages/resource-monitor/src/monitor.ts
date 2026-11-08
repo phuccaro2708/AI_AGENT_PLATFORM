@@ -113,16 +113,24 @@ export class ResourceMonitor {
       const nextProc = new Map<number, { cpuTimeMs: number; atMs: number }>();
       let rss = 0;
       let readable = 0;
-      for (const pid of this.trackedPids()) {
+      const pids = this.trackedPids();
+      // Background sources (Windows) measure on their own schedule: ask, do not wait; this sample reads the last answer.
+      if (pids.length > 0) this.source.refresh?.(pids).catch(() => undefined);
+      for (const pid of pids) {
         const p = this.source.process(pid);
         if (!p) continue;
         readable++;
         rss += p.rssBytes;
+        const at = p.atMs ?? now; // when the numbers were taken, not when we asked
         const prev = this.prevProc.get(pid);
-        if (prev && now > prev.atMs && p.cpuTimeMs >= prev.cpuTimeMs) {
-          childCpuPercent[pid] = ((p.cpuTimeMs - prev.cpuTimeMs) / (now - prev.atMs)) * 100;
+        if (prev && at === prev.atMs) {
+          nextProc.set(pid, prev); // the same reading again: no new interval, keep the old baseline
+          continue;
         }
-        nextProc.set(pid, { cpuTimeMs: p.cpuTimeMs, atMs: now });
+        if (prev && at > prev.atMs && p.cpuTimeMs >= prev.cpuTimeMs) {
+          childCpuPercent[pid] = ((p.cpuTimeMs - prev.cpuTimeMs) / (at - prev.atMs)) * 100;
+        }
+        nextProc.set(pid, { cpuTimeMs: p.cpuTimeMs, atMs: at });
       }
       this.prevProc = nextProc; // pids no longer tracked are forgotten
       if (readable > 0) metrics.trackedRssBytes = rss;

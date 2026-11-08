@@ -1,4 +1,4 @@
-export { NodeResourceSource } from "./source.js";
+export { NodeResourceSource, parseWindowsProcessTable, sumTree } from "./source.js";
 export type {
   NodeResourceSourceDeps,
   ProcessReading,

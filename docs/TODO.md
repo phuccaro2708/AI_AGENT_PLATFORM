@@ -9,7 +9,7 @@
 - **Phase 2: đóng 2026-11-03 (có ngoại lệ, xem PHASE2_REPORT).** Tiếp theo: 7 → 8 → 9 (10 song song 5–6).
 - Cập nhật 2026-11-04: nhánh gốc `claude/loving-lovelace-32lh71` đã ở `868daef` (gồm 7A, 7B, quét CLI, redaction, bỏ Gemini); PR #1 đã MERGED. Kiểm cục bộ: lint, typecheck, 383 test, build đều qua; `cargo clippy -D warnings` sạch, `cargo test` 12 qua / 1 bỏ qua. CI `babca05` đỏ vì Prettier lệch ở `docs/HANDOFF.md`; `868daef` (đã format lại) xanh 5/5 job.
 - **Thứ tự chốt lại 2026-11-04** (ROADMAP, mục "Thứ tự thực hiện"; ADR-005): Phase 7 (phần không cần policy) song song Phase 3 → Phase 4 (+ 7C-2, đóng Phase 7) → Phase 5 → Phase 6 → Phase 8 → Phase 9; Phase 10 xuyên suốt.
-- Ollama: hoãn, bỏ khỏi kế hoạch hiện tại vì máy chưa cài (không có để probe). Làm lại khi có môi trường.
+- Ollama: đã làm lại 2026-11-08 khi máy có Ollama 0.40.14 (S0–S6, xem PROGRESS); tool calling với model thật vẫn chưa thử.
 
 ### Ngoại lệ chuyển từ Phase 1
 
@@ -142,13 +142,13 @@ Nợ chuyển tiếp từ Phase 2: (engine resume + UI giải quyết reconcilia
 
 - [x] Quét CLI agent theo danh sách ứng viên khai báo bằng dữ liệu (PATH + vị trí cài Windows), hiển thị "đã phát hiện, chưa hỗ trợ" (`agents.scan`, `packages/cli-probe/src/candidates.ts`, Settings → Agents)
 - [x] Probe Antigravity (`agy`, quan sát `--print`, `--output-format stream-json`; đã có fixture `--help` 1.4.8 + capability từ help, đã quan sát output thật 2026-11-04: 2 lượt `--print`, xem ASSUMPTIONS; adapter dựng 2026-11-04, chỉ kiểm bằng CLI giả) rồi `adapter-antigravity` + fixtures + contract tests
-- [ ] `adapter-ollama`: HTTP client, discover models, stream
-- [ ] Tool loop riêng cho Ollama (whitelist tool, read-only mặc định, giới hạn vòng lặp)
+- [x] `adapter-ollama`: HTTP client, stream, một model một lúc (2026-11-08; "discover models" chủ ý KHÔNG làm: không gọi `/api/tags` hay `ollama list`, model do người dùng đặt qua `AGENT_STUDIO_OLLAMA_MODEL`)
+- [x] Tool loop riêng cho Ollama (whitelist tool, read-only, giới hạn vòng lặp): xong với server giả; CHƯA thử với model thật
 - [x] Capability-based router (`services/orchestrator/src/capability-router.ts`); nối vào `workflows.start` 2026-11-05 (phiên cloud, nhánh `claude/gracious-ritchie-ut3238`): bỏ trống `agentId` thì router chọn agent sẵn sàng có `streaming` (loại `stub`), lỗi dùng `describeCapabilityGap`. Không thêm method IPC. `agentId` chỉ định rõ vẫn được giữ nguyên, không kiểm capability ở backend. UI có lựa chọn "Auto" và nút bật/tắt `agy` từ 2026-11-05 (`91317e4`, `excludeAgents` trong `workflows.start`; chưa xem trong app Tauri thật); chưa chạy `agy` thật
-- [~] Resource monitor (RAM/VRAM) + Resource-Aware Scheduler — phần mã thuần xong 2026-11-05 (`packages/resource-monitor`: CPU/RAM hệ thống + RSS/CPU tiến trình con, ngưỡng cấu hình, giảm/tạm hoãn; điểm móc `SchedulerOptions.admission`). đã nối vào sidecar 2026-11-05 (`SidecarService` tạo monitor khi có `resourceSource`, `sidecar-main` truyền `NodeResourceSource`, ngưỡng mặc định; chưa truyền `trackedPids`), chưa có cấu hình trong settings, chưa hiển thị trong UI, chưa đo VRAM (không có API Node), chưa đo trên Windows, chưa ép bằng Job Object
+- [~] Resource monitor (RAM/VRAM) + Resource-Aware Scheduler — phần mã thuần xong 2026-11-05 (`packages/resource-monitor`: CPU/RAM hệ thống + RSS/CPU tiến trình con, ngưỡng cấu hình, giảm/tạm hoãn; điểm móc `SchedulerOptions.admission`). đã nối vào sidecar 2026-11-05 (`SidecarService` tạo monitor khi có `resourceSource`, `sidecar-main` truyền `NodeResourceSource`, ngưỡng mặc định; chưa truyền `trackedPids`), chưa có cấu hình trong settings, chưa hiển thị trong UI, VRAM: đã đo cả GPU bằng `nvidia-smi` và model Ollama bằng `/api/ps` (2026-11-08), chưa đo trên Windows, chưa ép bằng Job Object
 - [x] UI hiển thị capability thiếu (helper `describeCapabilityGap`) — `apps/desktop/src/capabilityGap.ts` (+ test, nối vào AgentView/PeerReviewView, chặn Run kèm lý do); đã xem trong app Tauri thật 2026-11-04 (Peer Review với `agy` thật trên máy: nhãn `(thiếu capability)`, Start review bị khoá kèm lý do; xem PROGRESS.md). Riêng nhánh AgentView (cần `streaming`) chưa chạm được vì không adapter nào thiếu `streaming`; chỉ có unit test
 - [x] Test thêm adapter giả không sửa core (cho routing; xem PHASE3_REPORT về giới hạn của sidecar)
-- [~] PHASE3_REPORT.md (bản nháp trung thực, cập nhật 2026-11-08; Phase 3 chưa đóng: còn Ollama, VRAM, kiểm giao diện Settings "Load limits" trong app thật. Đã xong 2026-11-08: admission cho `workflows.start`/`runStub`, `trackedPids` Windows, ngưỡng + concurrency trong Settings, `agy` thật qua adapter (một phần, xem ASSUMPTIONS))
+- [~] PHASE3_REPORT.md (bản nháp trung thực, cập nhật 2026-11-08; Phase 3 chưa đóng: Ollama/VRAM đã có mã + test (S1–S6), còn kiểm giao diện Settings "Load limits" trong app thật và tool calling thật. Đã xong 2026-11-08: admission cho `workflows.start`/`runStub`, `trackedPids` Windows, ngưỡng + concurrency trong Settings, `agy` thật qua adapter (một phần, xem ASSUMPTIONS))
 
 ## Phase 4 — Security & Reliability
 

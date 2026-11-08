@@ -689,3 +689,12 @@ Mã: ADR-008. `codex` = `CodexAppServerAdapter` khi cổng bật; RSS watchdog `
 - **Đã đo:** `/api/version`, `/api/tags`, `/api/ps`, `/api/chat` trả JSON đúng dạng; `/api/ps` có `size_vram` và `context_length`; `nvidia-smi --query-gpu=...` chạy được. Model duy nhất đã pull (9,2B Q4_K_M) chỉ nạp được một phần vào 8 GB VRAM (`size_vram` ~5,6 GB trên `size` ~8,7 GB).
 - **Đã đo, kết quả bất ngờ:** với `tools` trong request, model trả văn bản bịa thay vì `tool_calls` (1 mẫu). Không được giả định model có `capabilities: tools` sẽ gọi tool.
 - **Chưa đo:** streaming, `think:true`, model khác/nhỏ hơn, lỗi Ollama tắt hoặc model chưa pull, thời gian tải khi VRAM đã đầy.
+
+### Ollama: kết quả adapter và chạy thật (S1–S6, 2026-11-08)
+
+- **Đã đo (qwen3:4b, Ollama 0.40.14, RTX 5060 Laptop 8151 MiB, 1 lượt):** streaming NDJSON qua `/api/chat` đúng như adapter giả định; `/api/ps` cho `size`=`size_vram`=3033 MiB, `context_length` 4096; `nvidia-smi` cả máy +3139 MiB khi nạp và về đúng mức cũ sau `keep_alive:0`. Chênh ~106 MiB giữa hai nguồn là phần ngoài `size` của model (suy đoán: bộ đệm CUDA/runtime, CHƯA kiểm chứng).
+- **Đã đo, điều bất ngờ:** `think:false` KHÔNG ngăn `qwen3:4b` viết lập luận ("Hmm, the user just asked…") vào `message.content`. Adapter không tách phần này, nên câu trả lời của model loại này gồm cả lập luận và dễ chạm `num_predict` (lỗi "token limit" là hành vi đúng). Chưa thử `think:true` để tách vào trường riêng.
+- **Danh sách model đổi:** S0 thấy một model 9,2B; lúc S6 `/api/tags` chỉ còn `qwen3.5:4b` và `qwen3:4b` (đều sửa 2026-11-08 sáng, không do phiên này pull). Số đo VRAM của model 9,2B chạy một phần (S0) và của 4B chạy trọn (S6) cùng đúng, khác model.
+- **Chưa đo:** tool calling thật với model nào (S0 là 1 mẫu bịa văn bản, S6 không thử tool), `qwen3.5:4b`, hai model luân phiên trên Ollama thật (chỉ có test với server giả), tải model khi VRAM đã đầy.
+- **Giả định còn lại:** `ModelSlot` chỉ tuần tự hoá những gì chính tiến trình sidecar gửi; chương trình khác dùng chung Ollama thì không thấy. Giới hạn VRAM mặc định TẮT; 85/95 trong giao diện chỉ là giá trị khởi đầu, chưa hiệu chỉnh. Chỉ số làm giảm/dừng task là VRAM cả GPU (`nvidia-smi`), không phải VRAM của riêng Ollama.
+- **Biến môi trường mới (sidecar):** `AGENT_STUDIO_OLLAMA_MODEL`, `AGENT_STUDIO_OLLAMA_URL` (loopback; địa chỉ khác bị bỏ), `AGENT_STUDIO_OLLAMA_TOOLS=read-only`. Tool read-only chỉ thấy trong thư mục làm việc của task.

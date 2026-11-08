@@ -16,13 +16,21 @@ export type FakeMode =
   | "error-line"
   | "http-500"
   | "model-missing" // 404 with a JSON error, as Ollama answers for an unpulled model
-  | "hang"; // sends headers and one chunk, then nothing
+  | "hang" // sends headers and one chunk, then nothing
+  | "scripted"; // one `ScriptStep` per /api/chat request, in order (the last one repeats)
+
+/** What a scripted reply contains: some text and/or tool calls (`function.arguments` as an object, as Ollama sends). */
+export interface ScriptStep {
+  text?: string;
+  toolCalls?: { name: string; arguments: unknown }[];
+}
 
 export interface FakeOllama {
   url: string;
   mode: FakeMode;
   /** Parsed bodies of the `/api/chat` requests, in order. */
   chats: Record<string, unknown>[];
+  script: ScriptStep[];
   close(): Promise<void>;
 }
 
@@ -49,6 +57,7 @@ export async function startFakeOllama(mode: FakeMode = "ok"): Promise<FakeOllama
     url: "",
     mode,
     chats: [],
+    script: [],
     close: () => new Promise((res) => server.close(() => res())),
   };
   const sockets = new Set<import("node:net").Socket>();
@@ -105,6 +114,22 @@ export async function startFakeOllama(mode: FakeMode = "ok"): Promise<FakeOllama
       } else if (m === "error-line") {
         res.write(chunk("start"));
         res.end(line({ error: "llama runner process has terminated" }));
+      } else if (m === "scripted") {
+        const step = state.script[Math.min(state.chats.length - 1, state.script.length - 1)] ?? {};
+        if (step.text) res.write(chunk(step.text));
+        if (step.toolCalls) {
+          res.write(
+            line({
+              model: "m",
+              message: {
+                role: "assistant",
+                content: "",
+                tool_calls: step.toolCalls.map((c) => ({ function: c })),
+              },
+            }),
+          );
+        }
+        res.end(doneChunk());
       } else {
         res.write(chunk("first"));
         // never ends: the client must time out or abort

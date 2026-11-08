@@ -623,3 +623,12 @@ Nhánh `worktree-p4-close-prep`; chưa push, không PR, không viết `PHASE4_RE
 
 - Lệnh: `git rev-list/cherry/merge-base --is-ancestor` cho từng nhánh so với `claude/loving-lovelace-32lh71` và `worktree-p4-close-prep`; `gh pr checks 3`; đọc log job ubuntu. Kết quả thật: 19 nhánh local + `fix-pm-abort-flaky` đã nằm trong `worktree-p4-close-prep`; `phase-2-kickoff` tụt 204, không ghép; chưa ghép/xoá gì.
 - CI ubuntu đỏ ở 3 file test (xem HANDOFF); chưa sửa, chưa xác định nguyên nhân. Auto-fix đang bật cho PR #3.
+
+### 2026-11-08: Phase 3 phần còn lại (P0, P3-2, P3-4, P3-5, P3-6) trên nhánh `worktree-p4-close-prep`
+
+- **P0** (`7117bc9`, `7107efe`): `workflows.start` và `runStub` đi qua `enqueue` + `Scheduler.tick()` (cùng admission với ResourceMonitor). Test IPC `SidecarService.handle` (`sidecar-admission.test.ts`): `paused` không bắt đầu, hồi phục thì bắt đầu; test cũ được chỉnh 4 chỗ (prompt đã che secret trước `enqueue`; thứ tự sự kiện; 12 message). `runStub` trả `queued` ngay khi bị giữ (tránh chặn vòng IPC tuần tự; phát hiện qua review).
+- **P3-2** (`5ee7a53`): đo RSS/CPU pid con trên Windows bằng PowerShell nền (`shell:false`, mảng đối số). Đo thật: RSS lệch ≤ ~3 %, CPU tích luỹ ±~13 %. Chi tiết trong ASSUMPTIONS.
+- **P3-4/P3-5** (`61c5dfa`, `0412cbf`): `resources.get`/`resources.set`, khoá `resources.v1`, Zod, khôi phục sau khởi động lại, thẻ "Load limits" trong Settings, `ALLOWED_METHODS` + test Rust. `cargo clippy --all-targets -- -D warnings` sạch; `cargo test --locked`: 24 + 2 + 9 test pass, 1 ignored (sẵn có).
+- **P3-6** (`3eb1f5c`): `agy` 1.4.8 thật qua adapter, 4 lượt gọi model nhỏ, không gặp lỗi hết hạn mức; xem ASSUMPTIONS "Phase 3 (P3-6)". Probe mở bằng `AGENT_STUDIO_REAL_AGY=1`.
+- **Gate (chạy tuần tự, không song song):** `pnpm lint` exit 0; `pnpm format` exit 0; `pnpm typecheck` exit 0; `pnpm test` exit 0 (97 file pass, 3 skip; 952 test pass, 6 expected fail, 62 skip); `pnpm build` exit 0. `python scripts/secret-scan.py` (PowerShell, venv `%TEMP%\secscan-venv`): `findings: 0 (accepted fixture hits: 848)`, exit 0.
+- **Không làm:** Ollama (P3-1), VRAM (P3-3), đóng Phase 3, tick gate, push, PR. Sự kiện CI của PR #3 (head `574e643`, cũ hơn HEAD) được bỏ qua vì brief cấm push.

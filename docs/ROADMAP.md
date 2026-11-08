@@ -136,6 +136,8 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 - [ ] Thêm adapter mới không sửa Orchestrator core.
 - [ ] Hết VRAM/RAM → hệ thống degrade có kiểm soát, không treo máy.
 
+> Tình trạng 2026-11-08 (KHÔNG tick gate): RAM/CPU degrade đã nối qua admission, đo pid con Windows và ngưỡng/concurrency trong Settings; còn VRAM, Ollama và kiểm giao diện trong app thật. Xem `docs/PHASE3_REPORT.md`.
+
 ## Phase 4 — Security & Reliability (2–3 tuần)
 
 **Trạng thái (2026-11-05): ĐANG LÀM, chưa đóng.** Bằng chứng: `docs/PROGRESS.md` (mục 2026-11-05), `docs/SECURITY.md`, `docs/DEPS_AUDIT.md`.

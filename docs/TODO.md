@@ -148,7 +148,7 @@ Nợ chuyển tiếp từ Phase 2: (engine resume + UI giải quyết reconcilia
 - [~] Resource monitor (RAM/VRAM) + Resource-Aware Scheduler — phần mã thuần xong 2026-11-05 (`packages/resource-monitor`: CPU/RAM hệ thống + RSS/CPU tiến trình con, ngưỡng cấu hình, giảm/tạm hoãn; điểm móc `SchedulerOptions.admission`). đã nối vào sidecar 2026-11-05 (`SidecarService` tạo monitor khi có `resourceSource`, `sidecar-main` truyền `NodeResourceSource`, ngưỡng mặc định; chưa truyền `trackedPids`), chưa có cấu hình trong settings, chưa hiển thị trong UI, chưa đo VRAM (không có API Node), chưa đo trên Windows, chưa ép bằng Job Object
 - [x] UI hiển thị capability thiếu (helper `describeCapabilityGap`) — `apps/desktop/src/capabilityGap.ts` (+ test, nối vào AgentView/PeerReviewView, chặn Run kèm lý do); đã xem trong app Tauri thật 2026-11-04 (Peer Review với `agy` thật trên máy: nhãn `(thiếu capability)`, Start review bị khoá kèm lý do; xem PROGRESS.md). Riêng nhánh AgentView (cần `streaming`) chưa chạm được vì không adapter nào thiếu `streaming`; chỉ có unit test
 - [x] Test thêm adapter giả không sửa core (cho routing; xem PHASE3_REPORT về giới hạn của sidecar)
-- [~] PHASE3_REPORT.md (có bản nháp trung thực; Phase 3 chưa đóng: còn Ollama, phần còn lại của resource monitor (VRAM, `trackedPids`, UI, cấu hình), adapter `agy` chưa chạy CLI thật)
+- [~] PHASE3_REPORT.md (bản nháp trung thực, cập nhật 2026-11-08; Phase 3 chưa đóng: còn Ollama, VRAM, kiểm giao diện Settings "Load limits" trong app thật. Đã xong 2026-11-08: admission cho `workflows.start`/`runStub`, `trackedPids` Windows, ngưỡng + concurrency trong Settings, `agy` thật qua adapter (một phần, xem ASSUMPTIONS))
 
 ## Phase 4 — Security & Reliability
 

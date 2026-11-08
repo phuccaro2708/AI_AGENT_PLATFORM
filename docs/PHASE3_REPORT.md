@@ -48,3 +48,16 @@ Không chạy `agy` thật; không dùng lượt probe còn lại.
 - Yêu cầu theo màn hình là quy ước của UI, không phải luật backend: agent đơn cần `streaming`; Peer Review cần `tool_execution` (cả hai vai chạy với `permissions`; adapter `agy` từ chối task có `permissions`).
 - `AgentView`/`PeerReviewView`: nút Run bị chặn kèm lý do (vd. "agy không hỗ trợ: chạy công cụ"); Peer Review ưu tiên agent đủ capability khi chọn mặc định và gắn "(thiếu capability)" vào option.
 - Đã chạy: lint, prettier --check, typecheck, test (47 file, 431 test), build — đều pass. **Chưa kiểm trong app Tauri thật** (render, bố cục câu chặn). Router vẫn chưa nối `workflows.start`.
+
+## Cập nhật 2026-11-08: phần còn lại của Phase 3 (BẢN NHÁP, Phase 3 vẫn CHƯA đóng)
+
+| Mục                                          | Trạng thái                        | Bằng chứng                                                                                                                                                                                                            |
+| -------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0 admission cho `workflows.start`/`runStub` | DONE                              | test IPC `sidecar-admission.test.ts` (không bắt đầu khi `paused`, bắt đầu sau hồi phục)                                                                                                                               |
+| P3-2 `trackedPids` Windows                   | DONE (có giới hạn)                | `windows-process-source.test.ts` + đo thật: RSS ≤ ~3 %, CPU ±~13 %; `trackedRssBytes` chưa ảnh hưởng admission                                                                                                        |
+| P3-4 ngưỡng trong Settings                   | DONE (UI chưa xem trong app thật) | `resources.get/set`, Zod, khôi phục sau restart (test mở lại DB), thẻ Settings; clippy + cargo test sạch                                                                                                              |
+| P3-5 concurrency từ Settings                 | DONE                              | test: không vượt trần khi tải và trần cùng đổi; hạ trần không dừng task đang chạy                                                                                                                                     |
+| P3-6 `agy` thật qua adapter                  | PARTIAL                           | output, cwd, prompt nhiều dòng, lỗi (model sai, cwd sai), timeout 1 s, cancel đã kiểm; chưa kiểm: lỗi chưa đăng nhập/hết hạn mức, nội dung lỗi thật (parser bỏ), cây tiến trình con, ép quyền (KHÔNG kiểm chứng được) |
+| P3-1 Ollama, P3-3 VRAM                       | NOT_RUN                           | hoãn theo brief                                                                                                                                                                                                       |
+
+Gate: lint, format, typecheck, test (952 pass), build đều exit 0; secret scan 0 phát hiện mới. **Ba acceptance gate ROADMAP vẫn chưa đạt** (thiếu Ollama, VRAM, kiểm UI trong app thật); bản báo cáo này chưa được đóng.

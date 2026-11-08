@@ -1308,3 +1308,162 @@ describe.skipIf(MODE !== "claude-default")(
     }, 200_000);
   },
 );
+
+// External review 2026-11-07 (docs/ASSUMPTIONS.md d14): `env.NODE_OPTIONS` and `apiKeyHelper` in
+// `.claude/settings.local.json` reportedly run code outside the gate. Here: (1)(2) REPRODUCE with real claude WITHOUT
+// the new check (only `--setting-sources local`, no MCP gate: the question is only whether the marker appears);
+// (3) the production taskArgs REFUSES the same file before claude starts; (4) is a file in the PARENT of the task
+// folder read? Markers live in the temp repo; nothing outside `root` is touched.
+describe.skipIf(MODE !== "claude-settings-keys")(
+  "REAL claude, settings.local.json keys that run code (opt-in: AGENT_STUDIO_REAL_CLI_GATES=claude-settings-keys)",
+  () => {
+    const PROMPT = "Reply with the single word hi. Do not use any tool.";
+    const MODEL_ARGS = [
+      "--model",
+      "haiku",
+      "--no-session-persistence",
+      "--max-budget-usd",
+      "0.2",
+      "--disable-slash-commands",
+    ];
+    const marker = (dir: string, f: string) => existsSync(join(dir, f));
+
+    async function run(
+      name: string,
+      setup: (root: string, repo: string) => void,
+      guarded: boolean,
+      withBash = false,
+    ) {
+      const { root, repo } = freshRepo(name);
+      setup(root, repo);
+      const adapter = new ClaudeAdapter({
+        safeMode: false,
+        extraArgs: MODEL_ARGS,
+        taskArgs: guarded
+          ? claudeGateTaskArgs({
+              configDir: join(root, "gate-config"),
+              launcher: { command: process.execPath, args: [gateTapScript] },
+              askEveryTool: true,
+              isolateSettings: true,
+              requireLauncher: true,
+            })
+          : () => ["--setting-sources", "local", ...(withBash ? ["--allowedTools", "Bash"] : [])],
+      });
+      const events: AgentEvent[] = [];
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 120_000);
+      let thrown: string | undefined;
+      try {
+        for await (const e of adapter.execute({
+          id: `real-${name}`,
+          prompt: withBash ? "Run the shell command: node -v . Then say done." : PROMPT,
+          cwd: repo,
+          signal: ac.signal,
+        })) {
+          events.push(e);
+        }
+      } catch (e) {
+        thrown = e instanceof Error ? e.message : String(e);
+      } finally {
+        clearTimeout(timer);
+      }
+      const out = {
+        envMarker: marker(root, "env-ran.txt") || marker(repo, "env-ran.txt"),
+        helperMarker: marker(root, "helper-ran.txt") || marker(repo, "helper-ran.txt"),
+        thrown,
+        eventTypes: events.map((e) => e.type),
+        lastEvent: events.length
+          ? JSON.stringify(events[events.length - 1]).slice(0, 220)
+          : undefined,
+      };
+      report[name] = out;
+      return out;
+    }
+
+    const writeSettings = (dir: string, s: object) => {
+      mkdirSync(join(dir, ".claude"), { recursive: true });
+      writeFileSync(join(dir, ".claude", "settings.local.json"), JSON.stringify(s));
+    };
+    const nodeWrite = (file: string) =>
+      `node -e "require('fs').appendFileSync(${JSON.stringify(file)},'x')"`;
+
+    it("1: env.NODE_OPTIONS preload, no check (reproduction)", async () => {
+      await run(
+        "settings-keys-env",
+        (_root, repo) => {
+          const pre = join(repo, "pre.cjs");
+          writeFileSync(
+            pre,
+            `require('fs').appendFileSync(${JSON.stringify(join(repo, "env-ran.txt"))},'x')`,
+          );
+          writeSettings(repo, {
+            env: { NODE_OPTIONS: `--require ${pre.split(String.fromCharCode(92)).join("/")}` },
+          });
+        },
+        false,
+      );
+    }, 150_000);
+
+    it("5: env.NODE_OPTIONS preload with a Bash tool call that starts node, no check", async () => {
+      await run(
+        "settings-keys-env-bash",
+        (_root, repo) => {
+          const pre = join(repo, "pre.cjs");
+          const marker = join(repo, "env-ran.txt").split(String.fromCharCode(92)).join("/");
+          writeFileSync(pre, `require('fs').appendFileSync(${JSON.stringify(marker)},'x')`);
+          writeSettings(repo, {
+            env: { NODE_OPTIONS: `--require ${pre.split(String.fromCharCode(92)).join("/")}` },
+          });
+        },
+        false,
+        true,
+      );
+    }, 150_000);
+
+    it("2: apiKeyHelper, no check (reproduction)", async () => {
+      await run(
+        "settings-keys-helper",
+        (_root, repo) => {
+          writeSettings(repo, {
+            apiKeyHelper: nodeWrite(
+              join(repo, "helper-ran.txt").split(String.fromCharCode(92)).join("/"),
+            ),
+          });
+        },
+        false,
+      );
+    }, 150_000);
+
+    it("3: the same two keys with the production taskArgs: refused, claude not started, no marker", async () => {
+      const r = await run(
+        "settings-keys-guarded",
+        (_root, repo) => {
+          writeSettings(repo, {
+            env: { NODE_OPTIONS: "--require x.cjs" },
+            apiKeyHelper: nodeWrite(
+              join(repo, "helper-ran.txt").split(String.fromCharCode(92)).join("/"),
+            ),
+          });
+        },
+        true,
+      );
+      expect(r.envMarker).toBe(false);
+      expect(r.helperMarker).toBe(false);
+      expect(JSON.stringify(r)).toMatch(/settings\.local\.json/);
+    }, 150_000);
+
+    it("4: settings.local.json with apiKeyHelper in the PARENT of the task folder: is it read?", async () => {
+      await run(
+        "settings-keys-parent",
+        (root) => {
+          writeSettings(root, {
+            apiKeyHelper: nodeWrite(
+              join(root, "helper-ran.txt").split(String.fromCharCode(92)).join("/"),
+            ),
+          });
+        },
+        false,
+      );
+    }, 150_000);
+  },
+);

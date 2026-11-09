@@ -682,3 +682,8 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Không push, không PR, không tick gate Phase 3, không đóng Phase 3.
 - Gate tuần tự sau S6 (trước commit tài liệu): `pnpm lint`, `format`, `typecheck`, `test`, `build` đều exit 0; test: 105 file pass, 4 skip; 1038 pass, 6 expected fail, 63 skip. Secret scan: `findings: 0 (accepted fixture hits: 876)`. `node scripts/docs-sync-check.mjs` OK. Không đụng `src-tauri` nên không chạy cargo. Soak CLI thật chưa chạy lại.
 - Sau `0b6dde6` (test `no-spawn.test.ts`: adapter không chạy process, không `ollama list`), gate đầy đủ chạy lại tuần tự trên trạng thái cuối: `pnpm lint`, `format`, `typecheck`, `test`, `build` đều exit 0; test: 106 file pass, 4 skip; 1039 pass, 6 expected fail, 63 skip. Secret scan: `findings: 0 (accepted fixture hits: 878)`; dòng thô trên cây làm việc đúng 2 (`docs/SECURITY.md:37`, `sidecar-permission-gates.test.ts:170`), cả hai đã nằm trong allowlist. Cách hiểu "chỉ còn 2 phát hiện đã biết" = 0 phát hiện chưa chấp nhận cần người dùng xác nhận.
+
+## 2026-11-08: /save (sau S1–S7)
+
+- Đối chiếu docs với git: HANDOFF cập nhật head `c34a8c9`, local hơn origin 24 commit (chưa push). Commit từ S1 đến nay: `39f0c9b`, `ed94128`, `a71f9e3`, `cda1e38`, `dc624d5`, `c0f6899`, `731e2d8`, `0feb5c7` (docs), `0b6dde6` (test no-spawn), `c34a8c9` (docs gate cuối). Gate cuối và secret scan: xem mục "S1–S6 đóng Phase 3" ở trên (không chạy lại trong lần lưu này).
+- Chờ người dùng: xác nhận cách đọc secret scan (0 phát hiện + 2 mục allowlist), kiểm giao diện thật, tool calling Ollama với model thật, soak CLI thật, đóng Phase 3. Không tick gate, không đóng Phase 3.

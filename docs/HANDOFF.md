@@ -1,6 +1,6 @@
 # Bàn giao tiến độ
 
-Cập nhật: 2026-11-08 (đã đối chiếu với git). Việc Phase 4 hiện nằm ở nhánh `worktree-p4-close-prep` (head `574e643` lúc lưu; Phase 3 còn lại làm xong ở `e78fa37`, rồi sửa 5 phát hiện review ở `2843b89` (gate tuần tự 5/5 exit 0, 955 test pass; secret scan và soak CLI thật chưa chạy lại sau bản sửa), nhánh local hơn origin 11 commit (chưa push), nhánh chính `claude/loving-lovelace-32lh71` ở `080adce`; commit cũ hơn đã push, PR #3 đang mở vào nhánh chính, chưa ghép; CI trên PR: job TypeScript ubuntu ĐỎ, xem dưới). Nhánh chính vẫn ở `080adce`. Các mục "Vị trí" và CI bên dưới là lịch sử đến 2026-11-06 và nói về nhánh chính cũ; kế hoạch hiện hành nằm ở `docs/NEXT_PLAN.md` (C0–C13). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
+Cập nhật: 2026-11-08 (đã đối chiếu với git). Việc Phase 4 hiện nằm ở nhánh `worktree-p4-close-prep` (head `c34a8c9` lúc lưu 2026-11-08, sau S1–S7 Phase 3: gate tuần tự 5/5 exit 0, 1039 test pass; Phase 3 còn lại làm xong ở `e78fa37`, rồi sửa 5 phát hiện review ở `2843b89` (gate tuần tự 5/5 exit 0, 955 test pass; secret scan và soak CLI thật chưa chạy lại sau bản sửa), nhánh local hơn origin 24 commit (chưa push), nhánh chính `claude/loving-lovelace-32lh71` ở `080adce`; commit cũ hơn đã push, PR #3 đang mở vào nhánh chính, chưa ghép; CI trên PR: job TypeScript ubuntu ĐỎ, xem dưới). Nhánh chính vẫn ở `080adce`. Các mục "Vị trí" và CI bên dưới là lịch sử đến 2026-11-06 và nói về nhánh chính cũ; kế hoạch hiện hành nằm ở `docs/NEXT_PLAN.md` (C0–C13). Nhật ký chi tiết theo thời gian nằm ở `docs/PROGRESS.md`; file này chỉ nêu trạng thái hiện tại để người tiếp quản đọc nhanh.
 
 ## Phase 4 hiện tại (2026-11-07, nhánh `worktree-p4-close-prep`)
 
@@ -78,6 +78,7 @@ Cập nhật: 2026-11-08 (đã đối chiếu với git). Việc Phase 4 hiện 
 
 ## Chờ người dùng quyết
 
+- Secret scan sau S1–S7: script in `findings: 0 (accepted fixture hits: 878)`; dòng thô trên cây làm việc đúng 2 (`docs/SECURITY.md:37`, `sidecar-permission-gates.test.ts:170`), đã nằm trong allowlist theo yêu cầu 2026-11-07. Mục tiêu goal ghi "chỉ còn 2 phát hiện đã biết": cần người dùng xác nhận 0 phát hiện chưa chấp nhận là đủ, hay muốn gỡ 2 mục khỏi allowlist để script báo đúng 2.
 - ADR-006 phần chưa duyệt: A1 chủ DB, A7 spawn sớm sidecar, A8 yêu cầu lặp `workflows.start` chưa được hỏi; A2/A4/A5/A6 (kênh, token, vai, allowlist/cầu nối) chờ sau Phase 4.
 - Duyệt hướng P4-1 c/d (claude `--permission-prompt-tool` nhưng cổng không thấy mọi lời gọi; codex `app-server` có approval có cấu trúc, `exec --json` không có) và định nghĩa 5 bước recovery.
 - Duyệt dependency Tailwind/shadcn và Playwright; cho phép lượt probe `agy` thứ 3; duyệt phạm vi grant 7C-2; xác nhận có bỏ `claude/phase-2-kickoff-8a5732` không.

@@ -271,7 +271,8 @@ Nợ chuyển tiếp từ Phase 2: (engine resume + UI giải quyết reconcilia
 ## Loop Runner (repo riêng `D:\Program\loop-runner`, 2026-11-09)
 
 - [x] Task 1–10: scaffold, probe CLI, config, exec/redact, gates, tasks/phase, budget, worktree + diff guard, adapter claude/codex, `runLoop` (đã review; implementer báo 203 test pass, chưa tự chạy lại)
-- [ ] Task 11: CLI `check`, `run --dry-run` (hỏi người dùng trước khi cài lệnh global)
-- [ ] Task 12: `loop.config.json` của Agent Workspace; AGENTS.md/`implementer.toml` 2→3 lần sửa; ghi UNVERIFIED vào ASSUMPTIONS
-- [ ] Task 13: chạy thật claude/codex (cần người dùng cho phép) + `docs/reports/LOOP_RUNNER_ACCEPTANCE.md`
-- [ ] Review cả nhánh một lượt, ghi ADR cho quy tắc 10 mới, viết tiêu chí Phase 4–9 thành lệnh chạy được
+- [x] Task 11–13: CLI `check`/`run`, `loop.config.json` + AGENTS.md/`implementer.toml` 3 lần sửa + ASSUMPTIONS, nghiệm thu chạy thật (báo cáo `docs/reports/LOOP_RUNNER_ACCEPTANCE.md`, bước 1 PARTIAL)
+- [x] Review cả nhánh một lượt + một đợt sửa I-1..I-7 (loop-runner `cb5a61b`), ADR-010 cho quy tắc 10
+- [ ] I-8: bước cài phụ thuộc trong run worktree rồi chạy lại nghiệm thu bước 1
+- [ ] Hỏi người dùng trước khi cài lệnh global `loop-runner`
+- [ ] Viết tiêu chí Phase 3–10 thành lệnh chạy được

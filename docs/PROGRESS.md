@@ -734,3 +734,10 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Kết quả implementer báo: vitest 246/246, `tsc --noEmit` sạch; 9 test mới fail trên mã cũ. Tôi chưa tự chạy lại trong phiên này.
 - Còn mở (Minor, ghi sổ SDD): `core.hooksPath` = gốc worktree không được bảo vệ; push tới URL tường minh không bị phát hiện; `taskFileCommitted` chạy `git diff` trong checkout của người dùng (clean filter của họ sẽ chạy); `tests/tasks.test.ts` để lại thư mục `lr-tasks-*` trong thư mục tạm; chưa có resume khi chạy lại sau khi xong một phần (CLI phải cảnh báo).
 - Chưa làm: Task 11–13. Không gọi CLI thật. Chỉ đổi tài liệu trong repo này; gate Agent Workspace không chạy lại.
+
+## 2026-11-09: Loop Runner Task 11–13, review cả nhánh, nghiệm thu
+
+- Repo `loop-runner`: Task 11 `1df94e6`/`aaef6eb` (CLI), Task 12 `769c7a9` (schema config strict), Task 13 `a68793c` (mẫu nghiệm thu), `ff9eb61` (sửa lỗi nghiệm thu: shim `.cmd` trên Windows, guard `.git/info`, tên khóa lạ trong config), `cb5a61b` (sửa 7 phát hiện Important của review toàn nhánh). Repo này: `91e8142`, `ae8c48c` (config, 2→3 lần sửa, ASSUMPTIONS, ADR-010), `4cad95a` (báo cáo nghiệm thu).
+- Đã chạy (tôi, ở `cb5a61b`): `pnpm typecheck` sạch, `pnpm test` 310/310 (repo `loop-runner`). Ở repo này, agent báo gate lint/typecheck/test/build PASS; format chỉ lỗi trên file `.superpowers/*` chưa track (tôi chưa chạy lại). Nghiệm thu với claude/codex thật: kết quả trong `docs/reports/LOOP_RUNNER_ACCEPTANCE.md` (bước 1 PARTIAL, bước 2–4 PASS).
+- Review toàn nhánh: 0 Critical, 8 Important (I-1..I-7 đã sửa; I-8 chưa), 16 Minor chưa sửa hết (ghi sổ SDD).
+- Chưa làm/NOT_RUN: chạy lại nghiệm thu bước 1 sau các bản sửa; bước cài phụ thuộc trong run worktree; cài lệnh global; tiêu chí Phase 3–10 thành lệnh; clippy/`cargo test` (không có gate điều kiện). Không push, không tạo PR, không ghép.

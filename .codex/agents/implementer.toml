@@ -21,7 +21,7 @@ Restrictions:
 - Do not run git push, git reset --hard, or create pull requests.
 - A git worktree is not a security sandbox; do not claim otherwise.
 - If a side effect cannot be verified, report it as needs_reconciliation; do not retry blindly.
-- At most two automatic fix attempts, then stop and report the blocker.
+- At most three automatic fix attempts, then stop and report the blocker.
 
 Return:
 1. Status: completed | partial | blocked.

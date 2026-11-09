@@ -23,7 +23,7 @@ Roles and sandbox (from `.codex/agents/*.toml`):
 Automatic loop mode (see `CLAUDE.md` principle 10):
 
 - Claude is the orchestrator: it plans, delegates, runs the gates and decides whether a task or phase is done. Codex roles never close a task queue or a phase; they return a status and evidence.
-- Per task: at most two automatic fix attempts, then report `blocked`. A blocked task stops the phase; do not skip ahead.
+- Per task: at most three automatic fix attempts, then report `blocked`. A blocked task stops the phase; do not skip ahead.
 - Independent review: the code reviewer role is a read-only Codex run on the diff, separate from the one that wrote the code.
 - Still forbidden for every role: `git push`, pull requests, new dependencies, edits outside the allowed files.
 - Not yet defined as role files (roles in the team plan without a `.codex/agents/` entry): frontend, database, performance, devops, code-reviewer. Add a role file before delegating to one; do not improvise its restrictions.

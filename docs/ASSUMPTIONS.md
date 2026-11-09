@@ -742,3 +742,16 @@ Nguồn: `scripts/probe.ts` trong repo công cụ loop-runner (commit `feat: add
 
 - Trong cùng một thư mục tạm: claude (đọc) → claude (ghi `claude.txt`) → codex (read-only) → codex (ghi `probe.txt`), nối tiếp, cả bốn exit 0, không có lỗi khoá/xung đột, cả hai file ghi đúng. Điều kiện kết luận trong script nay gồm cả lượt ghi của claude (trước đó thiếu). Chỉ áp dụng cho thư mục tạm KHÔNG phải git.
 - **UNVERIFIED:** worktree git thật (index lock, `.git`), thư mục có file cấu hình riêng của từng CLI (`.claude/`, `AGENTS.md`), hai CLI chạy SONG SONG (không được thiết kế; công cụ vẫn phải tuần tự), thay đổi chưa commit của lượt trước bị lượt sau đọc lại đúng.
+
+## Loop Runner: chưa kiểm chứng (UNVERIFIED) (2026-11-09)
+
+Danh sách giả định của `D:\Program\loop-runner` mà chưa có phép đo. Không mục nào dưới đây được coi là ranh giới bảo mật.
+
+- **`claude --tools Read,Grep,Glob` không cô lập MCP, hook hay cấu hình người dùng.** Cờ chỉ giới hạn tool tích hợp; MCP server, hook và `settings` của người dùng vẫn có thể nạp. Chưa đo.
+- **Hành vi Bash dưới `acceptEdits` và ghi ngoài cwd chưa đo, và diff guard không thấy.** Guard chỉ so cây làm việc của worktree chạy; ghi ra ngoài thư mục đó không nằm trong diff.
+- **`codex -s read-only` từng cho ghi trong cwd** (xem Giả định 3 ở mục "Loop Runner probes" phía trên: ca read-only chưa được đo từ chối ghi). Vì vậy chế độ này không phải ranh giới; vai reviewer dựa vào kiểm diff, không dựa vào sandbox.
+- **Hình dạng JSON output của claude và codex chưa probe đầy đủ.** Chỉ có các khoá đã thấy trong Giả định 1 và 2 (một mẫu mỗi chế độ); lỗi, hết quota, output dài chưa quan sát.
+- **`git push` tới URL tường minh không bị phát hiện.** Guard chỉ chụp `refs/remotes`; push thẳng tới một URL không đổi ref remote nào.
+- **`core.hooksPath=.` không được bảo vệ.** Cấu hình git cục bộ có thể trỏ hook về thư mục làm việc.
+- **Git driver ở phạm vi global (filter/diff/merge driver) ngoài phạm vi.** Công cụ không kiểm cấu hình git toàn cục của người dùng.
+- **Cách tính token khác nhau theo CLI.** claude báo `usage` và `total_cost_usd`, codex báo `usage` theo sự kiện; cộng dồn chéo hai CLI là ước lượng, không so sánh trực tiếp được.

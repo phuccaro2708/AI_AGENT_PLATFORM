@@ -164,3 +164,11 @@ Gate chung: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm bui
 - **Quyết định (người dùng chọn):** chỉ bỏ `agy` khỏi **phạm vi gate Phase 3**. Code `packages/adapter-antigravity`, đăng ký trong sidecar và UI giữ nguyên, không xoá, không ẩn. Gate Phase 3 tính trên Claude, Codex, Ollama.
 - **Đánh đổi:** `agy` vẫn chạy được nhưng không còn được bảo đảm bởi gate; phần PARTIAL (lỗi chưa đăng nhập/hết hạn mức, cây tiến trình con, ép quyền) trở thành nợ ngoài gate, không phải điều kiện đóng.
 - **Xem lại nếu:** muốn `agy` là agent hỗ trợ chính thức (khi đó đưa lại vào gate và hoàn tất kiểm thật), hoặc quyết định gỡ hẳn khỏi codebase.
+
+## ADR-010: Chế độ vòng lặp tự động trong CLAUDE.md nguyên tắc 10 (2026-11-09)
+
+- **Trạng thái:** Người dùng đã duyệt (2026-11-09, trong hội thoại); đã ghi vào `CLAUDE.md` nguyên tắc 10.
+- **Bối cảnh:** công cụ `loop-runner` (repo riêng, xem `docs/superpowers/specs/2026-11-09-autonomous-loop-runner-design.md`) chạy vòng lặp task → gate → review để giảm việc duyệt tay từng task.
+- **Quyết định:** khi người dùng chủ động bật vòng lặp, điều phối viên được tự đóng phase và sang phase kế tiếp, nhưng chỉ khi mọi tiêu chí nghiệm thu trong `docs/ROADMAP.md` đã PASS bằng kết quả lệnh thật (không có mục NOT_RUN/BLOCKED) và `docs/PHASEn_REPORT.md` đã ghi. Mỗi task tối đa 3 lần tự sửa (`AGENTS.md`, `.codex/agents/implementer.toml`, `maxAttemptsPerTask` trong `loop.config.json`).
+- **Giới hạn:** không áp dụng cho phiên thường; đúng thứ tự ADR-005; không `git push`, không tạo PR, không thêm dependency; vai Codex không bao giờ tự đóng phase; task BLOCKED thì dừng. Tiêu chí chưa có lệnh chạy được vẫn là NOT_RUN nên phase đó không tự đóng. Các giả định chưa kiểm của công cụ: `docs/ASSUMPTIONS.md`, mục "Loop Runner: chưa kiểm chứng".
+- **Xem lại nếu:** vòng lặp làm hỏng cây làm việc, vượt giới hạn trên, hoặc có phép đo cho thấy cô lập CLI không đủ.

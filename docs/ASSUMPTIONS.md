@@ -704,3 +704,39 @@ Mã: ADR-008. `codex` = `CodexAppServerAdapter` khi cổng bật; RSS watchdog `
 - **Đã đo (Ollama 0.40.14, `qwen3:4b`, 1 lượt):** `POST /api/generate {"model":..., "keep_alive":0}` gỡ model ngay (`done_reason:"unload"`); `/api/ps` trước đó có `qwen3:4b` (`size_vram` ~3,18 GB), sau đó rỗng.
 - **Hành vi mới:** khi một lượt chạy model B ngay sau model A (cùng server, cùng tiến trình sidecar), adapter gỡ A (`keep_alive:0`, best effort, lỗi bị bỏ qua) trước khi gửi chat của B; cùng model thì không gỡ. `detect()` kiểm tên đã cấu hình có trong `/api/tags` (tên không tag = `:latest`); tên sai hoặc server không trả lời = không sẵn sàng.
 - **Chưa đo:** chạy liên tiếp hai model qua adapter thật rồi đọc `/api/ps` (mới có test server giả và phép đo gỡ model ở trên); chương trình khác dùng chung Ollama không bị thấy bởi `ModelSlot`.
+
+## Loop Runner probes (2026-11-09)
+
+Nguồn: `scripts/probe.ts` trong repo công cụ loop-runner (commit `feat: add CLI probe script`), chạy một lần trên Windows 11, Node 24, `claude` 2.1.319, `codex-cli` 0.167.0. Mọi lời gọi dùng argument array, `shell: false`, trong một thư mục tạm mới (`fs.mkdtemp`), prompt tối thiểu không chứa dữ liệu dự án; không dùng cờ bỏ qua quyền/sandbox. Mỗi chế độ đúng một lần gọi. Output CLI coi là dữ liệu không đáng tin.
+
+### Cách chạy CLI trên Windows mà không qua shell (VERIFIED)
+
+- **`claude`**: là file thực thi gốc `~\.local\bin\claude.exe`; `spawn(<đường dẫn claude.exe>, ["--version"], {shell:false})` → exit 0, `2.1.319 (Claude Code)`.
+- **`codex`**: `spawn("codex", ["--version"], {shell:false})` → `ENOENT` (npm cài `codex.cmd` shim, Node không chạy được nếu không có shell). Cách đã kiểm chứng: `spawn(process.execPath, [<APPDATA>\npm\node_modules\@openai\codex\bin\codex.js, "--version"], {shell:false})` → exit 0, `codex-cli 0.167.0`. Đây là đúng điều `codex.cmd` làm (`node …\bin\codex.js %*`).
+- **Hệ quả cho Task 8:** phải phân giải đường dẫn thật (không tin tên trần `codex`); với `.cmd` phải đọc entry `codex.js` sau shim hoặc cho người dùng cấu hình đường dẫn. Đường dẫn này phụ thuộc cách cài (npm toàn cục); chưa đo bản cài khác (winget, bản native).
+
+### Giả định 1: chạy không tương tác, có mã thoát và output dùng được (VERIFIED, 1 mẫu mỗi chế độ)
+
+- `claude.exe -p "Reply with the single word OK" --output-format json --no-session-persistence --max-budget-usd 0.50` → exit 0; stdout là MỘT đối tượng JSON, có `stop_reason:"end_turn"`, `session_id`, `total_cost_usd`, `usage`.
+- `node codex.js exec --sandbox read-only --skip-git-repo-check --ephemeral --json "Reply with the single word OK"` → exit 0; stdout là JSONL (`{"type":"thread.started",...}`, `item.completed`...). stderr in `Reading additional input from stdin...` (đã đóng stdin bằng `stdio: "ignore"`, không treo).
+- **Nhiễu:** JSONL của codex chứa các sự kiện `item.completed` loại `error` do hook plugin của người dùng ("skipping prompt hook ... not supported yet"); bộ phân tích phải bỏ qua loại sự kiện không biết, không coi `type:"error"` là thất bại của lượt.
+- **Chưa đo:** exit code khi lỗi (hết quota, sai cờ, hết giờ), `claude` không có `--no-session-persistence`, output rất dài, ổn định qua nhiều lần chạy (mới 1 mẫu).
+
+### Giả định 2: đo/giới hạn ngân sách (VERIFIED đo được token và chi phí; giới hạn cứng chỉ có ở claude)
+
+- **claude** (`--output-format json`), các khóa thật đã thấy: `total_cost_usd` (0.0967 ở lượt "OK"), `usage.input_tokens`, `usage.output_tokens`, `usage.cache_creation_input_tokens`, `usage.cache_read_input_tokens`, `usage.output_tokens_details.thinking_tokens`, `duration_api_ms`. Cờ `--max-budget-usd <amount>` có trong `--help` (chỉ với `--print`) và được TRUYỀN trong hai lượt đã chạy (0.50, không bị chạm nên chưa đo hành vi khi vượt).
+- **codex** (`exec --json`), sự kiện có khóa: `usage.input_tokens`, `usage.cached_input_tokens`, `usage.cache_write_input_tokens`, `usage.output_tokens`, `usage.reasoning_output_tokens` (26236 vào / 21 ra ở lượt "OK"). KHÔNG thấy trường chi phí USD. Không thấy cờ giới hạn ngân sách trong `codex exec --help`; chưa tìm kiếm sâu hơn.
+- **Quyết định ngân sách (đề xuất cho Task 8-10):** đọc token/chi phí sau mỗi lượt để cộng dồn và dừng từ phía công cụ; với claude thêm `--max-budget-usd` làm lưới an toàn; với codex chỉ có token đo SAU lượt nên giới hạn theo số lượt gọi và thời gian (spec mục 7) vẫn bắt buộc. Lưu ý một lượt "OK" tối thiểu đã tốn ~50k token đầu vào (chủ yếu cache) vì ngữ cảnh hệ thống tự nạp: ngân sách nhỏ hơn ~0.1 USD/lượt claude là không thực tế.
+- **Chưa đo:** hành vi khi chạm `--max-budget-usd`, mức quota thuê bao (không CLI nào báo trong output đã thấy), đơn vị tiền codex.
+
+### Giả định 3: `codex exec` ghi được trong thư mục làm việc (`workspace-write`) (VERIFIED)
+
+- `node codex.js exec --sandbox workspace-write --skip-git-repo-check --ephemeral "Create a file named probe.txt in the current directory containing OK"` → exit 0; `probe.txt` tồn tại trong thư mục tạm với nội dung `OK` (header codex: `sandbox: workspace-write`, `approval: on-request`, không bị treo vì stdin đóng).
+- Cờ đã chạy: `--sandbox read-only|workspace-write`, `--skip-git-repo-check`, `--ephemeral`, `--json`. `--help` còn có `--sandbox danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`, `--cd`, `--output-schema`, `-o/--output-last-message`: KHÔNG chạy.
+- **Chưa đo:** ca `read-only` thật sự từ chối ghi (lượt read-only chỉ hỏi "OK"); sandbox có chặn ghi NGOÀI thư mục làm việc không; ghi vào `.git` trong worktree git thật (thư mục tạm không phải repo, nên chưa biết có cần cờ thêm cho `git commit`).
+- **Claude có chế độ ghi tương đương (VERIFIED):** `claude.exe -p "Create a file named claude.txt in the current directory containing OK" --output-format json --no-session-persistence --permission-mode acceptEdits --max-budget-usd 0.50` → exit 0, `claude.txt` = `OK`. `--help` liệt kê `--permission-mode` với `acceptEdits|auto|bypassPermissions|manual|dontAsk|plan`, `--permission-prompts host|none`, `--allowedTools`, `--disallowedTools`, `--tools`: chỉ chạy `acceptEdits`, các cờ còn lại chưa chạy (chưa đo việc chạy lệnh Bash/`git` ở `acceptEdits`).
+
+### Giả định 4: Claude và Codex làm việc tuần tự trên cùng thư mục không giẫm nhau (VERIFIED ở mức tối thiểu)
+
+- Trong cùng một thư mục tạm: claude (đọc) → claude (ghi `claude.txt`) → codex (read-only) → codex (ghi `probe.txt`), nối tiếp, cả bốn exit 0, không có lỗi khoá/xung đột, cả hai file ghi đúng.
+- **Chưa đo:** worktree git thật (index lock, `.git`), thư mục có file cấu hình riêng của từng CLI (`.claude/`, `AGENTS.md`), hai CLI chạy SONG SONG (không được thiết kế; công cụ vẫn phải tuần tự), thay đổi chưa commit của lượt trước bị lượt sau đọc lại đúng.

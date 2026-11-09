@@ -39,7 +39,11 @@ beforeEach(() => {
   // Armed only after the clean setup commit.
   const m = fwd(marks);
   for (const h of ["post-checkout", "reference-transaction", "post-index-change", "pre-commit"]) {
-    writeFileSync(join(hooks, h), `#!/bin/sh\necho ran >> "${m}/hook-${h}"\nexit 0\n`);
+    // The executable bit matters on POSIX: git silently skips a hook that is not executable, which would make
+    // the control and every "never runs" check below pass for the wrong reason.
+    writeFileSync(join(hooks, h), `#!/bin/sh\necho ran >> "${m}/hook-${h}"\nexit 0\n`, {
+      mode: 0o755,
+    });
   }
   git(repo, "config", "core.hooksPath", fwd(hooks));
   git(repo, "config", "core.fsmonitor", `echo ran >> "${m}/fsmonitor"; true`);

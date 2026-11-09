@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { Writable } from "node:stream";
 import { createLogger } from "@agent-studio/shared-utils";
 import { SidecarService } from "./sidecar.js";
@@ -11,6 +11,8 @@ import { SidecarService } from "./sidecar.js";
 /**
  * P4-4 (b) wired into the orchestrator: `jobWrap` reaches the `claude` and `codex` spawns. No real CLI and no real
  * wrapper are run: an unusable wrapper path makes the run fail closed, which only happens if the option got there.
+ * The adapters look the program up on PATH before they check these options, so empty placeholder programs named
+ * `claude` and `codex` are put first on PATH (a CI runner has neither CLI). They are never started.
  */
 let dir: string;
 let svc: SidecarService | undefined;
@@ -39,8 +41,17 @@ const call = async <T = Record<string, unknown>>(method: string, params?: unknow
 beforeEach(() => {
   dir = realpathSync.native(mkdtempSync(join(tmpdir(), "as-jw-")));
   mkdirSync(join(dir, "data"));
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  for (const name of ["claude", "codex"]) {
+    const file = join(bin, process.platform === "win32" ? `${name}.exe` : name);
+    writeFileSync(file, "");
+    if (process.platform !== "win32") chmodSync(file, 0o755);
+  }
+  vi.stubEnv("PATH", `${bin}${delimiter}${process.env["PATH"] ?? ""}`);
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   svc?.close();
   svc = undefined;
   rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
@@ -68,7 +79,12 @@ describe("cliTreeMemoryLimitMb in the orchestrator", () => {
   it.each(["claude", "codex"])(
     "%s: the option reaches the spawn (an invalid value stops the run and names it)",
     async (agentId) => {
-      open({ cliTreeMemoryLimitMb: 0 });
+      // The codex app-server checks the limit right after the spawn, so it needs a program that really starts:
+      // node itself (it exits on the unknown arguments; the run has already been stopped by then).
+      open({
+        cliTreeMemoryLimitMb: 0,
+        ...(agentId === "codex" ? { codexAppServer: { command: process.execPath } } : {}),
+      });
       expect(await messagesOf(agentId)).toContain("treeMemoryLimitMb");
     },
   );

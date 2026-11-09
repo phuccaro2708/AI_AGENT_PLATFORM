@@ -226,7 +226,17 @@ describe("treeMemoryLimitMb (RAM watchdog)", () => {
     const a = make(e, [{ hang: true }], {
       treeMemoryLimitMb: 100,
       memoryPollMs: 20,
-      memorySampler: () => Promise.resolve(300 * 1024 * 1024),
+      // Over the limit only once the fake server has seen `turn/start`: a slower machine would otherwise kill it
+      // during the handshake, and "the turn had started" (hence needsReconciliation) would not hold.
+      memorySampler: () => {
+        let started = false;
+        try {
+          started = traffic(e).some((m) => m.method === "turn/start");
+        } catch {
+          // the traffic file does not exist yet
+        }
+        return Promise.resolve((started ? 300 : 10) * 1024 * 1024);
+      },
     });
     const events = await run(a, task(e));
     const last = events.at(-1) as { type: string; message?: string; needsReconciliation?: boolean };

@@ -21,6 +21,7 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 8. Không sửa file ngoài repo; không cài global dependency âm thầm.
 9. Không gọi message bus nội bộ là "A2A-compatible" nếu chưa qua compatibility test.
 10. Mỗi phase chỉ đóng khi đạt acceptance criteria trong `docs/ROADMAP.md`; ghi báo cáo `docs/PHASEn_REPORT.md` với lệnh đã chạy và kết quả thật. Thứ tự phase hiện hành: `docs/DECISIONS.md#adr-005-thứ-tự-phase-chốt-lại-2026-11-04` (Phase 4 Policy Engine đứng trước khi đóng Phase 7).
+    - **Chế độ vòng lặp tự động** (người dùng duyệt 2026-11-09; chỉ áp dụng khi người dùng chủ động bật, không áp dụng cho phiên thường): điều phối viên (Claude) được tự đóng phase và sang phase kế tiếp, nhưng chỉ khi mọi tiêu chí nghiệm thu của phase trong `docs/ROADMAP.md` đã PASS bằng kết quả lệnh thật (không có mục NOT_RUN/BLOCKED) và `docs/PHASEn_REPORT.md` đã ghi. Vẫn đúng thứ tự ADR-005: không đổi thứ tự, không bỏ qua tiêu chí, không tự sang phase sau khi phase hiện tại còn task BLOCKED. Vai Codex (`.codex/agents/`) không bao giờ tự đóng phase. Vẫn KHÔNG `git push`, không tạo PR, không thêm dependency.
 
 ## Quy trình làm việc
 
@@ -35,7 +36,7 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 - **Tự đối chiếu trước khi merge**: với mỗi nhánh ứng viên, chạy `git rev-list --count <chính>..<nhánh>` (ahead/behind), `git cherry <chính> <nhánh>` (commit chưa có theo nội dung) và `git diff --stat $(git merge-base …)`. Nhánh 0 commit riêng thì coi là đã ghép. Nhánh cũ tụt xa (hàng trăm commit) hoặc viết lại phần mà nhánh chính đã tiến hoá thì KHÔNG merge, báo người dùng và để họ quyết.
 - **Tự merge (cục bộ)**: chỉ merge nhánh đã đối chiếu và có commit riêng hợp lệ, bằng `git merge --no-ff`. Xung đột chỉ ở file nối-thêm như `docs/PROGRESS.md`/`docs/ASSUMPTIONS.md` thì giữ cả hai phía; xung đột ở mã thì dừng và báo. Sau mỗi lần merge có đổi mã phải chạy lại gate (lint, format, typecheck, test, build; thêm `cargo clippy --all-targets -- -D warnings` và `cargo test --locked` nếu đụng `src-tauri`). Gate đỏ thì không coi là xong, báo đúng kết quả.
 - **Dọn nhánh**: chỉ xoá nhánh đã nằm trọn trong nhánh chính (`git branch --merged`) và worktree sạch (`git status --porcelain` rỗng). Nhánh chưa ghép, nhánh có commit riêng, nhánh mặc định của GitHub thì không xoá. Xoá nhánh trên origin chỉ khi commit của nó đã có trên origin của nhánh chính.
-- **KHÔNG tự làm**: `git push` (nhất là `--force`), tạo PR, đổi thứ tự phase, đóng phase, xoá nhánh chưa ghép, `git reset --hard`/`checkout --` trên việc chưa commit. Những việc này vẫn cần người dùng yêu cầu.
+- **KHÔNG tự làm**: `git push` (nhất là `--force`), tạo PR, đổi thứ tự phase, đóng phase (trừ chế độ vòng lặp tự động ở nguyên tắc 10), xoá nhánh chưa ghép, `git reset --hard`/`checkout --` trên việc chưa commit. Những việc này vẫn cần người dùng yêu cầu.
 - Mỗi lần tự động xong ghi lại trong `docs/PROGRESS.md` (lệnh đã chạy, kết quả thật); không ghi kết quả CI chưa đọc.
 - Báo cáo trung thực: test fail thì nói fail, bước bỏ qua thì nói bỏ qua.
 - Yêu cầu có nhiều cách hiểu khác nhau: nêu giả định và các lựa chọn, không chọn ngầm. Nếu chỉ có một cách hợp lý thì cứ làm.

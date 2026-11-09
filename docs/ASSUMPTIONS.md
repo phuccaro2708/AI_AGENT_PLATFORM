@@ -704,3 +704,9 @@ Mã: ADR-008. `codex` = `CodexAppServerAdapter` khi cổng bật; RSS watchdog `
 - **Đã đo (Ollama 0.40.14, `qwen3:4b`, 1 lượt):** `POST /api/generate {"model":..., "keep_alive":0}` gỡ model ngay (`done_reason:"unload"`); `/api/ps` trước đó có `qwen3:4b` (`size_vram` ~3,18 GB), sau đó rỗng.
 - **Hành vi mới:** khi một lượt chạy model B ngay sau model A (cùng server, cùng tiến trình sidecar), adapter gỡ A (`keep_alive:0`, best effort, lỗi bị bỏ qua) trước khi gửi chat của B; cùng model thì không gỡ. `detect()` kiểm tên đã cấu hình có trong `/api/tags` (tên không tag = `:latest`); tên sai hoặc server không trả lời = không sẵn sàng.
 - **Chưa đo:** chạy liên tiếp hai model qua adapter thật rồi đọc `/api/ps` (mới có test server giả và phép đo gỡ model ở trên); chương trình khác dùng chung Ollama không bị thấy bởi `ModelSlot`.
+
+### Ollama: tool calling thật và áp lực tài nguyên thật (2026-11-08)
+
+- **Đã đo:** `read_file` qua tool loop với model thật: `qwen3.5:4b` 4/4, `qwen3:4b` 3/4 (1 lần hết 512 token trong lập luận, không gọi tool). Hai model liên tiếp: `/api/ps` chỉ còn model sau. Admission trên sidecar thật: VRAM 64,1 % ≥ pause 38 % giữ task chờ, gỡ model thì task chạy sau ~6,6 s; RAM tương tự (~5 s).
+- **Bất ngờ:** model còn trong VRAM sau lượt chạy (keep_alive) giữ trạng thái `paused` khi dải VRAM bật; RAM máy này nằm sẵn 80–88 %.
+- **Chưa đo:** `list_dir` và từ chối đường dẫn ngoài thư mục với model thật; app Tauri thật; mẫu nhỏ (4 lượt mỗi model).

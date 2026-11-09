@@ -718,3 +718,10 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - **Standards 1, 2 (đúng):** `SECURITY.md` viết lại: hạn 10 s của kiểm tra policy trong cổng (`permission-prompt.test.ts`), Edit/Glob/Grep đã được cổng xét (`claude-permission-gate.test.ts`, cổng giả, chưa đo lại với claude thật), `maxRounds` đã lưu và có test ngắt vòng 2; kết quả cũ giữ dưới nhãn lịch sử. Cổng treo bản thân chỉ có `timeoutMs` phía host (mặc định không giới hạn).
 - **Standards 3 (smell Low):** `models.ts` và `ps.ts` lặp phần gọi HTTP; **không gộp** (chưa có thay đổi giao thức buộc sửa cả hai).
 - Gate đầy đủ trên cây làm việc: lint, format, typecheck, test (107 file pass, 1046 test pass, 63 skip), build exit 0. Chưa chạy lại `cargo` (không đụng Rust), chưa đọc CI.
+
+## 2026-11-08: kiểm các mục còn lại trước khi đóng Phase 3
+
+- Thêm hai bài test opt-in (bỏ qua nếu không đặt biến môi trường): `tests/contract/real-ollama-switch-tools.test.ts` (hai model liên tiếp, tool calling thật) và `tests/contract/real-resource-pressure.test.ts` (sidecar thật, RAM của OS, `nvidia-smi`, Ollama thật).
+- Kết quả thật: xem `docs/PHASE3_REPORT.md` mục "Kiểm chứng thật 2026-11-08" (đổi model đúng, tool calling 7/8, admission VRAM và RAM đúng, phát hiện giữ `paused` do keep_alive).
+- `cargo clippy --all-targets --locked -- -D warnings` sạch. Hai thẻ Settings xem trong preview trình duyệt (mô phỏng), KHÔNG trong app Tauri thật. Chưa đọc CI; chưa push.
+- Gate đầy đủ trên cây làm việc: lint, format, typecheck, test (107 file pass, 1046 test pass, 67 skip), build exit 0.

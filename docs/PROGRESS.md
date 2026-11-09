@@ -692,3 +692,10 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 
 - Người dùng xác nhận cách đọc "chỉ còn 2 phát hiện đã biết" = 0 phát hiện chưa chấp nhận (2 mục `docs/SECURITY.md:37`, `sidecar-permission-gates.test.ts:170` ở lại allowlist). Ghi vào HANDOFF ở `db8890a`; allowlist không đổi.
 - Đối chiếu docs với git: head `db8890a`, local hơn origin 26 commit (chưa push); HANDOFF sửa head và số commit cho khớp. Chỉ đổi tài liệu, gate không chạy lại (kết quả gần nhất 5/5 exit 0, 1039 test pass, ghi ở mục trước). `docs-sync-check` OK. Không tick gate, không đóng Phase 3.
+
+## 2026-11-08: sửa 3 phát hiện review (Ollama discover, phạm vi VRAM, báo cáo Phase 3)
+
+- **Phát hiện 1 (thật):** ROADMAP yêu cầu "discover models" nhưng code bỏ chủ ý. Đã thêm `listOllamaModels` (HTTP `/api/tags`, không spawn), IPC `ollama.models` (+ allowlist `lib.rs`), thẻ Settings "Ollama models" (nhiều model / rỗng / không tới được / model cấu hình chưa cài). Commit `e2fe785`. Test: `models.test.ts`, `sidecar-ollama.test.ts`; `no-spawn.test.ts` vẫn pass.
+- **Phát hiện 2 (đúng một phần):** VRAM mặc định tắt và không đo được thì không có áp lực; đây là thiết kế đã ghi ở ASSUMPTIONS, nay ghi rõ vào báo cáo thành phạm vi bảo đảm. **Không đổi mặc định.** Chưa thử ngưỡng trong app Tauri thật: NOT_RUN.
+- **Phát hiện 3 (thật):** `PHASE3_REPORT.md` viết lại: một bảng gate hiện tại ở đầu; phần cũ chuyển thành "Lịch sử".
+- Gate sau `e2fe785`: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build` exit 0 (107 file pass, 1043 test pass, 63 skip); `cargo test --locked` 9 pass. Chưa chạy clippy, chưa đọc CI.

@@ -1,6 +1,25 @@
-# PHASE 3 REPORT (luồng A: Antigravity + capability router)
+# PHASE 3 REPORT
 
-Nhánh: `claude/p3-agy-adapter-2c4e8f`. **Phase 3 CHƯA đóng**: mới xong luồng A (adapter `agy`, router). Ollama, Resource Scheduler và UI chưa làm.
+Nhánh: `worktree-p4-close-prep`. **Phase 3 CHƯA đóng** (việc tick gate và đóng là của người dùng). Bảng dưới là trạng thái hiện tại, thống nhất; các mục bên dưới bảng là **lịch sử theo thời điểm** (luồng A viết 2026-11-0x, khi Ollama/scheduler/UI còn chưa làm) và không còn là trạng thái hiện tại.
+
+## Acceptance gate Phase 3 (trạng thái hiện tại)
+
+| Tiêu chí                                                                | Trạng thái                      | Lệnh / bằng chứng                                                                                                                                                                                                                                                                                                                                                    | Commit               |
+| ----------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Mọi adapter (Claude, Codex, Antigravity, Ollama) qua cùng contract test | ĐẠT (CLI/server giả)            | `describeAdapterContract` gọi cho cả bốn adapter; `pnpm test` 2026-11-08: 107 file pass, 1043 test pass. Ollama thật mới chạy 1 model, 1 lượt chat thường.                                                                                                                                                                                                           | `39f0c9b`            |
+| Thêm adapter mới không sửa Orchestrator core                            | ĐẠT, có giới hạn                | `sidecar-ollama.test.ts` (chạy task qua lõi không đổi). Giới hạn: đăng ký `agy` thật vẫn sửa `sidecar.ts`; enum IPC/settings còn `claude\|codex`.                                                                                                                                                                                                                    | `a71f9e3`            |
+| `OllamaAdapter`: stream, **discover models**, tool loop whitelist       | ĐẠT (giả); thật: một phần       | Discover: `models.test.ts` (nhiều model, rỗng, không tới được) + `sidecar-ollama.test.ts` (`ollama.models`), thẻ Settings "Ollama models". Tool loop: server giả; tool calling với model thật NOT_RUN.                                                                                                                                                               | `e2fe785`, `ed94128` |
+| Hết VRAM/RAM → degrade có kiểm soát                                     | ĐẠT trên test; app thật NOT_RUN | Test admission: RAM/CPU/VRAM giảm/dừng và hồi phục (`sidecar-admission.test.ts`). **Phạm vi bảo đảm:** RAM/CPU luôn bật theo mặc định; VRAM mặc định TẮT cho tới khi người dùng bật ô trong thẻ "Load limits", và khi `nvidia-smi` không đo được thì không có áp lực VRAM (không đoán). Chưa thử ngưỡng RAM/VRAM với task đang chạy + task chờ trong app Tauri thật. | `cda1e38`, `dc624d5` |
+
+## NOT_RUN còn lại (không có bằng chứng, không được coi là đã đạt)
+
+- Tool calling với model Ollama thật; hai model Ollama tranh tài nguyên (mới có test server giả).
+- Thẻ "Load limits" và thẻ "Ollama models" trong app Tauri thật; ghi trạng thái admission/mức dùng/hồi phục khi chạm ngưỡng trong app thật.
+- Gate cục bộ ghi ở trên là kết quả tôi chạy lại sau `e2fe785` (lint, format, typecheck, test, build exit 0; `cargo test --locked` 9 pass); chưa có CI đọc cho commit này.
+
+---
+
+## Lịch sử: luồng A (Antigravity + capability router)
 
 ## Đã làm
 
@@ -10,14 +29,6 @@ Nhánh: `claude/p3-agy-adapter-2c4e8f`. **Phase 3 CHƯA đóng**: mới xong lu�
 - `task.permissions` được đặt thì adapter từ chối chạy (fail-closed) vì chưa có cơ chế ép quyền đã kiểm chứng.
 - Đăng ký trong `SidecarService` (registry) cạnh claude/codex; `agents.scan` báo `agy` là `supported:true`; alias vitest và `scripts/build-sidecar.mjs`.
 - `services/orchestrator/src/capability-router.ts`: `selectAgent` (theo capability, không theo tên), `snapshotAdapters`, `describeCapabilityGap` (nhãn tiếng Việt).
-
-## Acceptance gate Phase 3 (ROADMAP)
-
-| Tiêu chí                                                                | Trạng thái           | Bằng chứng                                                                                                                                                                                                                       |
-| ----------------------------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mọi adapter (Claude, Codex, Antigravity, Ollama) qua cùng contract test | **CHƯA**             | Claude, Codex, Antigravity qua `describeAdapterContract` (CLI giả). Ollama: có (2026-11-08), qua `describeAdapterContract` với server giả.                                                                                       |
-| Thêm adapter mới không sửa Orchestrator core                            | **ĐẠT, có giới hạn** | Router và `Orchestrator` nhận adapter qua registry/`extraAdapters` (test `capability-router.test.ts`). Nhưng đăng ký `agy` thật vẫn phải sửa `sidecar.ts` (hard-code theo tên), và các enum IPC/settings vẫn là `claude\|codex`. |
-| Hết VRAM/RAM → degrade có kiểm soát                                     | **CHƯA**             | Đã có (RAM/CPU/VRAM cả GPU, 2026-11-08); chưa xem UI trong app thật.                                                                                                                                                             |
 
 ## Lệnh đã chạy và kết quả thật
 

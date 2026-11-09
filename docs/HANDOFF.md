@@ -78,7 +78,7 @@ Cập nhật: 2026-11-08 (đã đối chiếu với git). Việc Phase 4 hiện 
 
 ## Chờ người dùng quyết
 
-- Secret scan sau S1–S7: script in `findings: 0 (accepted fixture hits: 878)`; dòng thô trên cây làm việc đúng 2 (`docs/SECURITY.md:37`, `sidecar-permission-gates.test.ts:170`), đã nằm trong allowlist theo yêu cầu 2026-11-07. Mục tiêu goal ghi "chỉ còn 2 phát hiện đã biết": cần người dùng xác nhận 0 phát hiện chưa chấp nhận là đủ, hay muốn gỡ 2 mục khỏi allowlist để script báo đúng 2.
+- Secret scan sau S1–S7 (người dùng ĐÃ XÁC NHẬN 2026-11-08): script in `findings: 0 (accepted fixture hits: 878)`; dòng thô trên cây làm việc đúng 2 (`docs/SECURITY.md:37`, `sidecar-permission-gates.test.ts:170`), đã nằm trong allowlist. Cách đọc "chỉ còn 2 phát hiện đã biết" = 0 phát hiện chưa chấp nhận được chấp nhận; allowlist giữ nguyên.
 - ADR-006 phần chưa duyệt: A1 chủ DB, A7 spawn sớm sidecar, A8 yêu cầu lặp `workflows.start` chưa được hỏi; A2/A4/A5/A6 (kênh, token, vai, allowlist/cầu nối) chờ sau Phase 4.
 - Duyệt hướng P4-1 c/d (claude `--permission-prompt-tool` nhưng cổng không thấy mọi lời gọi; codex `app-server` có approval có cấu trúc, `exec --json` không có) và định nghĩa 5 bước recovery.
 - Duyệt dependency Tailwind/shadcn và Playwright; cho phép lượt probe `agy` thứ 3; duyệt phạm vi grant 7C-2; xác nhận có bỏ `claude/phase-2-kickoff-8a5732` không.

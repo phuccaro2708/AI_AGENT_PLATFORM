@@ -160,7 +160,9 @@ describe("D1 IPC", () => {
     const seqs = mine.flatMap((e) => (e.event === "task.message" ? [e.sequence] : []));
     expect(seqs.length).toBeGreaterThan(2);
     expect(seqs).toEqual(seqs.map((_, i) => i)); // contiguous from 0
-    expect(mine.at(0)).toMatchObject({ event: "task.state", state: "running" });
+    // A single task is queued first (task.request, sequence 0) and then claimed by the scheduler.
+    expect(mine.at(0)).toMatchObject({ event: "task.message", sequence: 0 });
+    expect(mine.find((e) => e.event === "task.state")).toMatchObject({ state: "running" });
     expect(mine.at(-1)).toMatchObject({ event: "task.state", state: "completed" });
     // Same data the log view returns: events are a live view of persisted messages.
     const logged = (await call(svc, "logs.query", { taskId: s?.taskId })).result?.messages;
@@ -281,6 +283,8 @@ describe("D1 IPC", () => {
       "claude",
       "codex",
       "agy",
+      "ollama", // registered unavailable until AGENT_STUDIO_OLLAMA_MODEL is set (S3)
+      "codex-app-server", // registered by default since Q3 (2026-11-07)
     ]);
     expect(list.result?.cli).toHaveLength(2);
     expect(

@@ -126,6 +126,42 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
       return { tasks: [] };
     case "tasks.resolveReconciliation":
       return { state: String(p.decision) === "requeue" ? "queued" : String(p.decision) };
+    case "ollama.models":
+      return {
+        reachable: true,
+        configured: null,
+        models: [{ name: "qwen3:4b", sizeBytes: 2_500_000_000, parameterSize: "4B" }],
+      };
+    case "resources.get":
+    case "resources.set": {
+      const d = {
+        concurrency: 2,
+        thresholds: {
+          cpu: { reduceAt: 85, pauseAt: 95 },
+          memory: { reduceAt: 80, pauseAt: 90 },
+          releaseMarginPercent: 5,
+        },
+      };
+      return {
+        settings: method === "resources.set" ? p.settings : d,
+        defaults: d,
+        status: {
+          concurrency: 2,
+          effectiveConcurrency: 2,
+          running: 0,
+          queued: 0,
+          monitor: {
+            level: "normal",
+            reasons: [],
+            measured: true,
+            cpuPercent: 12,
+            memoryPercent: 48,
+          },
+          gpu: null,
+          ollama: null,
+        },
+      };
+    }
     case "diagnostics.export":
       return {
         dir: "(preview) diagnostics-20260101T000000Z",

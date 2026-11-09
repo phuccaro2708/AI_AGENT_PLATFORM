@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -182,6 +182,81 @@ describe("CodexAppServerAdapter handshake", () => {
   });
 });
 
+describe("jobWrap (agent-job-wrap)", () => {
+  it("does not start the server when the wrapper path is unusable, and says why", async () => {
+    const e = env();
+    const events = await run(
+      make(e, [], { jobWrap: { path: "relative/agent-job-wrap.exe" } }),
+      task(e),
+    );
+    expect(existsSync(e.logFile)).toBe(false); // the fake server never ran
+    const last = events.at(-1);
+    expect(last?.type).toBe("error");
+    expect(JSON.stringify(last)).toContain("agent-job-wrap");
+  });
+});
+
+// Windows only, and only when `cargo build` has produced the wrapper (apps/desktop/src-tauri/target/debug).
+const realWrap = fileURLToPath(
+  new URL("../../../apps/desktop/src-tauri/target/debug/agent-job-wrap.exe", import.meta.url),
+);
+describe("through the REAL agent-job-wrap", () => {
+  it.skipIf(process.platform !== "win32" || !existsSync(realWrap))(
+    "the JSON-RPC pipe still works and the turn completes",
+    async () => {
+      const e = env();
+      const events = await run(
+        make(e, [], { jobWrap: { path: realWrap, jobMemLimitMb: 4096 } }),
+        task(e),
+      );
+      expect(traffic(e).map((m) => m.method)).toEqual([
+        "initialize",
+        "initialized",
+        "thread/start",
+        "turn/start",
+      ]);
+      expect(events.at(-1)?.type).toBe("completed");
+    },
+  );
+});
+
+describe("treeMemoryLimitMb (RAM watchdog)", () => {
+  it("kills a server whose tree is over the limit and asks for reconciliation (turn had started)", async () => {
+    const e = env();
+    const a = make(e, [{ hang: true }], {
+      treeMemoryLimitMb: 100,
+      memoryPollMs: 20,
+      memorySampler: () => Promise.resolve(300 * 1024 * 1024),
+    });
+    const events = await run(a, task(e));
+    const last = events.at(-1) as { type: string; message?: string; needsReconciliation?: boolean };
+    expect(last.type).toBe("error");
+    expect(last.message).toMatch(/codex stopped: process tree uses 300 MB, limit 100 MB/);
+    expect(last.needsReconciliation).toBe(true);
+  }, 20_000);
+
+  it("an unmeasurable tree is treated as over the limit after 5 failures (fail closed)", async () => {
+    const e = env();
+    const a = make(e, [{ hang: true }], {
+      treeMemoryLimitMb: 100,
+      memoryPollMs: 10,
+      memorySampler: () => Promise.reject(new Error("no")),
+    });
+    const events = await run(a, task(e));
+    expect(JSON.stringify(events.at(-1))).toContain("cannot measure the memory");
+  }, 20_000);
+
+  it("under the limit the turn completes normally", async () => {
+    const e = env();
+    const a = make(e, [], {
+      treeMemoryLimitMb: 100,
+      memoryPollMs: 20,
+      memorySampler: () => Promise.resolve(10 * 1024 * 1024),
+    });
+    expect((await run(a, task(e))).at(-1)?.type).toBe("completed");
+  });
+});
+
 describe("command approvals", () => {
   it("accepts a command the policy allows, with a plain accept (never a session/execpolicy grant)", async () => {
     const e = env();
@@ -359,6 +434,30 @@ describe("pwsh -Command wrapper (the observed Windows shape)", () => {
     expect(unwrapPowerShellCommand(`${wrap("ls")} extra`)).toBeUndefined();
   });
 
+  // Second observed form (codex-cli 0.166.0, ASSUMPTIONS d6): a ONE-word command comes without quotes.
+  const bare = (inner: string) => `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command ${inner}`;
+  it("unwraps the observed unquoted one-word form and nothing wider", () => {
+    expect(unwrapPowerShellCommand(bare("Get-ChildItem"))).toBe("Get-ChildItem");
+    expect(unwrapPowerShellCommand(bare("echo"))).toBe("echo");
+    expect(unwrapPowerShellCommand(bare("Get-ChildItem -Force"))).toBeUndefined(); // several words: not observed
+    expect(unwrapPowerShellCommand(bare("ls;calc"))).toBeUndefined();
+    expect(unwrapPowerShellCommand(bare("$x"))).toBeUndefined();
+    expect(unwrapPowerShellCommand(bare("ls\nx"))).toBeUndefined();
+    expect(unwrapPowerShellCommand(bare(""))).toBeUndefined();
+    expect(unwrapPowerShellCommand(bare("ls 'x'"))).toBeUndefined();
+    expect(unwrapPowerShellCommand(`"C:\\x\\pwsh.exe" -NoProfile -Command ls`)).toBeUndefined();
+    expect(unwrapPowerShellCommand(`"C:\\x\\cmd.exe" -Command ls`)).toBeUndefined();
+  });
+
+  it("accepts an unquoted one-word command the policy allows, declines one it does not", async () => {
+    const e = env();
+    await run(make(e, [cmdRequest(bare("Get-ChildItem"))]), task(e));
+    expect(replies(e)).toEqual([{ id: 100, result: { decision: "accept" } }]);
+    const e2 = env();
+    await run(make(e2, [cmdRequest(bare("mkdir"))]), task(e2));
+    expect(replies(e2)).toEqual([{ id: 100, result: { decision: "decline" } }]);
+  });
+
   it("accepts a wrapped plain command the policy allows (engine decides, not the wrapper)", async () => {
     const e = env();
     const events = await run(make(e, [cmdRequest(wrap("Get-ChildItem -File -Force"))]), task(e));
@@ -401,6 +500,15 @@ describe("pwsh -Command wrapper (the observed Windows shape)", () => {
     ["double-quoted inner", `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command "git status"`],
     ["unquoted outer path", `pwsh.exe -Command 'git status'`],
     ["call operator", wrap("& calc")],
+    ["unquoted iex", bare("iex")],
+    ["unquoted Invoke-Expression", bare("Invoke-Expression")],
+    ["unquoted several words", bare("Get-ChildItem -Force")],
+    ["unquoted chained with ;", bare("ls;calc")],
+    ["unquoted variable", bare("$env:USERPROFILE")],
+    [
+      "unquoted -NoProfile before -Command",
+      `"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoProfile -Command ls`,
+    ],
     ["empty inner", wrap("   ")],
   ];
   it.each(hostile)("never reaches the engine: %s", async (_name, command) => {

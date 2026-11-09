@@ -1,5 +1,11 @@
-export { runProcess, startProcess } from "./process.js";
-export type { RunOptions, RunOutcome, RunResult, RunningProcess } from "./process.js";
+export { jobWrapArgs, runProcess, startProcess } from "./process.js";
+export type {
+  JobWrapOptions,
+  RunOptions,
+  RunOutcome,
+  RunResult,
+  RunningProcess,
+} from "./process.js";
 export {
   ExecutableNotFoundError,
   UnsupportedShimError,
@@ -16,5 +22,8 @@ export {
   filterEnv,
 } from "./manifest.js";
 export type { SpawnManifest } from "./manifest.js";
-export { killTree } from "./kill-tree.js";
+export { killTree, type KillResult, type KillTreeOptions } from "./kill-tree.js";
+export { parseProcessRows, sampleTreeBytes, treeBytes } from "./tree-memory.js";
+export type { ProcessRow, TreeMemorySampler } from "./tree-memory.js";
+export { liveChildPids, trackLivePid } from "./live-pids.js";
 export { createLineSplitter } from "./lines.js";

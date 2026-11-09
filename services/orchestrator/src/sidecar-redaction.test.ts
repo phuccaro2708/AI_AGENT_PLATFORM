@@ -254,11 +254,11 @@ describe("redaction of loaded secrets (Phase 7 criterion)", () => {
       "logs.query",
       { taskId: tasks[0]!.id, afterSequence: 0, limit: 200 },
     );
-    // `afterSequence: 0` is exclusive, so task.accepted (sequence 0) is not listed: then 5 progress
-    // events per secret x 2 and the failure, numbered without gaps.
+    // `afterSequence: 0` is exclusive, so task.request (sequence 0, written when the task is queued) is not
+    // listed: then task.accepted, 5 progress events per secret x 2 and the failure, numbered without gaps.
     expect(messages.map((m) => m.sequence)).toEqual(messages.map((_m, i) => i + 1));
     expect(messages.at(-1)?.type).toBe("task.failed");
-    expect(messages).toHaveLength(11);
+    expect(messages).toHaveLength(12);
   });
 
   it("does not mask values shorter than 6 characters (documented limit)", async () => {

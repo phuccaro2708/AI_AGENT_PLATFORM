@@ -50,6 +50,13 @@
       "when": 1793809126854,
       "tag": "0006_approval_decision_log",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794064663046,
+      "tag": "0007_workflow_max_rounds",
+      "breakpoints": true
     }
   ]
 }

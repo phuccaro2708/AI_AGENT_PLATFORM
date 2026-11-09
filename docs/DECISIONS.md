@@ -143,3 +143,24 @@ Gate chung: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm bui
 - Tool MCP có hiện thẻ phê duyệt trong Harness hay chạy ngầm tuỳ preset (`workspace-write` + `ask` là mặc định theo tài liệu).
 - Hành vi khi cầu nối rơi giữa chừng (reconnect, tool call treo, `probe` đóng kết nối).
 - Chưa kiểm trong repo này: ACL mặc định của named pipe do Node tạo; tên pipe được giải phóng khi tiến trình chết trên Windows thật; cách tiến trình Node đọc credential store.
+
+## ADR-007: Bật mặc định hai cổng quyền và trần RAM cả cây (Q3, 2026-11-07)
+
+- **Bối cảnh:** hai cổng quyền (Codex `app-server`, Claude `--permission-prompt-tool` với `askEveryTool`) đã có bằng chứng chạy CLI thật (ASSUMPTIONS d3, d6, d9) nhưng mặc định TẮT; `jobMemLimitMb` đo được (R4) nhưng chưa nối vào cấu hình.
+- **Quyết định (người dùng chọn):** đặt mặc định BẬT cả hai cổng và nối `jobMemLimitMb`. Codex: người dùng chọn đăng ký thêm agent `codex-app-server` mặc định, KHÔNG chuyển `codex` (exec) sang app-server. Ràng buộc: fail-closed (thiếu launcher/`--safe-mode` đã lưu thì từ chối task), có công tắc tắt (`AGENT_STUDIO_CLAUDE_GATE`, `AGENT_STUDIO_CODEX_GATE`, `AGENT_STUDIO_JOB_MEM_LIMIT_MB`; `SidecarOptions` `false`), không tuyên bố sandbox hay "duyệt từng lệnh".
+- **Đánh đổi:** cổng Claude chỉ phủ sáu tool và cần `--safe-mode` tắt (thay bằng `--setting-sources local`); task Codex chọn `codex` vẫn không qua cổng; trần RAM 8192 MB rộng vì chưa có số liệu commit thật; tác dụng phụ: `agents.list` có thêm `codex-app-server`.
+- **Xem lại nếu:** kiểm lại bằng CLI thật cho thấy mặc định mới làm hỏng task hợp lệ, `.claude/settings.local.json` nới được quyền, hoặc muốn ép task Codex đi qua cổng (khi đó mất `agent-job-wrap` cho Codex).
+
+## ADR-008: `codex` chạy bằng adapter app-server khi cổng Codex bật (2026-11-07)
+
+- **Bối cảnh:** ADR-007 chọn "thêm agent `codex-app-server`, không chuyển `codex`". Hệ quả: task chọn `codex` (exec) không qua cổng, `codex-app-server` không qua `agent-job-wrap`, nên review báo "cổng chưa nối production".
+- **Quyết định (người dùng chọn, 2026-11-07, "Chuyển `codex` sang app-server"):** khi cổng Codex bật (mặc định), agent `codex` dựng `CodexAppServerAdapter` (id `codex`), chạy trong `agent-job-wrap` và có watchdog RSS cả cây (`AGENT_STUDIO_CLI_TREE_MEM_MB`, tùy chọn). `codex-app-server` vẫn được đăng ký. Tắt: `AGENT_STUDIO_CODEX_GATE=0` / `codexAppServer:false` đưa `codex` về `codex exec` và bỏ `codex-app-server`. Thay thế một phần ADR-007 (phần "không chuyển `codex`").
+- **Đánh đổi:** `args` đã lưu của `codex` (dành cho `codex exec`) không dùng khi cổng bật; production policy vẫn từ chối mọi lệnh (allow list rỗng) nên task Codex cần chạy lệnh sẽ bị decline; hành vi app-server khác `exec --json` (sự kiện, `approvalPolicy: untrusted`). Không phải sandbox.
+- **Xem lại nếu:** task Codex hợp lệ hỏng vì decline lệnh, hoặc app-server thay đổi giao thức giữa các phiên bản codex.
+
+## ADR-009: `agy` (Antigravity) ra khỏi điều kiện đóng Phase 3 (2026-11-08)
+
+- **Bối cảnh:** `agy` chỉ kiểm bằng CLI giả và một phần CLI thật (PARTIAL); ép quyền không kiểm chứng được, adapter fail-closed với `task.permissions`; đăng ký thật còn hard-code trong `sidecar.ts`.
+- **Quyết định (người dùng chọn):** chỉ bỏ `agy` khỏi **phạm vi gate Phase 3**. Code `packages/adapter-antigravity`, đăng ký trong sidecar và UI giữ nguyên, không xoá, không ẩn. Gate Phase 3 tính trên Claude, Codex, Ollama.
+- **Đánh đổi:** `agy` vẫn chạy được nhưng không còn được bảo đảm bởi gate; phần PARTIAL (lỗi chưa đăng nhập/hết hạn mức, cây tiến trình con, ép quyền) trở thành nợ ngoài gate, không phải điều kiện đóng.
+- **Xem lại nếu:** muốn `agy` là agent hỗ trợ chính thức (khi đó đưa lại vào gate và hoàn tất kiểm thật), hoặc quyết định gỡ hẳn khỏi codebase.

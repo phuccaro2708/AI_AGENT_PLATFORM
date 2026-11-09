@@ -1,7 +1,5 @@
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { Repo } from "@agent-studio/storage";
+import { digestInsideWorktree } from "./worktree-hash.js";
 
 export interface ArtifactCheck {
   path: string;
@@ -37,16 +35,12 @@ export class ArtifactRegistry {
     return this.repo.listArtifacts(taskId).map((a) => {
       const base = { path: a.path, expectedSha256: a.sha256 };
       if (isOutside(a.path)) return { ...base, status: "missing" as const };
-      try {
-        const actual = createHash("sha256")
-          .update(readFileSync(join(root, a.path)))
-          .digest("hex");
-        return actual === a.sha256
-          ? { ...base, actualSha256: actual, status: "ok" as const }
-          : { ...base, actualSha256: actual, status: "changed" as const };
-      } catch {
-        return { ...base, status: "missing" as const };
-      }
+      // A link that leaves the worktree is reported missing and never read (fail-closed).
+      const d = digestInsideWorktree(root, a.path);
+      if (d.kind !== "ok") return { ...base, status: "missing" as const };
+      return d.sha256 === a.sha256
+        ? { ...base, actualSha256: d.sha256, status: "ok" as const }
+        : { ...base, actualSha256: d.sha256, status: "changed" as const };
     });
   }
 

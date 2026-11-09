@@ -6,6 +6,7 @@ import { Header } from "./Header";
 import { HistoryView } from "./HistoryView";
 import { Inspector } from "./Inspector";
 import { api, type AdapterInfo, type CliProbe, type Project } from "./api";
+import { visibleAdapters } from "./visibleAdapters";
 import { msg, type TaskRef } from "./components";
 import { getHealth, type Health } from "./health";
 import { loadRuns, saveRuns, type PeerRun } from "./peerReview";
@@ -64,7 +65,8 @@ export function App() {
   const refreshAgents = useCallback(
     () =>
       void api.agents().then(
-        ({ adapters: a, cli: c }) => {
+        ({ adapters: all, cli: c }) => {
+          const a = visibleAdapters(all, import.meta.env.DEV);
           setAdapters(a);
           setCli(c);
           setAgentId((cur) => cur || a.find((x) => x.available)?.id || a[0]?.id || "");
@@ -104,19 +106,29 @@ export function App() {
       .finally(() => setDetecting(false));
   };
 
-  const startAgentTask = (text: string) => {
+  /** Resolves `true` only once the backend accepted the task; the composer keeps the draft otherwise. */
+  const startAgentTask = (text: string): Promise<boolean> => {
     const preset = presetStore.all.find((p) => p.id === presetId);
-    api.startTask(projectId, agentId, composePrompt(preset, text), autoExcludes(allowAgy)).then(
-      (id) => {
-        setTasks((t) => [{ id, title: text.slice(0, 60), prompt: text, agentId, projectId }, ...t]);
-        setSelectedTask(id);
-        setError(null);
-      },
-      (err: unknown) => fail(msg(err)),
-    );
+    return api
+      .startTask(projectId, agentId, composePrompt(preset, text), autoExcludes(allowAgy))
+      .then(
+        (id) => {
+          setTasks((t) => [
+            { id, title: text.slice(0, 60), prompt: text, agentId, projectId },
+            ...t,
+          ]);
+          setSelectedTask(id);
+          setError(null);
+          return true;
+        },
+        (err: unknown) => {
+          fail(msg(err));
+          return false;
+        },
+      );
   };
 
-  const startRun = (implementer: string, reviewer: string, goal: string) => {
+  const startRun = (implementer: string, reviewer: string, goal: string): Promise<boolean> =>
     api.startPeerReview(projectId, implementer, reviewer, goal).then(
       (workflowId) => {
         const run: PeerRun = { workflowId, projectId, goal, implementer, reviewer };
@@ -127,10 +139,13 @@ export function App() {
         });
         setSelectedRun(workflowId);
         setError(null);
+        return true;
       },
-      (err: unknown) => fail(msg(err)),
+      (err: unknown) => {
+        fail(msg(err));
+        return false;
+      },
     );
-  };
 
   const project = projects.find((p) => p.id === projectId);
   const task = tasks.find((t) => t.id === selectedTask) ?? null;

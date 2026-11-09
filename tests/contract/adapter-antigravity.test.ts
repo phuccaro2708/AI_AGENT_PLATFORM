@@ -61,6 +61,17 @@ describe("createAntigravityParser on the REAL agy 1.4.8 fixtures", () => {
     expect(parsed.at(-1)?.final).toEqual({ type: "completed" });
   });
 
+  it("print-multiline: a multi-line prompt with quotes and shell characters comes back intact", () => {
+    const p = createAntigravityParser();
+    const parsed = lines("print-multiline.stream-json.ndjson").map((l) => p.parse(l));
+    const text = parsed
+      .flatMap((x) => x.events)
+      .flatMap((e) => (e.type === "text" ? [e.content] : []))
+      .join("");
+    expect(text).toBe('line-one "quoted" & | % $HOME\nline-two\n');
+    expect(parsed.at(-1)?.final).toEqual({ type: "completed" });
+  });
+
   it("print-plan-timeout: SUCCESS + empty response + 0 turns is an error, not a success", () => {
     const p = createAntigravityParser();
     const parsed = lines("print-plan-timeout.stream-json.ndjson").map((l) => p.parse(l));

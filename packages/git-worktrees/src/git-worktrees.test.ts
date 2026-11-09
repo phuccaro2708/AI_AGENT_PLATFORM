@@ -39,7 +39,7 @@ afterEach(() => {
 describe("create / list", () => {
   it("creates a worktree on its own namespaced branch at the base commit", async () => {
     const info = await wt.create({ workflowId: "wf_abc12345", taskId: "task_def67890" });
-    expect(info.branch).toBe("agent-studio/abc12345/def67890");
+    expect(info.branch).toBe("agent-studio/abc12345/def67890"); // pragma: allowlist secret (fake ids)
     expect(existsSync(join(info.path, "a.txt"))).toBe(true);
     expect(info.baseSha).toBe(git(repo, "rev-parse", "HEAD"));
     const listed = await wt.list();

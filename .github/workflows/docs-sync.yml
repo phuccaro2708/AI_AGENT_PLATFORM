@@ -1,0 +1,23 @@
+name: Docs sync
+# Fails when docs/HANDOFF.md, PROGRESS.md, TODO.md, ROADMAP.md fall behind git (mechanical half of `/save sync`).
+# It never edits files and never pushes; fix the drift by running /save and committing.
+on:
+  pull_request:
+  push:
+    branches: [main, claude/loving-lovelace-32lh71]
+
+permissions:
+  contents: read
+
+jobs:
+  docs-sync:
+    name: Docs match git (HANDOFF/PROGRESS/TODO/ROADMAP)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/docs-sync-check.mjs

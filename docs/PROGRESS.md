@@ -727,3 +727,10 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Quyết định tự đưa ra (ghi trong sổ SDD cục bộ `.superpowers/sdd/2026-11-09-loop-runner/progress.md`, không commit): zod 4.6.7 ghim chính xác; snapshot driver cục bộ thay vì allow-list `filter.lfs.*`; bắt buộc runner chụp trạng thái quanh lần gọi read-only vì sandbox read-only của codex không phải biên an toàn.
 - Chưa làm/NOT_RUN: Task 10–13, chạy thật với claude/codex, probe `--tools`/`acceptEdits`, các lệnh gate của Agent Workspace trên bản Loop Runner.
 - Chỉ đổi tài liệu trong repo này; gate Agent Workspace không chạy lại.
+
+## 2026-11-09: Loop Runner Task 10 (state machine `runLoop`) xong
+
+- Repo `loop-runner`: `5c56858` (feat: loop state machine and reports), `0939c63` (vòng sửa 1). Review độc lập tìm 3 phát hiện Important, hai cái tái hiện bằng probe: `git commit` của runner chạy hook mà agent sửa được (file cấm lọt vào commit), tick task ném lỗi khi file task ở checkout có sửa chưa commit (task xanh bị coi BLOCKED), `reportedCommands` không bao giờ được truyền. Đã sửa: commit của runner chạy với `core.hooksPath` trỏ thư mục rỗng ngoài worktree, guard chạy lại sau mỗi commit, từ chối chạy khi file task khác HEAD, so sánh `refs/remotes/*` quanh mỗi lần gọi agent, `runLoop` không bao giờ reject, từ chối hardlink. Re-review: đã xử lý hết, không có phát hiện mới.
+- Kết quả implementer báo: vitest 246/246, `tsc --noEmit` sạch; 9 test mới fail trên mã cũ. Tôi chưa tự chạy lại trong phiên này.
+- Còn mở (Minor, ghi sổ SDD): `core.hooksPath` = gốc worktree không được bảo vệ; push tới URL tường minh không bị phát hiện; `taskFileCommitted` chạy `git diff` trong checkout của người dùng (clean filter của họ sẽ chạy); `tests/tasks.test.ts` để lại thư mục `lr-tasks-*` trong thư mục tạm; chưa có resume khi chạy lại sau khi xong một phần (CLI phải cảnh báo).
+- Chưa làm: Task 11–13. Không gọi CLI thật. Chỉ đổi tài liệu trong repo này; gate Agent Workspace không chạy lại.

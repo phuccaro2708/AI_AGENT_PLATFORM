@@ -194,37 +194,48 @@ describe("ResourceMonitor with a source that measures in the background", () => 
 
 describe.skipIf(process.platform !== "win32")("real process on this Windows machine", () => {
   it("RSS and CPU time of a real child match what the child reports about itself", async () => {
-    // The child allocates ~200 MB (touched, so it is resident), reports its own numbers on stdout, then burns CPU.
+    // The child allocates ~200 MB (touched, so it is resident), says "ready", and only burns CPU once the test has
+    // taken its baseline reading and sent "go" on stdin. No timing assumption: a first reading can take seconds on a
+    // cold runner, and a fixed sleep before the burn was not enough there.
     const script = `
       const big = Buffer.alloc(200 * 1024 * 1024, 1);
       let sum = 0; for (let i = 0; i < big.length; i += 4096) sum += big[i];
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000); // idle first: the outside baseline is taken here
-      const u0 = process.cpuUsage();
-      const stop = Date.now() + 2500;
-      while (Date.now() < stop) { sum++; }
-      const u = process.cpuUsage(u0);
-      process.stdout.write(JSON.stringify({ rss: process.memoryUsage().rss, cpuMs: (u.user + u.system) / 1000, sum }) + "\\n");
-      setTimeout(() => {}, 3000);
+      process.stdout.write("ready\\n");
+      process.stdin.once("data", () => {
+        const u0 = process.cpuUsage();
+        const stop = Date.now() + 2500;
+        while (Date.now() < stop) { sum++; }
+        const u = process.cpuUsage(u0);
+        process.stdout.write(JSON.stringify({ rss: process.memoryUsage().rss, cpuMs: (u.user + u.system) / 1000, sum }) + "\\n");
+        setTimeout(() => process.exit(0), 3000);
+      });
     `;
     const child = spawn(process.execPath, ["-e", script], {
       shell: false,
       windowsHide: true,
-      stdio: ["ignore", "pipe", "ignore"],
+      stdio: ["pipe", "pipe", "ignore"],
     });
     try {
       const pid = child.pid!;
-      let reported = "";
-      child.stdout.on("data", (b: Buffer) => (reported += b.toString()));
+      let out = "";
+      child.stdout.on("data", (b: Buffer) => (out += b.toString()));
+      const waitFor = async (pred: () => boolean, what: string) => {
+        const deadline = Date.now() + 30_000;
+        while (!pred()) {
+          if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      };
+      await waitFor(() => out.includes("ready\n"), "the child to be ready");
       const src = new NodeResourceSource({ minRefreshMs: 0 });
       const readings: ProcessReading[] = [];
-      const deadline = Date.now() + 20_000;
-      while (!reported.includes("\n") && Date.now() < deadline) {
-        await src.refresh([pid]);
-        const r = src.process(pid);
-        if (r) readings.push(r);
-      }
-      // A reading takes a second or more on a busy runner, so only the idle baseline is required here.
+      await src.refresh([pid]);
+      const base = src.process(pid);
+      if (base) readings.push(base);
       expect(readings.length).toBeGreaterThanOrEqual(1);
+      child.stdin.write("go\n");
+      await waitFor(() => out.includes('"rss"') && out.trim().endsWith("}"), "the child's report");
+      const reported = out.slice(out.indexOf("{"));
       const mine = JSON.parse(reported.trim()) as { rss: number; cpuMs: number };
       // After the burn, one more reading while the child is idle but alive.
       await src.refresh([pid]);

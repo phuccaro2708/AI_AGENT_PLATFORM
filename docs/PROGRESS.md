@@ -718,3 +718,12 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - **Standards 1, 2 (đúng):** `SECURITY.md` viết lại: hạn 10 s của kiểm tra policy trong cổng (`permission-prompt.test.ts`), Edit/Glob/Grep đã được cổng xét (`claude-permission-gate.test.ts`, cổng giả, chưa đo lại với claude thật), `maxRounds` đã lưu và có test ngắt vòng 2; kết quả cũ giữ dưới nhãn lịch sử. Cổng treo bản thân chỉ có `timeoutMs` phía host (mặc định không giới hạn).
 - **Standards 3 (smell Low):** `models.ts` và `ps.ts` lặp phần gọi HTTP; **không gộp** (chưa có thay đổi giao thức buộc sửa cả hai).
 - Gate đầy đủ trên cây làm việc: lint, format, typecheck, test (107 file pass, 1046 test pass, 63 skip), build exit 0. Chưa chạy lại `cargo` (không đụng Rust), chưa đọc CI.
+
+## 2026-11-09: Loop Runner (vòng lặp tự động dùng chung) — thiết kế, plan, Task 1–9
+
+- Người dùng yêu cầu vòng lặp Claude + Codex không cần prompt (theo sơ đồ: Orchestrator → chuyên gia → thực thi → cổng QA/Security/CI → sửa/Merge) áp dụng cho mọi dự án. Đã chốt qua hỏi đáp: tối đa 3 lần sửa mỗi task + ngân sách token/quota (không đo được thì tính số lượt/thời gian), vai cốt lõi theo sơ đồ, công cụ ở repo riêng `D:\Program\loop-runner` + `loop.config.json` mỗi dự án, tiêu chí phase gắn với lệnh chạy được, thi hành subagent-driven. Người dùng duyệt spec và plan, và cho phép tạo repo, `git init`, cài dependency ở đó; cài lệnh global CHƯA được duyệt.
+- Commit trong repo này: `267b80d` (sửa quy tắc 10 CLAUDE.md, thêm vai Codex vào AGENTS.md), `4e9f60b` (spec), `ad2eca2` (plan), `98daa77`, `88809d0` (probe CLI vào ASSUMPTIONS).
+- Repo `loop-runner` (nhánh `main`, chưa push): Task 1–9 xong, mỗi task qua review của agent độc lập và các vòng sửa (Task 8 diff guard: 3 vòng sửa vì nhiều đường vượt qua như detach HEAD, `.git` redirect, filter/fsmonitor, config tampering, driver cục bộ của git-lfs; Task 9: 1 vòng). Head `4011443`; implementer báo 203 test pass và `tsc --noEmit` sạch, tôi chưa tự chạy lại trong phiên này.
+- Quyết định tự đưa ra (ghi trong sổ SDD cục bộ `.superpowers/sdd/2026-11-09-loop-runner/progress.md`, không commit): zod 4.6.7 ghim chính xác; snapshot driver cục bộ thay vì allow-list `filter.lfs.*`; bắt buộc runner chụp trạng thái quanh lần gọi read-only vì sandbox read-only của codex không phải biên an toàn.
+- Chưa làm/NOT_RUN: Task 10–13, chạy thật với claude/codex, probe `--tools`/`acceptEdits`, các lệnh gate của Agent Workspace trên bản Loop Runner.
+- Chỉ đổi tài liệu trong repo này; gate Agent Workspace không chạy lại.

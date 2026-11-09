@@ -267,3 +267,12 @@ Nợ chuyển tiếp từ Phase 2: (engine resume + UI giải quyết reconcilia
 
 - [ ] A2A gateway + compatibility tests đúng phiên bản spec
 - [ ] Nếu spike khả thi: cô lập AppContainer / Windows Sandbox
+
+## Loop Runner (repo riêng `D:\Program\loop-runner`, 2026-11-09)
+
+- [x] Task 1–9: scaffold, probe CLI, config, exec/redact, gates, tasks/phase, budget, worktree + diff guard, adapter claude/codex (đã review; implementer báo 203 test pass, chưa tự chạy lại)
+- [ ] Task 10: state machine `runLoop` + báo cáo (đang giao implementer)
+- [ ] Task 11: CLI `check`, `run --dry-run` (hỏi người dùng trước khi cài lệnh global)
+- [ ] Task 12: `loop.config.json` của Agent Workspace; AGENTS.md/`implementer.toml` 2→3 lần sửa; ghi UNVERIFIED vào ASSUMPTIONS
+- [ ] Task 13: chạy thật claude/codex (cần người dùng cho phép) + `docs/reports/LOOP_RUNNER_ACCEPTANCE.md`
+- [ ] Review cả nhánh một lượt, ghi ADR cho quy tắc 10 mới, viết tiêu chí Phase 4–9 thành lệnh chạy được

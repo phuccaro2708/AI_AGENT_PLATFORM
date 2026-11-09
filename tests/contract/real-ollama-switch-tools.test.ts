@@ -69,7 +69,7 @@ describe.skipIf(!PAIR || PAIR.length !== 2)("real Ollama: two models one after t
 describe.skipIf(!TOOLS)("real Ollama: read-only tool calling", () => {
   it("a real model asks for read_file, the adapter runs it inside the folder, the reply uses the content", async () => {
     const dir = mkdtempSync(join(tmpdir(), "as-real-"));
-    const secret = "ZX-4417-KESTREL";
+    const secret = "ZX-4417-KESTREL"; // pragma: allowlist secret
     writeFileSync(join(dir, "note.txt"), `the access code is ${secret}\n`);
     try {
       const a = new OllamaAdapter({

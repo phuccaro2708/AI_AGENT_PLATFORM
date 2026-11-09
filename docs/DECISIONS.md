@@ -157,3 +157,10 @@ Gate chung: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm bui
 - **Quyết định (người dùng chọn, 2026-11-07, "Chuyển `codex` sang app-server"):** khi cổng Codex bật (mặc định), agent `codex` dựng `CodexAppServerAdapter` (id `codex`), chạy trong `agent-job-wrap` và có watchdog RSS cả cây (`AGENT_STUDIO_CLI_TREE_MEM_MB`, tùy chọn). `codex-app-server` vẫn được đăng ký. Tắt: `AGENT_STUDIO_CODEX_GATE=0` / `codexAppServer:false` đưa `codex` về `codex exec` và bỏ `codex-app-server`. Thay thế một phần ADR-007 (phần "không chuyển `codex`").
 - **Đánh đổi:** `args` đã lưu của `codex` (dành cho `codex exec`) không dùng khi cổng bật; production policy vẫn từ chối mọi lệnh (allow list rỗng) nên task Codex cần chạy lệnh sẽ bị decline; hành vi app-server khác `exec --json` (sự kiện, `approvalPolicy: untrusted`). Không phải sandbox.
 - **Xem lại nếu:** task Codex hợp lệ hỏng vì decline lệnh, hoặc app-server thay đổi giao thức giữa các phiên bản codex.
+
+## ADR-009: `agy` (Antigravity) ra khỏi điều kiện đóng Phase 3 (2026-11-08)
+
+- **Bối cảnh:** `agy` chỉ kiểm bằng CLI giả và một phần CLI thật (PARTIAL); ép quyền không kiểm chứng được, adapter fail-closed với `task.permissions`; đăng ký thật còn hard-code trong `sidecar.ts`.
+- **Quyết định (người dùng chọn):** chỉ bỏ `agy` khỏi **phạm vi gate Phase 3**. Code `packages/adapter-antigravity`, đăng ký trong sidecar và UI giữ nguyên, không xoá, không ẩn. Gate Phase 3 tính trên Claude, Codex, Ollama.
+- **Đánh đổi:** `agy` vẫn chạy được nhưng không còn được bảo đảm bởi gate; phần PARTIAL (lỗi chưa đăng nhập/hết hạn mức, cây tiến trình con, ép quyền) trở thành nợ ngoài gate, không phải điều kiện đóng.
+- **Xem lại nếu:** muốn `agy` là agent hỗ trợ chính thức (khi đó đưa lại vào gate và hoàn tất kiểm thật), hoặc quyết định gỡ hẳn khỏi codebase.

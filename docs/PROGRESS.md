@@ -705,3 +705,8 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Người dùng quyết: **giữ giới hạn VRAM mặc định TẮT** (không đổi mặc định). Ghi vào ROADMAP và HANDOFF.
 - Đối chiếu docs với git: head `68ee0f0`, local hơn origin 29 commit trước commit lưu này (chưa push); HANDOFF sửa head, số commit và thêm `e2fe785`/`68ee0f0`. ROADMAP ghi discover models và quyết định VRAM.
 - Chỉ đổi tài liệu; gate không chạy lại (kết quả gate sau `e2fe785` ở mục ngay trên). Vẫn NOT_RUN: thử ngưỡng RAM/VRAM và hai thẻ Settings trong app Tauri thật, tool calling với model Ollama thật.
+
+## 2026-11-08: `agy` ra khỏi phạm vi gate Phase 3
+
+- Người dùng quyết: chỉ bỏ `agy` khỏi phạm vi gate Phase 3; code giữ nguyên. Ghi ADR-009 (`DECISIONS.md`); sửa `ROADMAP.md` (dòng AntigravityAdapter, gate 1), `TODO.md` (ghi chú đầu Phase 3), `PHASE3_REPORT.md` (bảng gate).
+- Chỉ đổi tài liệu; không chạy gate. Không tick gate, không đóng Phase 3. Ô gate 2 ("thêm adapter không sửa core") vẫn chờ người dùng quyết về hard-code `sidecar.ts`.

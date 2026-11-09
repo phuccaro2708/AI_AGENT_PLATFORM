@@ -140,6 +140,8 @@ Nợ chuyển tiếp từ Phase 2: (engine resume + UI giải quyết reconcilia
 
 ## Phase 3 — Quét CLI & Local AI
 
+> 2026-11-08 (ADR-009): `agy` ngoài phạm vi gate đóng Phase 3; code giữ nguyên. Các mục `agy` dưới đây là nợ ngoài gate.
+
 - [x] Quét CLI agent theo danh sách ứng viên khai báo bằng dữ liệu (PATH + vị trí cài Windows), hiển thị "đã phát hiện, chưa hỗ trợ" (`agents.scan`, `packages/cli-probe/src/candidates.ts`, Settings → Agents)
 - [x] Probe Antigravity (`agy`, quan sát `--print`, `--output-format stream-json`; đã có fixture `--help` 1.4.8 + capability từ help, đã quan sát output thật 2026-11-04: 2 lượt `--print`, xem ASSUMPTIONS; adapter dựng 2026-11-04, chỉ kiểm bằng CLI giả) rồi `adapter-antigravity` + fixtures + contract tests
 - [x] `adapter-ollama`: HTTP client, stream, một model một lúc (2026-11-08; discover models làm sau đó qua HTTP `/api/tags` (`ollama.models`, thẻ Settings), không gọi `ollama list`; model vẫn do người dùng đặt qua `AGENT_STUDIO_OLLAMA_MODEL`)

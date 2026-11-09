@@ -124,7 +124,7 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 ## Phase 3 — Quét CLI & Local AI (1–2 tuần)
 
 - **Quét CLI agent (nâng cấp):** danh sách ứng viên khai báo bằng dữ liệu (tên lệnh, cờ `--version`/`--help`), dò trong PATH và vị trí cài thường gặp trên Windows; mỗi CLI tìm thấy được ghi đường dẫn, version và bảng capability suy từ `--help`. Chỉ CLI đã có adapter và qua contract test mới chạy được task; CLI chỉ được phát hiện thì hiển thị "đã phát hiện, chưa hỗ trợ" (không giả lập). Gemini CLI không nằm trong phạm vi.
-- `AntigravityAdapter` (lệnh `agy`): chỉ làm sau khi probe thật trên máy chứng minh `--print` + `--output-format stream-json`; parse theo fixture thật, ghi vào `docs/ASSUMPTIONS.md`.
+- `AntigravityAdapter` (lệnh `agy`; **ngoài phạm vi gate Phase 3 từ 2026-11-08, ADR-009**; code giữ nguyên): chỉ làm sau khi probe thật trên máy chứng minh `--print` + `--output-format stream-json`; parse theo fixture thật, ghi vào `docs/ASSUMPTIONS.md`.
 - `OllamaAdapter`: HTTP API streaming, discover models, tool-calling loop riêng với tool whitelist; mặc định read-only.
 - Capability-based routing (không hard-code theo tên agent).
 - Resource-Aware Scheduler: theo dõi RAM/VRAM, 1 model Ollama tại một thời điểm, tạm ngừng nhận local inference khi thiếu tài nguyên.
@@ -132,7 +132,7 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 
 **Acceptance gate**
 
-- [ ] Mọi adapter (Claude, Codex, Antigravity, Ollama) qua cùng bộ contract test.
+- [ ] Mọi adapter trong phạm vi gate (Claude, Codex, Ollama; `agy` ngoài gate, ADR-009) qua cùng bộ contract test.
 - [ ] Thêm adapter mới không sửa Orchestrator core.
 - [ ] Hết VRAM/RAM → hệ thống degrade có kiểm soát, không treo máy.
 

@@ -687,3 +687,8 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 
 - Đối chiếu docs với git: HANDOFF cập nhật head `c34a8c9`, local hơn origin 24 commit (chưa push). Commit từ S1 đến nay: `39f0c9b`, `ed94128`, `a71f9e3`, `cda1e38`, `dc624d5`, `c0f6899`, `731e2d8`, `0feb5c7` (docs), `0b6dde6` (test no-spawn), `c34a8c9` (docs gate cuối). Gate cuối và secret scan: xem mục "S1–S6 đóng Phase 3" ở trên (không chạy lại trong lần lưu này).
 - Chờ người dùng: xác nhận cách đọc secret scan (0 phát hiện + 2 mục allowlist), kiểm giao diện thật, tool calling Ollama với model thật, soak CLI thật, đóng Phase 3. Không tick gate, không đóng Phase 3.
+
+## 2026-11-08: /save (xác nhận secret scan)
+
+- Người dùng xác nhận cách đọc "chỉ còn 2 phát hiện đã biết" = 0 phát hiện chưa chấp nhận (2 mục `docs/SECURITY.md:37`, `sidecar-permission-gates.test.ts:170` ở lại allowlist). Ghi vào HANDOFF ở `db8890a`; allowlist không đổi.
+- Đối chiếu docs với git: head `db8890a`, local hơn origin 26 commit (chưa push); HANDOFF sửa head và số commit cho khớp. Chỉ đổi tài liệu, gate không chạy lại (kết quả gần nhất 5/5 exit 0, 1039 test pass, ghi ở mục trước). `docs-sync-check` OK. Không tick gate, không đóng Phase 3.

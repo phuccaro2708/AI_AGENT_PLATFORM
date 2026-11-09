@@ -699,3 +699,9 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - **Phát hiện 2 (đúng một phần):** VRAM mặc định tắt và không đo được thì không có áp lực; đây là thiết kế đã ghi ở ASSUMPTIONS, nay ghi rõ vào báo cáo thành phạm vi bảo đảm. **Không đổi mặc định.** Chưa thử ngưỡng trong app Tauri thật: NOT_RUN.
 - **Phát hiện 3 (thật):** `PHASE3_REPORT.md` viết lại: một bảng gate hiện tại ở đầu; phần cũ chuyển thành "Lịch sử".
 - Gate sau `e2fe785`: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build` exit 0 (107 file pass, 1043 test pass, 63 skip); `cargo test --locked` 9 pass. Chưa chạy clippy, chưa đọc CI.
+
+## 2026-11-08: /save (sau sửa 3 phát hiện review)
+
+- Người dùng quyết: **giữ giới hạn VRAM mặc định TẮT** (không đổi mặc định). Ghi vào ROADMAP và HANDOFF.
+- Đối chiếu docs với git: head `68ee0f0`, local hơn origin 29 commit trước commit lưu này (chưa push); HANDOFF sửa head, số commit và thêm `e2fe785`/`68ee0f0`. ROADMAP ghi discover models và quyết định VRAM.
+- Chỉ đổi tài liệu; gate không chạy lại (kết quả gate sau `e2fe785` ở mục ngay trên). Vẫn NOT_RUN: thử ngưỡng RAM/VRAM và hai thẻ Settings trong app Tauri thật, tool calling với model Ollama thật.

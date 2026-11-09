@@ -33,6 +33,8 @@ export interface FakeOllama {
   script: ScriptStep[];
   /** Body of `GET /api/ps`; `undefined` answers HTTP 500. Default: one partly-loaded model, as measured in S0. */
   ps: unknown;
+  /** Body of `GET /api/tags`; `undefined` answers HTTP 500. Default: two installed models. */
+  tags: unknown;
   close(): Promise<void>;
 }
 
@@ -65,6 +67,16 @@ export async function startFakeOllama(mode: FakeMode = "ok"): Promise<FakeOllama
         { name: "m:latest", size: 9_400_000_000, size_vram: 6_000_000_000, context_length: 4096 },
       ],
     },
+    tags: {
+      models: [
+        {
+          name: "b:latest",
+          size: 2_000,
+          details: { parameter_size: "4B", quantization_level: "Q4_K_M" },
+        },
+        { name: "a:7b", size: 4_000 },
+      ],
+    },
     close: () => new Promise((res) => server.close(() => res())),
   };
   const sockets = new Set<import("node:net").Socket>();
@@ -73,6 +85,16 @@ export async function startFakeOllama(mode: FakeMode = "ok"): Promise<FakeOllama
       if (req.url === "/api/version") {
         res.setHeader("content-type", "application/json");
         res.end(JSON.stringify({ version: "0.40.14" }));
+        return;
+      }
+      if (req.url === "/api/tags") {
+        if (state.tags === undefined) {
+          res.statusCode = 500;
+          res.end();
+          return;
+        }
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify(state.tags));
         return;
       }
       if (req.url === "/api/ps") {

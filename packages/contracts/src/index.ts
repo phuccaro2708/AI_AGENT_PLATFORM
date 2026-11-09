@@ -399,6 +399,8 @@ export const SidecarRequest = z.discriminatedUnion("method", [
     method: z.literal("resources.set"),
     params: z.object({ settings: ResourceSettings }),
   }),
+  // ---- Phase 3 (P3-1): models installed in the local Ollama (HTTP only; the person picks one via the env var). ----
+  z.object({ id: z.number().int(), method: z.literal("ollama.models") }),
   z.object({ id: z.number().int(), method: z.literal("shutdown") }),
 ]);
 export type SidecarRequest = z.infer<typeof SidecarRequest>;

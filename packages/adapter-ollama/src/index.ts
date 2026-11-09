@@ -9,4 +9,6 @@ export {
 } from "./tools.js";
 export { readOllamaPs } from "./ps.js";
 export type { OllamaLoadedModel, OllamaPsOptions } from "./ps.js";
+export { listOllamaModels } from "./models.js";
+export type { OllamaInstalledModel, OllamaTagsOptions } from "./models.js";
 export { ModelSlot, slotFor } from "./model-slot.js";

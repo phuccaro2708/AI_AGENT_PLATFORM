@@ -107,6 +107,7 @@ const ALLOWED_METHODS: &[&str] = &[
     "recovery.resolve",
     "resources.get",
     "resources.set",
+    "ollama.models",
 ];
 
 fn is_allowed(method: &str) -> bool {
@@ -487,6 +488,7 @@ mod tests {
             "recovery.resolve",
             "resources.get",
             "resources.set",
+            "ollama.models",
             "agents.getSettings",
             "agents.setSettings",
             "agents.probe",

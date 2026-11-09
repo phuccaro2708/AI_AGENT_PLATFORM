@@ -126,6 +126,12 @@ export async function previewCall(method: string, params: unknown): Promise<unkn
       return { tasks: [] };
     case "tasks.resolveReconciliation":
       return { state: String(p.decision) === "requeue" ? "queued" : String(p.decision) };
+    case "ollama.models":
+      return {
+        reachable: true,
+        configured: null,
+        models: [{ name: "qwen3:4b", sizeBytes: 2_500_000_000, parameterSize: "4B" }],
+      };
     case "resources.get":
     case "resources.set": {
       const d = {

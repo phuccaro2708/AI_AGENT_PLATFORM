@@ -214,3 +214,23 @@ describe("adding the ollama adapter did not change the core", () => {
     },
   );
 });
+
+describe("ollama.models (discover installed models)", () => {
+  it("lists installed models, then reports unreachable and empty differently", async () => {
+    const s = await startFakeOllama("ok");
+    servers.push(s);
+    open({ baseUrl: s.url });
+    const many = await call("ollama.models");
+    expect(many.result).toMatchObject({ reachable: true, configured: null });
+    expect(many.result?.["models"].map((m: { name: string }) => m.name)).toEqual([
+      "a:7b",
+      "b:latest",
+    ]);
+
+    s.tags = { models: [] };
+    expect((await call("ollama.models")).result).toMatchObject({ reachable: true, models: [] });
+
+    s.tags = undefined;
+    expect((await call("ollama.models")).result).toMatchObject({ reachable: false, models: [] });
+  });
+});

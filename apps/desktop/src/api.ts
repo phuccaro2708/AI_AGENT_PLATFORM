@@ -50,6 +50,13 @@ export interface ResourceSettings {
   /** `vram` is optional: absent = GPU memory never limits anything. */
   thresholds: { cpu: Band; memory: Band; vram?: Band; releaseMarginPercent: number };
 }
+export interface OllamaModels {
+  reachable: boolean;
+  /** Model name set through `AGENT_STUDIO_OLLAMA_MODEL`, or null. */
+  configured: string | null;
+  models: { name: string; sizeBytes: number; parameterSize?: string; quantization?: string }[];
+}
+
 export interface ResourceReport {
   settings: ResourceSettings;
   defaults: ResourceSettings;
@@ -256,6 +263,8 @@ export const api = {
     call<{ state: TaskState }>("recovery.resolve", { taskId, action, note, confirmUnverified }),
   /** A redacted support bundle written next to the database; the UI cannot choose where. */
   exportDiagnostics: () => call<DiagnosticsExport>("diagnostics.export"),
+  /** Models installed in the local Ollama (HTTP only). `reachable:false` = Ollama is not answering. */
+  ollamaModels: () => call<OllamaModels>("ollama.models"),
   getResources: () => call<ResourceReport>("resources.get"),
   /** Validated by the backend; a bad value is rejected and nothing changes. Applies to later tasks at once. */
   setResources: (settings: ResourceSettings) => call<ResourceReport>("resources.set", { settings }),

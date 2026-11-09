@@ -28,6 +28,7 @@ import { AntigravityAdapter } from "@agent-studio/adapter-antigravity";
 import {
   OllamaAdapter,
   readOllamaPs,
+  listOllamaModels,
   type OllamaAdapterOptions,
 } from "@agent-studio/adapter-ollama";
 import {
@@ -1183,6 +1184,15 @@ export class SidecarService {
           return ok(req.id, { worktrees: this.repo.listWorktrees(req.params.workflowId) });
         case "diagnostics.export":
           return ok(req.id, this.exportDiagnosticsBundle());
+        case "ollama.models": {
+          const o = this.opts.ollama;
+          const models = await listOllamaModels({ ...(o?.baseUrl ? { baseUrl: o.baseUrl } : {}) });
+          return ok(req.id, {
+            reachable: models !== undefined,
+            models: models ?? [],
+            configured: o?.model ?? null,
+          });
+        }
         case "resources.get":
           return ok(req.id, await this.resourceReport());
         case "resources.set": {

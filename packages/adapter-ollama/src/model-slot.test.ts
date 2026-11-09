@@ -82,3 +82,13 @@ describe("ModelSlot", () => {
     expect(s.state().active).toBe(0);
   });
 });
+
+describe("ModelSlot.switchTo", () => {
+  it("names the previously loaded model only when a different one comes next", () => {
+    const slot = new ModelSlot();
+    expect(slot.switchTo("a")).toBeUndefined(); // nothing loaded by us yet
+    expect(slot.switchTo("a")).toBeUndefined(); // same model
+    expect(slot.switchTo("b")).toBe("a"); // a must be dropped
+    expect(slot.switchTo("a")).toBe("b");
+  });
+});

@@ -698,3 +698,9 @@ Mã: ADR-008. `codex` = `CodexAppServerAdapter` khi cổng bật; RSS watchdog `
 - **Chưa đo:** tool calling thật với model nào (S0 là 1 mẫu bịa văn bản, S6 không thử tool), `qwen3.5:4b`, hai model luân phiên trên Ollama thật (chỉ có test với server giả), tải model khi VRAM đã đầy.
 - **Giả định còn lại:** `ModelSlot` chỉ tuần tự hoá những gì chính tiến trình sidecar gửi; chương trình khác dùng chung Ollama thì không thấy. Giới hạn VRAM mặc định TẮT; 85/95 trong giao diện chỉ là giá trị khởi đầu, chưa hiệu chỉnh. Chỉ số làm giảm/dừng task là VRAM cả GPU (`nvidia-smi`), không phải VRAM của riêng Ollama.
 - **Biến môi trường mới (sidecar):** `AGENT_STUDIO_OLLAMA_MODEL`, `AGENT_STUDIO_OLLAMA_URL` (loopback; địa chỉ khác bị bỏ), `AGENT_STUDIO_OLLAMA_TOOLS=read-only`. Tool read-only chỉ thấy trong thư mục làm việc của task.
+
+### Ollama: gỡ model khi chuyển, và "sẵn sàng" cần model đã cài (2026-11-08)
+
+- **Đã đo (Ollama 0.40.14, `qwen3:4b`, 1 lượt):** `POST /api/generate {"model":..., "keep_alive":0}` gỡ model ngay (`done_reason:"unload"`); `/api/ps` trước đó có `qwen3:4b` (`size_vram` ~3,18 GB), sau đó rỗng.
+- **Hành vi mới:** khi một lượt chạy model B ngay sau model A (cùng server, cùng tiến trình sidecar), adapter gỡ A (`keep_alive:0`, best effort, lỗi bị bỏ qua) trước khi gửi chat của B; cùng model thì không gỡ. `detect()` kiểm tên đã cấu hình có trong `/api/tags` (tên không tag = `:latest`); tên sai hoặc server không trả lời = không sẵn sàng.
+- **Chưa đo:** chạy liên tiếp hai model qua adapter thật rồi đọc `/api/ps` (mới có test server giả và phép đo gỡ model ở trên); chương trình khác dùng chung Ollama không bị thấy bởi `ModelSlot`.

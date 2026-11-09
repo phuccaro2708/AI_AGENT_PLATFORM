@@ -35,6 +35,8 @@ export interface FakeOllama {
   ps: unknown;
   /** Body of `GET /api/tags`; `undefined` answers HTTP 500. Default: two installed models. */
   tags: unknown;
+  /** Bodies of the `POST /api/generate` unload requests, in order. */
+  unloads: Record<string, unknown>[];
   close(): Promise<void>;
 }
 
@@ -61,6 +63,7 @@ export async function startFakeOllama(mode: FakeMode = "ok"): Promise<FakeOllama
     url: "",
     mode,
     chats: [],
+    unloads: [],
     script: [],
     ps: {
       models: [
@@ -69,6 +72,7 @@ export async function startFakeOllama(mode: FakeMode = "ok"): Promise<FakeOllama
     },
     tags: {
       models: [
+        { name: "m:latest", size: 3_000 },
         {
           name: "b:latest",
           size: 2_000,
@@ -85,6 +89,12 @@ export async function startFakeOllama(mode: FakeMode = "ok"): Promise<FakeOllama
       if (req.url === "/api/version") {
         res.setHeader("content-type", "application/json");
         res.end(JSON.stringify({ version: "0.40.14" }));
+        return;
+      }
+      if (req.url === "/api/generate" && req.method === "POST") {
+        state.unloads.push(JSON.parse(await readBody(req)) as Record<string, unknown>);
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ done: true }));
         return;
       }
       if (req.url === "/api/tags") {

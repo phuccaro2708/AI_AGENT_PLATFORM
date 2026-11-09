@@ -15,6 +15,12 @@ export interface OllamaTagsOptions {
   timeoutMs?: number;
 }
 
+/** Is the configured name installed? `name` without a tag means `name:latest`, as Ollama resolves it. */
+export function isInstalled(configured: string, installed: OllamaInstalledModel[]): boolean {
+  const want = configured.includes(":") ? configured : `${configured}:latest`;
+  return installed.some((m) => m.name === want);
+}
+
 /**
  * Models installed in Ollama (`GET /api/tags`, HTTP only, no process is started).
  * `undefined` = the server could not be asked or answered something else (unreachable); `[]` = reachable, nothing

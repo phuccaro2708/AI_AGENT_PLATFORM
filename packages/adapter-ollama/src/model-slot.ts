@@ -8,6 +8,7 @@
 export class ModelSlot {
   private model: string | undefined;
   private active = 0;
+  private lastUsed: string | undefined;
   private readonly queue: { model: string; grant: (release: () => void) => void }[] = [];
 
   /** Waits for the slot, then returns a release function (call it once). Rejects when `signal` aborts first. */
@@ -32,6 +33,17 @@ export class ModelSlot {
       signal.addEventListener("abort", onAbort, { once: true });
       this.queue.push(waiter);
     });
+  }
+
+  /**
+   * Call right after `acquire` resolves. Records `model` as the one this process now has loaded and returns the model
+   * it loaded before when that is a DIFFERENT one (the caller should unload it, so two models never sit in memory
+   * together). `undefined` = nothing to unload. Only what this process loaded is known.
+   */
+  switchTo(model: string): string | undefined {
+    const prev = this.lastUsed;
+    this.lastUsed = model;
+    return prev !== undefined && prev !== model ? prev : undefined;
   }
 
   /** Model currently held (`undefined` when idle), how many runs hold it, and how many wait. */

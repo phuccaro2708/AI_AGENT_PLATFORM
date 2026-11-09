@@ -710,3 +710,11 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 
 - Người dùng quyết: chỉ bỏ `agy` khỏi phạm vi gate Phase 3; code giữ nguyên. Ghi ADR-009 (`DECISIONS.md`); sửa `ROADMAP.md` (dòng AntigravityAdapter, gate 1), `TODO.md` (ghi chú đầu Phase 3), `PHASE3_REPORT.md` (bảng gate).
 - Chỉ đổi tài liệu; không chạy gate. Không tick gate, không đóng Phase 3. Ô gate 2 ("thêm adapter không sửa core") vẫn chờ người dùng quyết về hard-code `sidecar.ts`.
+
+## 2026-11-08: sửa nhận định review hai trục (Standards + Spec)
+
+- **Spec 1 (đúng):** `ModelSlot` chỉ tuần tự hoá, model A vẫn nằm trong bộ nhớ khi B bắt đầu. Sửa: `ModelSlot.switchTo` + adapter gỡ model trước (`/api/generate keep_alive:0`, best effort) khi đổi model. Đã đo thật phần gỡ (`done_reason:"unload"`, `/api/ps` rỗng). Chưa chạy hai model liên tiếp qua adapter thật.
+- **Spec 2 (đúng):** `detect()` chỉ gọi `/api/version`. Sửa: dùng `/api/tags`, tên cấu hình phải được cài (`isInstalled`, tên không tag = `:latest`). Test: model tên sai, đúng tag, danh sách rỗng, `/api/tags` 500.
+- **Standards 1, 2 (đúng):** `SECURITY.md` viết lại: hạn 10 s của kiểm tra policy trong cổng (`permission-prompt.test.ts`), Edit/Glob/Grep đã được cổng xét (`claude-permission-gate.test.ts`, cổng giả, chưa đo lại với claude thật), `maxRounds` đã lưu và có test ngắt vòng 2; kết quả cũ giữ dưới nhãn lịch sử. Cổng treo bản thân chỉ có `timeoutMs` phía host (mặc định không giới hạn).
+- **Standards 3 (smell Low):** `models.ts` và `ps.ts` lặp phần gọi HTTP; **không gộp** (chưa có thay đổi giao thức buộc sửa cả hai).
+- Gate đầy đủ trên cây làm việc: lint, format, typecheck, test (107 file pass, 1046 test pass, 63 skip), build exit 0. Chưa chạy lại `cargo` (không đụng Rust), chưa đọc CI.

@@ -225,6 +225,7 @@ describe("ollama.models (discover installed models)", () => {
     expect(many.result?.["models"].map((m: { name: string }) => m.name)).toEqual([
       "a:7b",
       "b:latest",
+      "m:latest",
     ]);
 
     s.tags = { models: [] };

@@ -2,6 +2,7 @@ import type { AgentCapability, AgentEvent } from "@agent-studio/contracts";
 import type { AgentAdapter, AgentTask } from "@agent-studio/agent-core";
 import { READ_ONLY_TOOLS, runReadOnlyTool } from "./tools.js";
 import { slotFor } from "./model-slot.js";
+import { isInstalled, listOllamaModels } from "./models.js";
 
 export const DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434";
 
@@ -120,19 +121,32 @@ export class OllamaAdapter implements AgentAdapter {
     this.fetchImpl = opts.fetch ?? fetch;
   }
 
-  /** Available = a model is configured AND the server answers; without a model no task could run. */
+  /**
+   * Available = a model is configured, the server answers AND that model is installed (`/api/tags`); without a
+   * model, or with a name Ollama does not have, a task could only fail.
+   */
   async detect(): Promise<boolean> {
     if (!this.opts.model) return false;
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), this.opts.detectTimeoutMs ?? 3000);
+    const installed = await listOllamaModels({
+      baseUrl: this.baseUrl,
+      fetch: this.fetchImpl,
+      timeoutMs: this.opts.detectTimeoutMs ?? 3000,
+    });
+    return installed !== undefined && isInstalled(this.opts.model, installed);
+  }
+
+  /** Best effort: tell Ollama to drop `model` from memory now (`keep_alive: 0`). Never throws; a failure only leaves it loaded. */
+  private async unload(model: string, signal: AbortSignal): Promise<void> {
     try {
-      const res = await this.fetchImpl(`${this.baseUrl}/api/version`, { signal: ctl.signal });
+      const res = await this.fetchImpl(`${this.baseUrl}/api/generate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model, keep_alive: 0 }),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+      });
       await res.body?.cancel().catch(() => undefined);
-      return res.ok;
     } catch {
-      return false;
-    } finally {
-      clearTimeout(timer);
+      /* the next chat may find two models loaded; nothing else to do */
     }
   }
 
@@ -174,7 +188,11 @@ export class OllamaAdapter implements AgentAdapter {
     let releaseSlot: (() => void) | undefined;
     try {
       // One model at a time on this server. Waiting is not "Ollama is silent": the idle timer starts after.
-      releaseSlot = await slotFor(this.baseUrl).acquire(model, ctl.signal);
+      const slot = slotFor(this.baseUrl);
+      releaseSlot = await slot.acquire(model, ctl.signal);
+      // The slot only orders the calls; the previous model would stay in memory (keep_alive) next to this one.
+      const previous = slot.switchTo(model);
+      if (previous !== undefined) await this.unload(previous, ctl.signal);
       arm();
       const toolsOn = this.opts.tools === "read-only";
       const maxRounds = this.opts.maxToolRounds ?? 4;

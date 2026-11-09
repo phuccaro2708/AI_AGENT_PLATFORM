@@ -147,6 +147,14 @@ describe("OllamaAdapter", () => {
   it("detect() is true for a live server and false when nothing listens", async () => {
     const s = await fake();
     expect(await make(s).detect()).toBe(true);
+    // installed under another tag only / not installed at all: a task could only fail, so not available
+    expect(await make(s, { model: "m:other" }).detect()).toBe(false);
+    expect(await make(s, { model: "nope" }).detect()).toBe(false);
+    expect(await make(s, { model: "a:7b" }).detect()).toBe(true); // exact name with tag
+    s.tags = { models: [] };
+    expect(await make(s).detect()).toBe(false); // reachable, nothing pulled
+    s.tags = undefined;
+    expect(await make(s).detect()).toBe(false); // /api/tags answers 500
     // a live server is not enough: without a configured model nothing could run
     expect(await new OllamaAdapter({ baseUrl: s.url }).detect()).toBe(false);
     const dead = new OllamaAdapter({ baseUrl: "http://127.0.0.1:1", model: "m" });
@@ -215,6 +223,29 @@ describe("one model at a time per server (S5)", () => {
     expect(s.chats.map((c) => c["model"])).toEqual(["a"]);
     a.ac.abort();
     await a.done;
+  });
+
+  it("unloads the previous model (keep_alive 0) before a different model's chat, and only then", async () => {
+    const s = await fake("ok");
+    await run(make(s, { model: "a" }), task("1", undefined, "t1"));
+    await run(make(s, { model: "a" }), task("2", undefined, "t2"));
+    expect(s.unloads).toEqual([]); // same model again: nothing to drop
+    await run(make(s, { model: "b" }), task("3", undefined, "t3"));
+    expect(s.unloads).toEqual([{ model: "a", keep_alive: 0 }]);
+    expect(s.chats.map((c) => c["model"])).toEqual(["a", "a", "b"]);
+  });
+
+  it("a failing unload does not stop the next model from running", async () => {
+    const s = await fake("ok");
+    await run(make(s, { model: "a" }), task("1", undefined, "t1"));
+    const failing = make(s, {
+      model: "b",
+      fetch: ((url: string, init?: RequestInit) =>
+        String(url).endsWith("/api/generate")
+          ? Promise.reject(new Error("boom"))
+          : fetch(url, init)) as typeof fetch,
+    });
+    expect((await run(failing, task("2", undefined, "t2"))).at(-1)).toEqual({ type: "completed" });
   });
 
   it("a finished run frees the slot for another model", async () => {

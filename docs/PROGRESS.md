@@ -741,3 +741,9 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Đã chạy (tôi, ở `cb5a61b`): `pnpm typecheck` sạch, `pnpm test` 310/310 (repo `loop-runner`). Ở repo này, agent báo gate lint/typecheck/test/build PASS; format chỉ lỗi trên file `.superpowers/*` chưa track (tôi chưa chạy lại). Nghiệm thu với claude/codex thật: kết quả trong `docs/reports/LOOP_RUNNER_ACCEPTANCE.md` (bước 1 PARTIAL, bước 2–4 PASS).
 - Review toàn nhánh: 0 Critical, 8 Important (I-1..I-7 đã sửa; I-8 chưa), 16 Minor chưa sửa hết (ghi sổ SDD).
 - Chưa làm/NOT_RUN: chạy lại nghiệm thu bước 1 sau các bản sửa; bước cài phụ thuộc trong run worktree; cài lệnh global; tiêu chí Phase 3–10 thành lệnh; clippy/`cargo test` (không có gate điều kiện). Không push, không tạo PR, không ghép.
+
+## 2026-11-09: Loop Runner I-8 — bước `setup` trước gate
+
+- Repo `loop-runner` (`fd3ff78`, test 338/341 khi chạy tuần tự; 3 test guard có sẵn quá 5 giây khi máy tải nặng, chạy riêng thì PASS): thêm khóa `setup` trong config (cùng dạng/kiểm tra với gate). Lệnh chạy một lần trong run worktree, trước mọi lượt gọi agent và gate. Setup lỗi thì dừng `blocked`, không gọi agent. Setup sửa file tracked, để lại file chưa track không bị ignore, đổi HEAD hoặc đổi git config thì dừng `needs_reconciliation`. File bị ignore do setup tạo ra là baseline của diff guard. `check` và `--dry-run` chỉ liệt kê, không chạy.
+- Repo này: `loop.config.json` thêm `setup` = `pnpm install --frozen-lockfile` (timeout 900000).
+- Đã chạy: `node <loop-runner>/dist/cli.js check --project .` (liệt kê `install: pnpm (2 args)`), `prettier --check loop.config.json`, `node scripts/docs-sync-check.mjs`. KHÔNG chạy `pnpm install` thật. Chạy lại nghiệm thu bước 1 vẫn NOT_RUN. Không push, không tạo PR.

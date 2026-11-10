@@ -1,4 +1,12 @@
 {
+  "setup": [
+    {
+      "name": "install",
+      "command": "pnpm",
+      "args": ["install", "--frozen-lockfile"],
+      "timeoutMs": 900000
+    }
+  ],
   "gates": [
     {
       "name": "lint",

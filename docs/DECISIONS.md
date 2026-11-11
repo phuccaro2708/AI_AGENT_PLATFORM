@@ -19,7 +19,8 @@ Chỉ giữ quyết định đang chi phối mã hiện tại. ADR-003 đến AD
   1. Mục tiêu là công cụ cho riêng một người. Bỏ installer, ký mã, auto-update, ACP, MCP gateway, lập lịch, mục tiêu "ngang AionUi".
   2. Chỉ giữ hai agent: Claude Code và Codex. Gỡ Antigravity, Ollama và resource monitor (CPU/RAM/VRAM).
   3. Gỡ cổng quyền tự viết (PolicyGate, `policy-engine`, cổng MCP `--permission-prompt-tool`, adapter `codex app-server`). Quyền do CLI tự thực thi qua cờ mà adapter truyền.
-  4. Bỏ hệ thống phase/gate/báo cáo. Tài liệu trạng thái còn `ROADMAP`, `TODO`, `HANDOFF`; nhật ký là `git log`.
+  4. Task đơn chạy với `workspace-write` ngay trong thư mục dự án, không qua worktree: agent sửa thẳng file của người dùng. Muốn có bản nháp tách riêng thì dùng Peer Review.
+  5. Bỏ hệ thống phase/gate/báo cáo. Tài liệu trạng thái còn `ROADMAP`, `TODO`, `HANDOFF`; nhật ký là `git log`.
 - **Cái mất đi, nói thẳng:**
   - Không còn kiểm tra trước khi chạy (thư mục, chương trình) và không còn kiểm tra sau khi chạy "có ghi ngoài phạm vi được cấp không" cho task đơn. Peer Review vẫn tự so worktree trước/sau lượt review.
   - Không còn hỏi người dùng theo từng lệnh/từng file. CLI chạy không tương tác tự quyết theo cờ quyền.

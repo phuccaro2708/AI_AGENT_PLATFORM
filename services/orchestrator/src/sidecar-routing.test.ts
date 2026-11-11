@@ -125,3 +125,23 @@ describe("workflows.start without agentId (capability router)", () => {
     expect(again.error?.message).toMatch(/Unknown agent/);
   });
 });
+
+describe("workflows.start permissions", () => {
+  it("runs a single task with workspace-write in the project folder", async () => {
+    const seen: AgentTask[] = [];
+    class Recording extends Fake {
+      override async *execute(task: AgentTask): AsyncIterable<AgentEvent> {
+        seen.push(task);
+        yield* super.execute(task);
+      }
+    }
+    open([new Recording("writer", ["streaming"])]);
+    const workflowId = await workflow();
+    const r = await call("workflows.start", { workflowId, agentId: "writer", prompt: "go" });
+    expect(r.error).toBeUndefined();
+    await svc!.idle();
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.permissions).toBe("workspace-write");
+    expect(seen[0]?.cwd).toBe(join(dir, "proj"));
+  });
+});

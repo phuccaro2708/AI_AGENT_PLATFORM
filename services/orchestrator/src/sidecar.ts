@@ -3,6 +3,7 @@ import {
   SidecarRequest,
   type AgentCapability,
   type SidecarEvent,
+  type TaskPermissions,
   type TaskState,
   type SidecarResponse,
 } from "@agent-studio/contracts";
@@ -537,6 +538,7 @@ export class SidecarService {
     agentId: string;
     prompt: string;
     cwd: string;
+    permissions?: TaskPermissions;
   }): Promise<{ taskId: string; settled: Promise<RunResult | undefined> }> {
     // `enqueue` stores the prompt as the task's `task.request` (and the UI receives it), so a secret the
     // user typed is masked here, exactly as the Peer Review goal is; the agent then runs the masked prompt.
@@ -775,6 +777,9 @@ export class SidecarService {
             agentId,
             prompt: req.params.prompt,
             cwd: root.rootPath,
+            // The user's choice (2026-11-11): a single task may edit the project folder itself. There is no
+            // worktree here, so the agent's edits land directly in the user's files; the CLI enforces the limit.
+            permissions: "workspace-write",
           });
           return ok(req.id, { taskId });
         }

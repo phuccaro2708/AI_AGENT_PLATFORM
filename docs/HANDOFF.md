@@ -11,7 +11,7 @@ Cập nhật 2026-11-11. File này chỉ ghi trạng thái hiện tại; lịch 
 ## Kết quả kiểm tra tại HEAD (máy Windows này, 2026-11-11)
 
 - `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm build`: đạt.
-- `pnpm test`: 644 đạt, 5 lỗi đã biết trước (`it.fails`), 1 bỏ qua, 0 đỏ.
+- `pnpm test`: 645 đạt, 5 lỗi đã biết trước (`it.fails`), 1 bỏ qua, 0 đỏ.
 - `cargo clippy --all-targets -- -D warnings`: đạt.
 - `cargo test --locked`: 1 ca đỏ, `job_wrap::timeout_kills_the_tree_and_exits_124`. Nhóm test Job Object đã chập chờn từ trước đợt này; chưa điều tra.
 - Chưa kiểm: chạy app thật (`tauri dev`) sau khi gỡ; chạy `claude`/`codex` thật không qua cổng quyền.

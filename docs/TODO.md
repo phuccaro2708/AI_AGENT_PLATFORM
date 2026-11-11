@@ -5,7 +5,7 @@ Việc còn mở, xếp theo thứ tự nên làm. Xong việc nào thì xoá d�
 ## Cần làm trước
 
 - [ ] Chạy app thật (`pnpm --filter @agent-studio/desktop tauri dev`) sau đợt gỡ 2026-11-11 và giao một task cho `claude`, một task cho `codex`.
-- [ ] Quyết định quyền mặc định của task đơn (`workflows.start` trong `services/orchestrator/src/sidecar.ts`): hiện không truyền `permissions`, nên Claude từ chối ghi và Codex chạy `read-only`.
+- [ ] Kiểm với CLI thật: task đơn giờ chạy `workspace-write` ngay trong thư mục dự án (không có worktree). Xác nhận `claude` và `codex` sửa được file và không ghi ra ngoài thư mục đó.
 - [ ] Điều tra test Rust `job_wrap::timeout_kills_the_tree_and_exits_124` (đỏ 2026-11-11) và hai test Job Object phía Node từng đỏ rồi tự xanh.
 
 ## Phần đã thành thừa, có thể gỡ tiếp

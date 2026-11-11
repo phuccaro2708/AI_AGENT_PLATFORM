@@ -29,7 +29,7 @@
     {
       "name": "test",
       "command": "pnpm",
-      "args": ["test"],
+      "args": ["test", "--no-file-parallelism"],
       "timeoutMs": 900000
     },
     {

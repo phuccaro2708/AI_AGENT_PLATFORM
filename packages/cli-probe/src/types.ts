@@ -41,7 +41,7 @@ export interface ProbeResult {
 }
 
 export interface CommandResult {
-  outcome: "exited" | "timeout" | "cancelled" | "spawn_error";
+  outcome: "exited" | "timeout" | "cancelled" | "spawn_error" | "memory_limit";
   exitCode: number | null;
   stdout: string;
   stderr: string;

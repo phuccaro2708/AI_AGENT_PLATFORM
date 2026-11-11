@@ -1,6 +1,3 @@
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   AgentEvent,
   ReviewResultPayload,
@@ -12,6 +9,7 @@ import type { Repo } from "@agent-studio/storage";
 import type { ContextBoard } from "./context-board.js";
 import type { Orchestrator, RunResult } from "./orchestrator.js";
 import type { FinalState } from "./outcome.js";
+import { digestInsideWorktree } from "./worktree-hash.js";
 
 /** The slice of `GitWorktrees` the engine needs; kept structural so tests can use a plain directory. */
 export interface Workspaces {
@@ -50,7 +48,7 @@ type Step = {
  * Step bookkeeping is in memory, but it can be rebuilt from the database (`resume`): tasks of a workflow
  * alternate implementer, reviewer, implementer, ... in creation order. A task that ended in
  * `needs_reconciliation` is never continued by the engine; the workflow waits until a person decides.
- * Not persisted: a custom `maxRounds` (a resumed workflow uses the default).
+ * A custom `maxRounds` is stored on the workflow row, so a resumed workflow keeps it (NULL = the engine default).
  */
 export class PeerReviewEngine {
   private readonly repo: Repo;
@@ -59,7 +57,6 @@ export class PeerReviewEngine {
   private readonly workspaces: Workspaces;
   private readonly maxRounds: number;
   private readonly steps = new Map<string, Step>();
-  private readonly roundLimits = new Map<string, number>();
 
   constructor(opts: {
     repo: Repo;
@@ -109,7 +106,8 @@ export class PeerReviewEngine {
       source: "verified",
       createdBy: "user",
     });
-    if (opts.maxRounds !== undefined) this.roundLimits.set(opts.workflowId, opts.maxRounds);
+    if (opts.maxRounds !== undefined)
+      this.repo.setWorkflowMaxRounds(opts.workflowId, opts.maxRounds);
     this.enqueueImplement(opts.workflowId, 1);
   }
 
@@ -227,6 +225,18 @@ export class PeerReviewEngine {
     if (!wt) throw new Error("implementer finished but has no worktree");
 
     const files = await this.snapshotFiles(wt.path);
+    const escaping = files.filter((f) => f.escapes);
+    if (escaping.length > 0) {
+      // Fail closed: nothing is registered or shown to the reviewer.
+      this.fail(
+        step.workflowId,
+        `the implementer left link(s) pointing outside the worktree: ${escaping
+          .slice(0, 3)
+          .map((f) => f.path)
+          .join(", ")}`,
+      );
+      return;
+    }
     for (const f of files) {
       this.repo.registerArtifact(taskId, f.path, f.sha256);
       this.board.add({
@@ -292,7 +302,7 @@ export class PeerReviewEngine {
       this.repo.setWorkflowState(step.workflowId, "completed");
       return;
     }
-    if (step.round >= (this.roundLimits.get(step.workflowId) ?? this.maxRounds)) {
+    if (step.round >= (this.repo.getWorkflowMaxRounds(step.workflowId) ?? this.maxRounds)) {
       this.fail(step.workflowId, `changes still requested after ${step.round} round(s)`);
       return;
     }
@@ -313,18 +323,17 @@ export class PeerReviewEngine {
   }
 
   /** Every changed file with its content hash; deleted files have nothing to hash and are skipped. */
-  private async snapshotFiles(path: string): Promise<{ path: string; sha256: string }[]> {
+  private async snapshotFiles(
+    path: string,
+  ): Promise<{ path: string; sha256: string; escapes?: true }[]> {
     const status = await this.workspaces.status(path);
-    const out: { path: string; sha256: string }[] = [];
+    const out: { path: string; sha256: string; escapes?: true }[] = [];
     for (const f of status.files) {
-      try {
-        const sha256 = createHash("sha256")
-          .update(readFileSync(join(path, f.path)))
-          .digest("hex");
-        out.push({ path: f.path, sha256 });
-      } catch {
-        // deleted or a directory: not an artifact
-      }
+      const d = digestInsideWorktree(path, f.path);
+      if (d.kind === "ok") out.push({ path: f.path, sha256: d.sha256 });
+      // A link leaving the worktree is never read; the marker keeps a change of the link itself visible.
+      else if (d.kind === "escapes") out.push({ path: f.path, sha256: d.marker, escapes: true });
+      // else: deleted or a directory: not an artifact
     }
     return out.sort((a, b) => a.path.localeCompare(b.path));
   }

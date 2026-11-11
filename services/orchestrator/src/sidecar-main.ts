@@ -1,7 +1,11 @@
 import { createInterface } from "node:readline";
 import { NodeResourceSource } from "@agent-studio/resource-monitor";
 import { createLogger } from "@agent-studio/shared-utils";
+import { runPermissionGate } from "./claude-permission-gate.js";
 import { createEventWriter } from "./event-writer.js";
+import { resolveJobWrap, resolveTreeMemoryLimitMb } from "./job-wrap-config.js";
+import { resolveOllama } from "./ollama-config.js";
+import { resolvePermissionGates } from "./permission-gates-config.js";
 import { createSecretRedactor, redactingDestination, takeSecretsFromEnv } from "./secrets.js";
 import { acquireSidecarLock, SidecarLockError } from "./sidecar-lock.js";
 import { SidecarService } from "./sidecar.js";
@@ -13,6 +17,18 @@ const EXIT_LOCKED = 75;
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? process.argv[i + 1] : undefined;
+}
+
+// Started by `claude --permission-prompt-tool` as its MCP server (P4-1 d, ON by default since Q3): no database, no
+// lock, no logs on stdout. Reached when the sidecar launched claude with the gate (switch: AGENT_STUDIO_CLAUDE_GATE=0).
+if (process.argv.includes("--permission-gate")) {
+  try {
+    await runPermissionGate(process.argv, process.stdin, process.stdout);
+    process.exit(0);
+  } catch (err) {
+    process.stderr.write(`permission gate cannot start: ${String(err)}\n`);
+    process.exit(2);
+  }
 }
 
 const dbPath = arg("db");
@@ -47,6 +63,9 @@ try {
   process.stdout.write(line, () => process.exit(err instanceof SidecarLockError ? EXIT_LOCKED : 1));
   await new Promise<never>(() => undefined); // never construct the service; the callback above exits
 }
+// P4-4 (b): wrapper ON by default when the installed binary is found, else a warning and no wrap. RAM watchdog stays OFF unless opted in.
+const jobWrap = resolveJobWrap(arg("job-wrap"), process.env, log);
+const cliTreeMemoryLimitMb = resolveTreeMemoryLimitMb(process.env, log);
 const service = new SidecarService(
   {
     dbPath,
@@ -55,6 +74,11 @@ const service = new SidecarService(
     resourceSource: new NodeResourceSource(),
     ...(nativeBinding ? { nativeBinding } : {}),
     ...(migrationsFolder ? { migrationsFolder } : {}),
+    ...(jobWrap ? { jobWrap } : {}),
+    // Q3: both permission gates are ON unless AGENT_STUDIO_CLAUDE_GATE / AGENT_STUDIO_CODEX_GATE says off.
+    ...resolvePermissionGates(process.env),
+    ...(cliTreeMemoryLimitMb === undefined ? {} : { cliTreeMemoryLimitMb }),
+    ollama: resolveOllama(process.env, log),
   },
   log,
 );

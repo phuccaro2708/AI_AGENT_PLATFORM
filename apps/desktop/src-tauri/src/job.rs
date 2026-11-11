@@ -31,7 +31,8 @@ mod imp {
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
         QueryInformationJobObject, SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOB_OBJECT_LIMIT_PROCESS_MEMORY,
+        JOB_OBJECT_LIMIT_JOB_MEMORY, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        JOB_OBJECT_LIMIT_PROCESS_MEMORY,
     };
     use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
 
@@ -47,15 +48,19 @@ mod imp {
         }
 
         /// Kill-on-close job, optionally capping the memory each process in the job may commit
-        /// (`JOB_OBJECT_LIMIT_PROCESS_MEMORY`, i.e. per process, NOT the sum over the tree). Past
-        /// the cap that process's allocations fail; Windows does not kill it, so a process that
-        /// cannot cope exits by itself.
-        ///
-        /// Measured on the dev machine (Windows 11): `JOB_OBJECT_LIMIT_JOB_MEMORY` (job-wide sum)
-        /// was set and read back correctly but did NOT stop a 600 MB allocation under a 300 MB
-        /// cap, so it is deliberately not used; the per-process limit did stop it. The cause of
-        /// the job-wide miss is unknown (see docs/ASSUMPTIONS.md).
+        /// (`JOB_OBJECT_LIMIT_PROCESS_MEMORY`, per process, NOT the sum over the tree). For a cap on
+        /// the whole tree use [`JobObject::with_limits`].
         pub fn with_memory_limit(limit_bytes: Option<u64>) -> io::Result<Self> {
+            Self::with_limits(limit_bytes, None)
+        }
+
+        /// Kill-on-close job with a per-process commit cap (`JOB_OBJECT_LIMIT_PROCESS_MEMORY`)
+        /// and/or a job-wide cap on the SUM of committed memory of the whole tree
+        /// (`JOB_OBJECT_LIMIT_JOB_MEMORY` + `JobMemoryLimit`). Past either cap the allocation that
+        /// would exceed it FAILS; Windows does not kill the process. R4 measurement: the job-wide
+        /// limit works as long as `JobMemoryLimit` is filled in next to the flag (docs/ASSUMPTIONS.md).
+        pub fn with_limits(process_bytes: Option<u64>, job_bytes: Option<u64>) -> io::Result<Self> {
+            let limit_bytes = process_bytes;
             // SAFETY: null attributes/name are valid; the returned handle is owned by `JobObject`.
             let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
             if handle.is_null() {
@@ -68,6 +73,10 @@ mod imp {
             if let Some(bytes) = limit_bytes {
                 info.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_PROCESS_MEMORY;
                 info.ProcessMemoryLimit = usize::try_from(bytes).unwrap_or(usize::MAX);
+            }
+            if let Some(bytes) = job_bytes {
+                info.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_JOB_MEMORY;
+                info.JobMemoryLimit = usize::try_from(bytes).unwrap_or(usize::MAX);
             }
             // SAFETY: `info` outlives the call and the size matches the struct.
             let ok = unsafe {
@@ -99,8 +108,9 @@ mod imp {
         }
 
         /// Highest committed memory (bytes) of all processes in the job so far, as reported by
-        /// Windows (`PeakJobMemoryUsed`). Committed, not resident. Measured: it is only maintained
-        /// while no per-process limit is set (reads 0 under one), so use it on uncapped jobs.
+        /// Windows (`PeakJobMemoryUsed`). Committed, not resident. Measured: it reads 0 under a
+        /// per-process limit; under a job-wide limit it also counts the attempt that was refused
+        /// (602 MB for a refused 600 MB request), so use it on uncapped jobs.
         pub fn peak_job_memory(&self) -> io::Result<u64> {
             // SAFETY: zeroed is valid for this plain-data struct; the size matches; the return
             // length pointer may be null.
@@ -184,6 +194,9 @@ mod imp {
             Ok(JobObject)
         }
         pub fn with_memory_limit(_limit_bytes: Option<u64>) -> io::Result<Self> {
+            Ok(JobObject)
+        }
+        pub fn with_limits(_process: Option<u64>, _job: Option<u64>) -> io::Result<Self> {
             Ok(JobObject)
         }
         pub fn peak_job_memory(&self) -> io::Result<u64> {
@@ -346,6 +359,33 @@ mod tests {
         assert!(
             !out.contains("ALLOC_OK"),
             "allocation survived the 300 MB cap: {out}"
+        );
+    }
+
+    /// R4: the job-wide cap is a real cap (control: a roomy job-wide cap lets the same request pass).
+    #[test]
+    fn job_wide_limit_caps_what_a_process_can_commit() {
+        const MB: u64 = 1024 * 1024;
+        let run = |job_limit: u64| {
+            let job = JobObject::with_limits(None, Some(job_limit)).expect("create job");
+            let child = job
+                .spawn(
+                    Command::new(std::env::current_exe().unwrap())
+                        .args(["--exact", "job::tests::alloc_helper", "--nocapture"])
+                        .env("AGENT_STUDIO_ALLOC_MB", "600")
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::null()),
+                    0,
+                )
+                .expect("spawn helper in job");
+            let out = child.wait_with_output().expect("wait");
+            String::from_utf8_lossy(&out.stdout).to_string()
+        };
+        assert!(run(1000 * MB).contains("ALLOC_OK"), "roomy cap blocked");
+        assert!(
+            !run(300 * MB).contains("ALLOC_OK"),
+            "allocation survived the 300 MB job-wide cap"
         );
     }
 }

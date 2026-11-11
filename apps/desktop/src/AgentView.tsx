@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { draftAfterStart } from "./draft";
 import type { AdapterInfo, Project } from "./api";
 import { AGENT_TASK_REQUIRES, capabilityBlocker } from "./capabilityGap";
 import { AUTO_AGENT } from "./autoRoute";
@@ -32,7 +33,8 @@ export function AgentView({
   onAgent: (id: string) => void;
   onDetect: () => void;
   task: TaskRef | null;
-  onStart: (prompt: string) => void;
+  /** Resolves `false` when the backend refused the task: the draft is then kept. */
+  onStart: (prompt: string) => void | boolean | Promise<void | boolean>;
   presets: Preset[];
   presetId: string;
   onPreset: (id: string) => void;
@@ -140,8 +142,10 @@ export function AgentView({
         submitLabel="Run task"
         blocker={blocker}
         onSubmit={(text) => {
-          onStart(text);
-          setPrompt("");
+          // Clear the draft only when the task was accepted, and only if it was not edited meanwhile.
+          void Promise.resolve(onStart(text)).then((ok) => {
+            setPrompt((cur) => draftAfterStart(cur, text, ok));
+          });
         }}
       />
     </div>

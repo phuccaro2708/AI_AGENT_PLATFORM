@@ -1,6 +1,7 @@
-import { realpathSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { closeSync, fstatSync, openSync, readSync, realpathSync, statSync } from "node:fs";
+import { basename, dirname, join, relative, resolve, isAbsolute } from "node:path";
 import { runProcess } from "@agent-studio/process-manager";
+import { newFileDiff } from "./new-file-diff.js";
 
 export class GitError extends Error {
   constructor(
@@ -23,6 +24,17 @@ export class WorktreeDirtyError extends Error {
   }
 }
 
+/** The repo's own config defines a filter driver (smudge/clean/process) that git would run on its files. */
+export class UntrustedGitConfigError extends Error {
+  constructor(readonly drivers: readonly string[]) {
+    super(
+      `Repository config defines filter driver(s) that run commands: ${drivers.join(", ")}. ` +
+        "List a driver in allowFilters only if you trust it.",
+    );
+    this.name = "UntrustedGitConfigError";
+  }
+}
+
 export class PathTooLongError extends Error {
   constructor(
     readonly path: string,
@@ -42,6 +54,11 @@ export interface GitWorktreesOptions {
   gitCommand?: string;
   /** Refuse to create a worktree whose path is longer than this. Default 200 (Windows MAX_PATH is 260). */
   maxPathLength?: number;
+  /**
+   * Filter drivers (e.g. `lfs`) the repo config may define. Any other `filter.<name>.smudge|clean|process`
+   * from repo-controlled config makes create/status/diff throw `UntrustedGitConfigError` (docs/THREAT_MODEL.md T19).
+   */
+  allowFilters?: readonly string[];
 }
 
 export interface WorktreeInfo {
@@ -108,6 +125,19 @@ function shorten(id: string): string {
   return (tail || safe || "x").slice(-12);
 }
 
+/**
+ * Prepended to every git call (T19, probed in docs/ASSUMPTIONS.md): a repo's own `.git/config` can point
+ * `core.hooksPath` at scripts and `core.fsmonitor` at a command, and git runs both during worktree add,
+ * status, diff and branch/ref updates. `-c` outranks repo config. Filter drivers and `diff.*.textconv` cannot
+ * be neutralised by name, so they are handled by `--no-textconv` and the `allowFilters` guard.
+ */
+const HARDENING_ARGS: readonly string[] = [
+  "-c",
+  `core.hooksPath=${process.platform === "win32" ? "NUL" : "/dev/null"}`,
+  "-c",
+  "core.fsmonitor=false",
+];
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -120,12 +150,33 @@ export class GitWorktrees {
   private readonly baseDir: string;
   private readonly gitCommand: string;
   private readonly maxPathLength: number;
+  private readonly allowFilters: ReadonlySet<string>;
 
   constructor(opts: GitWorktreesOptions) {
     this.repoRoot = opts.repoRoot;
     this.baseDir = opts.baseDir;
     this.gitCommand = opts.gitCommand ?? "git";
     this.maxPathLength = opts.maxPathLength ?? 200;
+    this.allowFilters = new Set(opts.allowFilters ?? []);
+  }
+
+  /** Throws when repo-controlled config defines a command-running filter driver that is not allowed. */
+  private async assertNoUntrustedFilters(cwd: string): Promise<void> {
+    const pattern = "^filter\\..*\\.(smudge|clean|process)$";
+    const r = await this.run(
+      ["config", "--show-scope", "--name-only", "--get-regexp", pattern],
+      cwd,
+    );
+    if (r.exitCode === 1) return; // no match
+    if (r.exitCode !== 0) throw new GitError(["config"], r.exitCode, r.stderr);
+    const bad = new Set<string>();
+    for (const line of r.stdout.split(/\r?\n/)) {
+      const [scope, key] = line.split("\t");
+      if (!key || scope === "system" || scope === "global") continue; // user-owned, not repo-controlled
+      const name = key.slice("filter.".length, key.lastIndexOf("."));
+      if (!this.allowFilters.has(name)) bad.add(name);
+    }
+    if (bad.size > 0) throw new UntrustedGitConfigError([...bad].sort());
   }
 
   branchName(workflowId: string, taskId: string): string {
@@ -146,6 +197,7 @@ export class GitWorktrees {
     if (path.length > this.maxPathLength) throw new PathTooLongError(path, this.maxPathLength);
     const branch = this.branchName(opts.workflowId, opts.taskId);
     const baseRef = opts.baseRef ?? "HEAD";
+    await this.assertNoUntrustedFilters(this.repoRoot);
     const baseSha = (await this.git(["rev-parse", "--verify", `${baseRef}^{commit}`])).trim();
     await this.git(["worktree", "add", "-b", branch, path, baseSha]);
     return { path, branch, baseRef, baseSha };
@@ -171,6 +223,7 @@ export class GitWorktrees {
   }
 
   async status(path: string): Promise<WorktreeStatus> {
+    await this.assertNoUntrustedFilters(path);
     const out = await this.git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], path);
     const parts = out.split("\0");
     const files: WorktreeStatus["files"] = [];
@@ -184,22 +237,68 @@ export class GitWorktrees {
     return { dirty: files.length > 0, files };
   }
 
+  /** True when `file` (relative to the worktree `root`) really lives inside `root` after resolving links. */
+  private insideWorktree(root: string, file: string): boolean {
+    try {
+      const rel = relative(realpathSync.native(root), realpathSync.native(join(root, file)));
+      return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+    } catch {
+      return false; // cannot be resolved: do not read it
+    }
+  }
+
+  /**
+   * Reads an untracked file through an already-open handle and returns its bytes only when that handle is the
+   * very file the path resolves to inside the worktree, before AND after the read (same dev/ino). A swap to an
+   * outside link, even one swapped back before the second check, leaves the handle on a different file and
+   * the content is refused. Fail closed: an unreadable file, a non-regular file or a zero inode is "outside".
+   */
+  private readVerified(root: string, file: string, cap: number): Buffer | "outside" {
+    if (!this.insideWorktree(root, file)) return "outside";
+    let fd: number | undefined;
+    try {
+      const abs = join(root, file);
+      fd = openSync(abs, "r");
+      const opened = fstatSync(fd, { bigint: true });
+      if (!opened.isFile() || opened.ino === 0n) return "outside";
+      const buf = Buffer.alloc(Math.min(Number(opened.size), cap));
+      let off = 0;
+      while (off < buf.length) {
+        const n = readSync(fd, buf, off, buf.length - off, off);
+        if (n === 0) break;
+        off += n;
+      }
+      if (!this.insideWorktree(root, file)) return "outside";
+      const now = statSync(realpathSync.native(abs), { bigint: true });
+      if (now.dev !== opened.dev || now.ino !== opened.ino) return "outside";
+      return buf.subarray(0, off);
+    } catch {
+      return "outside";
+    } finally {
+      if (fd !== undefined) closeSync(fd);
+    }
+  }
+
   /**
    * Unified diff of everything changed in the worktree against its HEAD, untracked files included (shown
    * as new files). Read-only: nothing is staged. Output beyond `maxBytes` is cut and `truncated` is set.
    */
   async diff(path: string, opts: { maxBytes?: number } = {}): Promise<WorktreeDiff> {
     const maxBytes = opts.maxBytes ?? 200_000;
-    const parts = [await this.git(["diff", "HEAD", "--no-color", "--no-ext-diff"], path)];
+    await this.assertNoUntrustedFilters(path);
+    const parts = [
+      await this.git(["diff", "HEAD", "--no-color", "--no-ext-diff", "--no-textconv"], path),
+    ];
     for (const f of (await this.status(path)).files) {
       if (f.code !== "??") continue;
-      // --no-index exits 1 when the files differ, which is the expected case here.
-      const r = await this.run(
-        ["diff", "--no-index", "--no-color", "--", "/dev/null", f.path],
-        path,
+      // Git lists the files behind a directory junction as ordinary untracked files, so the content is read
+      // here through a verified handle (never by git): a junction must not pull outside content into the diff.
+      const bytes = this.readVerified(path, f.path, maxBytes + 1);
+      parts.push(
+        bytes === "outside"
+          ? `# skipped: ${f.path} resolves outside the worktree\n`
+          : newFileDiff(f.path, bytes),
       );
-      if (r.exitCode !== 0 && r.exitCode !== 1) throw new GitError(["diff"], r.exitCode, r.stderr);
-      parts.push(r.stdout);
     }
     const patch = parts.join("");
     return patch.length > maxBytes
@@ -266,7 +365,7 @@ export class GitWorktrees {
   private async run(args: readonly string[], cwd: string) {
     const r = await runProcess({
       command: this.gitCommand,
-      args,
+      args: [...HARDENING_ARGS, ...args],
       cwd,
       env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
       timeoutMs: 60_000,

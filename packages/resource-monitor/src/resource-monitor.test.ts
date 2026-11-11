@@ -97,7 +97,10 @@ class FakeSource implements ResourceSource {
   }
 }
 
-function setup(over: Partial<Thresholds> = {}) {
+function setup(
+  over: Partial<Thresholds> = {},
+  monitorOpts: Partial<ConstructorParameters<typeof ResourceMonitor>[0]> = {},
+) {
   const source = new FakeSource();
   let now = 0;
   let pids: number[] = [];
@@ -106,6 +109,7 @@ function setup(over: Partial<Thresholds> = {}) {
     thresholds: { ...T, ...over },
     trackedPids: () => pids,
     clock: () => now,
+    ...monitorOpts,
   });
   return {
     source,
@@ -191,6 +195,47 @@ describe("ResourceMonitor", () => {
     m.sample();
     expect(m.lastError).toBeUndefined();
     expect(m.level).toBe("normal");
+  });
+
+  it("source failing on the very first sample: unmeasured, concurrency halves (not the base), never paused", () => {
+    const { m, source } = setup();
+    source.throwOnSystem = true;
+    const s = m.sample();
+    expect(s.measured).toBe(false);
+    expect(s.level).toBe("reduced");
+    expect(s.reasons.join(" ")).toContain("no measurement");
+    expect(m.maxConcurrency(2)).toBe(1);
+    expect(m.maxConcurrency(4)).toBe(2);
+    expect(m.consecutiveFailures).toBe(1);
+  });
+
+  it("tolerates up to maxStaleSamples failures after a good sample, then degrades and reports health changes", () => {
+    const events: boolean[] = [];
+    const { m, source } = setup({}, { maxStaleSamples: 2, onHealthChange: (h) => events.push(h) });
+    expect(m.sample().measured).toBe(true);
+    source.throwOnSystem = true;
+    expect(m.sample().level).toBe("normal"); // 1st failure: stale value tolerated
+    expect(m.sample().level).toBe("normal"); // 2nd
+    expect(m.snapshot().measured).toBe(true);
+    expect(m.sample().level).toBe("reduced"); // 3rd: too stale
+    expect(m.snapshot().measured).toBe(false);
+    expect(m.maxConcurrency(2)).toBe(1);
+    m.sample();
+    source.throwOnSystem = false;
+    m.sample();
+    expect(m.snapshot().measured).toBe(true);
+    expect(m.consecutiveFailures).toBe(0);
+    expect(m.level).toBe("normal");
+    expect(events).toEqual([false, true]); // one callback per flip, not per sample
+  });
+
+  it("a paused level is not softened to reduced when the source is lost", () => {
+    const { m, source } = setup({}, { maxStaleSamples: 0 });
+    source.sys = { ...source.sys, freeMemBytes: 50 };
+    expect(m.sample().level).toBe("paused");
+    source.throwOnSystem = true;
+    expect(m.sample().level).toBe("paused");
+    expect(m.snapshot().measured).toBe(false);
   });
 
   it("rejects invalid thresholds at construction", () => {

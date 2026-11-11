@@ -12,6 +12,7 @@ import type { StudioDb } from "./db.js";
 import {
   agents,
   agentSettings,
+  settings,
   approvals,
   artifacts,
   contextItems,
@@ -175,6 +176,27 @@ export class Repo {
       .innerJoin(projects, eq(projects.id, workflows.projectId))
       .where(eq(workflows.id, workflowId))
       .get();
+  }
+
+  /** Round limit stored by `setWorkflowMaxRounds`; undefined = none stored (the engine default applies). */
+  getWorkflowMaxRounds(workflowId: string): number | undefined {
+    return (
+      this.db
+        .select({ m: workflows.maxRounds })
+        .from(workflows)
+        .where(eq(workflows.id, workflowId))
+        .get()?.m ?? undefined
+    );
+  }
+
+  setWorkflowMaxRounds(workflowId: string, maxRounds: number): void {
+    if (!Number.isInteger(maxRounds) || maxRounds < 1) throw new Error("maxRounds must be >= 1");
+    const res = this.db
+      .update(workflows)
+      .set({ maxRounds })
+      .where(eq(workflows.id, workflowId))
+      .run();
+    if (res.changes !== 1) throw new Error(`Unknown workflow: ${workflowId}`);
   }
 
   getWorkflowState(workflowId: string): WorkflowState | undefined {
@@ -486,6 +508,19 @@ export class Repo {
       .limit(limit)
       .all()
       .map((r) => AgentMessage.parse(JSON.parse(r.payloadJson)));
+  }
+
+  /** A free-form app setting (the `settings` table); the caller owns the key and validates the text. */
+  getSetting(key: string): string | undefined {
+    return this.db.select().from(settings).where(eq(settings.key, key)).get()?.value;
+  }
+
+  setSetting(key: string, value: string): void {
+    this.db
+      .insert(settings)
+      .values({ key, value })
+      .onConflictDoUpdate({ target: settings.key, set: { value } })
+      .run();
   }
 
   /** Settings that passed a probe; `undefined` means "launch the CLI with its defaults". */

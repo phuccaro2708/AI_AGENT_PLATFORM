@@ -1,12 +1,18 @@
 import {
   canTransitionWorkflow,
+  ResourceSettings,
   SidecarRequest,
   type AgentCapability,
   type SidecarEvent,
   type TaskState,
   type SidecarResponse,
 } from "@agent-studio/contracts";
-import { AdapterRegistry, StubAdapter, type AgentAdapter } from "@agent-studio/agent-core";
+import {
+  AdapterRegistry,
+  StubAdapter,
+  type AgentAdapter,
+  type AgentTask,
+} from "@agent-studio/agent-core";
 import {
   createSecretRedactor,
   noSecrets,
@@ -16,8 +22,16 @@ import {
 import { checkAgentSettings, type AgentLaunchSettings } from "./agent-settings.js";
 import { evaluate } from "@agent-studio/policy-engine";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
-import { CodexAdapter } from "@agent-studio/adapter-codex";
+import { CodexAdapter, CodexAppServerAdapter } from "@agent-studio/adapter-codex";
+import type { CodexAppServerOptions } from "@agent-studio/adapter-codex";
 import { AntigravityAdapter } from "@agent-studio/adapter-antigravity";
+import {
+  OllamaAdapter,
+  readOllamaPs,
+  listOllamaModels,
+  type OllamaAdapterOptions,
+} from "@agent-studio/adapter-ollama";
+import { vramKeepAlive } from "./ollama-config.js";
 import {
   probeClaude,
   probeCodex,
@@ -34,14 +48,17 @@ import {
 import { exportDiagnostics, verifyDiagnostics } from "@agent-studio/diagnostics";
 import { createLogger, type Logger } from "@agent-studio/shared-utils";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
+import { liveChildPids, type JobWrapOptions } from "@agent-studio/process-manager";
 import { dirname, join } from "node:path";
 import { ApprovalService } from "./approvals.js";
 import { ArtifactRegistry } from "./artifacts.js";
 import { ContextBoard } from "./context-board.js";
 import { describeRouteFailure, selectAgent, snapshotAdapters } from "./capability-router.js";
-import { Orchestrator } from "./orchestrator.js";
+import { Orchestrator, type RunResult } from "./orchestrator.js";
 import { Scheduler } from "./scheduler.js";
 import { checkProjectRoot, duplicateOf } from "./project-policy.js";
+import { claudeGateTaskArgs, type ClaudeGateLauncher } from "./claude-permission-gate.js";
+import { appServerPolicy } from "./codex-app-server-gate.js";
 import { PolicyGate } from "./policy-gate.js";
 import {
   auditNote,
@@ -59,6 +76,8 @@ export interface SidecarOptions {
   migrationsFolder?: string;
   /** Test seam: adapters to register in addition to the stub. */
   extraAdapters?: AgentAdapter[];
+  /** The local Ollama agent (`ollama`): model, loopback URL, opt-in tools. Without a model it is registered but unavailable. */
+  ollama?: OllamaAdapterOptions;
   /** Receives server-pushed events (the transport decides how to deliver / drop them). */
   onEvent?: (event: SidecarEvent) => void;
   /** Test seam: replaces the real CLI probes. */
@@ -93,6 +112,43 @@ export interface SidecarOptions {
   policyCheckExtraLaunch?: boolean;
   /** How often a gate waiting for an approval looks at the task. Default 200 ms. */
   policyPollMs?: number;
+  /**
+   * Codex permission gate (P4-1 c): approval requests go through the Policy Engine. ON by default (Q3, 2026-11-07);
+   * `false` switches it off (real process: `AGENT_STUDIO_CODEX_GATE=0`). While ON, the `codex` agent itself runs the
+   * app-server adapter (ADR-008; stored `codex exec` args are not used) and `codex-app-server` stays registered too;
+   * `false` restores `codex exec` and drops `codex-app-server`. The fields are launch overrides for the embedding
+   * code (tests point them at a fake server); when `command` is set the program itself is not re-checked, as for
+   * `extraAdapters`. Without `command` the `codex` program is checked by the policy gate; if it is missing the
+   * task is refused.
+   */
+  codexAppServer?: Pick<CodexAppServerOptions, "command" | "baseArgs" | "env" | "envAllow"> | false;
+  /**
+   * P4-1 d: launch `claude` with `--permission-prompt-tool` so tool calls it did not settle itself are judged by
+   * the Policy Engine, with `askEveryTool` (all six tools go to the gate) and `--setting-sources local`.
+   * ON by default (Q3, 2026-11-07); `false` switches it off (real process: `AGENT_STUDIO_CLAUDE_GATE=0`).
+   * Fail closed: `--safe-mode` is turned off (it would stop the gate from loading, d3), and a task is refused when
+   * the launcher is missing or the stored arguments bring `--safe-mode` back. `configDir` (default: `gate` next to
+   * the database) receives one MCP config file per task; `launcher` is the program claude starts as that MCP server
+   * (default: this sidecar's own bundle, see `sidecar-main.ts`). `askEveryTool: false` is a test seam.
+   * Not a sandbox: claude does not send every call to the gate (docs/SECURITY.md).
+   */
+  claudePermissionGate?:
+    { configDir?: string; launcher?: ClaudeGateLauncher; askEveryTool?: boolean } | false;
+  /**
+   * P4-4 (b): start the `claude` and `codex` CLIs inside `agent-job-wrap` (Windows Job Object, kill on close).
+   * Unset here = off. `sidecar-main` sets it by default when the installed binary is found (`job-wrap-config.ts`;
+   * `AGENT_STUDIO_JOB_WRAP=0` turns it off; missing binary = warning and no wrap). Not applied to
+   * `codex-app-server` or Antigravity.
+   */
+  jobWrap?: JobWrapOptions;
+  /**
+   * Opt-in (P4-4 (b)): kill the `claude`/`codex` process tree when its total resident memory passes this many MB
+   * (host-side polling watchdog; the Job Object caps are per process). OFF by default (it only polls); set here,
+   * or via `AGENT_STUDIO_CLI_TREE_MEM_MB=<positive MB>` in `sidecar-main`, to opt in.
+   */
+  cliTreeMemoryLimitMb?: number;
+  /** Wall-clock limit of one `claude` run while its permission gate is on (ms, default 2 h; 0 = none). Backstop for a hung gate process. */
+  claudeTaskTimeoutMs?: number;
   /** Parent folder of diagnostics bundles. Default: `diagnostics` next to the database. */
   diagnosticsDir?: string;
   /** Folder and file stem of the sidecar's log file (the native side redirects stderr there). Default: next to the database, `sidecar`. */
@@ -105,6 +161,7 @@ const DEFAULT_COMMANDS: Readonly<Record<string, string>> = {
   claude: "claude",
   codex: "codex",
   agy: "agy",
+  "codex-app-server": "codex",
 };
 
 const ok = (id: number, result: unknown) => ({
@@ -115,6 +172,9 @@ const fail = (id: number, message: string) => ({
   response: { id, error: { message } } as SidecarResponse,
   shutdown: false,
 });
+
+/** Where the load limits are stored (the `settings` table); the value is the JSON of a `ResourceSettings`. */
+const RESOURCE_SETTINGS_KEY = "resources.v1";
 
 /** Transport-independent request handler (unit-testable). */
 /** ~120 characters of stored payload around the first (case-insensitive) match. */
@@ -140,6 +200,8 @@ const SCAN_ONLY_ADAPTERS: ReadonlySet<string> = new Set(["agy"]);
 /** Same requirement the UI applies to a single-agent task (`AGENT_TASK_REQUIRES`): a live log. */
 const AUTO_AGENT_REQUIRES: readonly AgentCapability[] = ["streaming"];
 
+const DEFAULT_CLAUDE_TASK_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+
 export class SidecarService {
   readonly db: StudioDb;
   private readonly repo: Repo;
@@ -152,12 +214,14 @@ export class SidecarService {
   private readonly artifacts: ArtifactRegistry;
   /** Phase 0 spike workflow for `runStub`; created on first use so a normal start adds no project. */
   private spikeWorkflowId: string | undefined;
+  /** The limits in force (P3-4, P3-5): what Settings saved, else the defaults. */
+  private resourceSettings!: ResourceSettings;
   private readonly recoveredTasks: number;
   private readonly secrets: ProviderSecrets;
   private readonly redactor: SecretRedactor;
   private readonly probes: Record<"claude" | "codex", (o?: ProbeOptions) => Promise<ProbeResult>>;
-  /** Tasks currently executing in this process. */
-  private readonly active = new Map<string, { abort: AbortController; done: Promise<void> }>();
+  /** Callers of `runThroughScheduler` waiting for their task to settle. */
+  private readonly settleWaiters = new Map<string, (r: RunResult | undefined) => void>();
   /** Pre-run policy check and post-run scope check around every agent (P4-1 a + b). */
   private readonly gate: PolicyGate;
   private gateWorkspaces: ProjectWorkspaces | undefined;
@@ -187,18 +251,52 @@ export class SidecarService {
     provider: "claude" | "codex",
     s?: { command: string; args: string[]; env: Record<string, string> },
   ): AgentAdapter {
+    // Q3 follow-up (2026-11-07, user decision): while the Codex gate is ON, the `codex` agent IS the app-server
+    // adapter, so every command/file request goes through the Policy Engine. The stored `args` (`codex exec`
+    // arguments) are not used. Switch back to `codex exec` with `codexAppServer:false` / AGENT_STUDIO_CODEX_GATE=0.
+    if (provider === "codex" && this.opts.codexAppServer !== false) {
+      return this.buildAppServerAdapter(s, "codex");
+    }
     const secret = this.secrets[provider];
     // Variables the user (stored settings) or the native side (secrets) named on purpose may reach the child;
     // the rest of this process's environment is cut down by the adapter's own manifest (P4-3).
     const envAllow = [...Object.keys(s?.env ?? {}), ...Object.keys(secret)];
-    const o =
-      s || Object.keys(secret).length > 0
+    const o = {
+      ...(s || Object.keys(secret).length > 0
         ? {
             ...(s ? { command: s.command, extraArgs: s.args } : {}),
             env: this.childEnv(provider, s?.env ?? {}),
             envAllow,
           }
-        : {};
+        : {}),
+      ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
+      ...(this.opts.cliTreeMemoryLimitMb === undefined
+        ? {}
+        : { treeMemoryLimitMb: this.opts.cliTreeMemoryLimitMb }),
+    };
+    const gateOpt = this.opts.claudePermissionGate;
+    if (provider === "claude" && gateOpt !== false) {
+      const build = claudeGateTaskArgs({
+        configDir: gateOpt?.configDir ?? join(dirname(this.opts.dbPath), "gate"),
+        launcher: gateOpt?.launcher ?? { command: process.execPath, args: [process.argv[1] ?? ""] },
+        askEveryTool: gateOpt?.askEveryTool ?? true,
+        isolateSettings: true,
+        requireLauncher: true,
+      });
+      const taskArgs = (task: AgentTask) => {
+        // `--safe-mode` keeps the MCP gate from loading (d3): refuse instead of running without the gate.
+        if ((s?.args ?? []).some((a) => a === "--safe-mode")) {
+          throw new Error(
+            "--safe-mode in the stored claude arguments is incompatible with the gate",
+          );
+        }
+        return build(task);
+      };
+      const t = this.opts.claudeTaskTimeoutMs ?? DEFAULT_CLAUDE_TASK_TIMEOUT_MS;
+      return this.gate.wrap(
+        new ClaudeAdapter({ ...o, safeMode: false, taskArgs, ...(t > 0 ? { timeoutMs: t } : {}) }),
+      );
+    }
     return this.gate.wrap(provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o));
   }
 
@@ -277,6 +375,48 @@ export class SidecarService {
     return { ok: probe.status === "ok" && looksLikeTheCli, probe, checked, looksLikeTheCli };
   }
 
+  /**
+   * `codex-app-server`: the same program, environment and secrets as the stored `codex` settings (so a custom path,
+   * proxy variable or Credential Manager key reaches it too); explicit `SidecarOptions.codexAppServer` fields win.
+   * The stored `args` are NOT passed: they are `codex exec` arguments and were never probed for `app-server`.
+   */
+  private buildAppServerAdapter(
+    s?: { command: string; args: string[]; env: Record<string, string> },
+    id: "codex" | "codex-app-server" = "codex-app-server",
+  ): AgentAdapter {
+    const explicit = this.opts.codexAppServer || {};
+    const secret = this.secrets.codex;
+    const fromSettings =
+      s || Object.keys(secret).length > 0
+        ? {
+            ...(s ? { command: s.command } : {}),
+            env: this.childEnv("codex", s?.env ?? {}),
+            envAllow: [...Object.keys(s?.env ?? {}), ...Object.keys(secret)],
+          }
+        : {};
+    const appServer = { ...fromSettings, ...explicit };
+    const run = this.opts.policyEvaluate ?? evaluate;
+    return this.gate.wrap(
+      new CodexAppServerAdapter({
+        ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
+        ...(this.opts.cliTreeMemoryLimitMb === undefined
+          ? {}
+          : { treeMemoryLimitMb: this.opts.cliTreeMemoryLimitMb }),
+        ...appServer,
+        id,
+        evaluate: async (request, ctx) =>
+          run(appServerPolicy(ctx), request, { taskId: ctx.taskId }),
+      }),
+      { checkLaunch: appServer.command === undefined },
+    );
+  }
+
+  /** A change of the `codex` settings also reaches `codex-app-server` (when it is registered). */
+  private refreshAppServer(provider: "claude" | "codex"): void {
+    if (provider !== "codex" || this.opts.codexAppServer === false) return;
+    this.registry.replace(this.buildAppServerAdapter(this.repo.getAgentSettings("codex")));
+  }
+
   /** What an agent of this provider is started with: our environment, its settings, its secrets. */
   private childEnv(provider: "claude" | "codex", env: Record<string, string>) {
     return { ...process.env, ...env, ...this.secrets[provider] };
@@ -336,6 +476,19 @@ export class SidecarService {
     this.registry.register(this.buildCliAdapter("claude", this.repo.getAgentSettings("claude")));
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
     this.registry.register(this.gate.wrap(new AntigravityAdapter()));
+    // Short keep_alive while a VRAM band is saved (read per call, the band can change at runtime); an explicit option wins.
+    this.registry.register(
+      this.gate.wrap(
+        new OllamaAdapter({
+          ...opts.ollama,
+          keepAlive:
+            opts.ollama?.keepAlive ?? (() => vramKeepAlive(this.resourceSettings.thresholds)),
+        }),
+      ),
+    );
+    if (opts.codexAppServer !== false) {
+      this.registry.register(this.buildAppServerAdapter(this.repo.getAgentSettings("codex")));
+    }
     for (const a of opts.extraAdapters ?? [])
       this.registry.register(
         this.gate.wrap(a, { checkLaunch: opts.policyCheckExtraLaunch === true }),
@@ -364,24 +517,38 @@ export class SidecarService {
       board: new ContextBoard(this.repo),
       workspaces,
     });
+    this.resourceSettings = this.loadResourceSettings();
     if (opts.resourceSource) {
       this.resourceMonitor = new ResourceMonitor({
         source: opts.resourceSource,
-        thresholds: DEFAULT_THRESHOLDS,
+        thresholds: this.resourceSettings.thresholds,
+        trackedPids: liveChildPids, // the CLI agents' root pids (P3-2)
+        onHealthChange: (healthy, d) =>
+          healthy
+            ? this.log.info("resource monitor measuring again")
+            : this.log.warn(
+                { failures: d.consecutiveFailures, err: this.redactor.text(String(d.error)) },
+                "resource monitor cannot read the source: concurrency is reduced until it recovers",
+              ),
       });
       this.resourceMonitor.start(opts.resourceSampleMs);
     }
     this.scheduler = new Scheduler({
       repo: this.repo,
       orchestrator: this.orchestrator,
-      ...(opts.schedulerConcurrency !== undefined
-        ? { concurrency: opts.schedulerConcurrency }
-        : {}),
+      concurrency: this.resourceSettings.concurrency,
       ...(this.resourceMonitor ? { admission: this.resourceMonitor } : {}),
-      onSettled: (id, result) => this.engine.onSettled(id, result),
+      onStarted: (id) => opts.onEvent?.({ event: "task.state", taskId: id, state: "running" }),
+      onSettled: (id, result) => {
+        const waiter = this.settleWaiters.get(id);
+        this.settleWaiters.delete(id);
+        waiter?.(result);
+        return this.engine.onSettled(id, result);
+      },
     });
     // Workflows left `running` by a previous exit need the scheduler again (it starts lazily otherwise).
-    if (this.repo.listWorkflowIdsByState("running").length > 0) {
+    // Single tasks held by admission stay `queued` in a `pending` workflow, so they need it too.
+    if (this.repo.listWorkflowIdsByState("running").length > 0 || this.queuedCount() > 0) {
       this.scheduler.start(opts.schedulerIntervalMs);
     }
     void this.engine
@@ -484,6 +651,197 @@ export class SidecarService {
     return next;
   }
 
+  /**
+   * Text for the native confirmation dialog (T12). Everything shown comes from validated parameters and the
+   * stored state, masked by the redactor and shortened; a request that could not succeed (unknown or already
+   * answered approval, unknown task) throws, so the shell shows no dialog for it.
+   */
+  private async describeForConfirmation(
+    req: SidecarRequest,
+  ): Promise<{ title: string; message: string }> {
+    // Free text may be shortened, but never silently: the dialog says how much is not shown.
+    const clip = (t: string, n: number) =>
+      t.length > n ? `${t.slice(0, n)} [\u2026 ${t.length - n} more characters NOT shown]` : t;
+    const text = (t: string, n: number) => clip(this.redactor.text(t), n);
+    // For what decides WHICH program runs, a shortened view could hide the dangerous part: refuse instead.
+    const whole = (what: string, t: string, n: number) => {
+      if (t.length > n)
+        throw new Error(`${what} is too long to confirm safely (over ${n} characters)`);
+      return this.redactor.text(t);
+    };
+    switch (req.method) {
+      case "approvals.resolve": {
+        const a = this.repo.getApproval(req.params.approvalId);
+        if (!a) throw new Error(`Unknown approval: ${req.params.approvalId}`);
+        if (a.state !== "pending") throw new Error(`Approval is already ${a.state}: ${a.id}`);
+        const verb = req.params.decision === "approved" ? "APPROVE" : "DENY";
+        return {
+          title: `${verb} a task's request?`,
+          message:
+            `Decision: ${verb}\nTask: ${a.taskId}\nScope: ${req.params.scope}\n` +
+            `Request: ${text(a.requestJson, 1200)}\n` +
+            (req.params.note ? `Note: ${text(req.params.note, 300)}\n` : "") +
+            "\nThe agent will act on this answer.",
+        };
+      }
+      case "tasks.resolveReconciliation": {
+        const state = this.repo.getTaskState(req.params.taskId);
+        if (state === undefined) throw new Error(`Unknown task: ${req.params.taskId}`);
+        const rerun = req.params.decision === "requeue" ? "\nThe task will run again." : "";
+        return {
+          title: "Settle a task with unknown side effects?",
+          message:
+            `Task: ${req.params.taskId} (now ${state})\nDecision: ${req.params.decision}\n` +
+            `Note: ${text(req.params.note, 600)}${rerun}\n\nOnly confirm if you checked what the task changed.`,
+        };
+      }
+      case "recovery.resolve": {
+        const report = await this.recoveryReport(req.params.taskId);
+        if (!report) throw new Error(`Unknown task: ${req.params.taskId}`);
+        const decision = planResolution(report, req.params.action, req.params.confirmUnverified);
+        const e = report.evidence;
+        return {
+          title: "Recover a stopped task?",
+          message:
+            `Task: ${report.taskId} (${report.state}, attempt ${report.attempt})\n` +
+            `Action: ${req.params.action} (stored as: ${decision})\n` +
+            `Evidence: ${report.classification}; tool calls ${e.toolCalls}, unfinished ${e.unfinishedToolCalls}, ` +
+            `worktree ${!e.hasWorktree ? "none" : e.worktreeChanged === null ? "unreadable" : e.worktreeChanged ? "changed" : "clean"}\n` +
+            `Checked by the person: ${req.params.confirmUnverified ? "yes" : "no"}\n` +
+            `Note: ${text(req.params.note, 600)}`,
+        };
+      }
+      case "agents.setSettings": {
+        const { provider, settings } = req.params;
+        if (settings === null) {
+          return {
+            title: `Reset the ${provider} CLI settings?`,
+            message: `The ${provider} agent goes back to its default program and arguments.`,
+          };
+        }
+        const envNames = Object.keys(settings.env);
+        return {
+          title: `Change the program the ${provider} agent runs?`,
+          message:
+            `Provider: ${provider}\nProgram: ${whole("The program", settings.command, 400)}\n` +
+            `Arguments: ${whole("The arguments", JSON.stringify(settings.args), 600)}\n` +
+            `Environment variables set: ${envNames.length === 0 ? "none" : whole("The environment variable names", envNames.join(", "), 300)}\n` +
+            "\nTasks for this agent will launch this program.",
+        };
+      }
+      case "agents.probe": {
+        const { provider, settings } = req.params;
+        const envNames = Object.keys(settings.env);
+        return {
+          title: `Run this program to probe the ${provider} agent?`,
+          message:
+            `Provider: ${provider}\nProgram: ${whole("The program", settings.command, 400)}\n` +
+            `Arguments: ${whole("The arguments", JSON.stringify(settings.args), 600)}\n` +
+            `Environment variables set: ${envNames.length === 0 ? "none" : whole("The environment variable names", envNames.join(", "), 300)}\n` +
+            `\nThe program will be RUN now (version/help check) with the ${provider} secrets in its environment.`,
+        };
+      }
+      default:
+        throw new Error(`No confirmation is defined for ${req.method}`);
+    }
+  }
+
+  /**
+   * Every single-task path goes through the scheduler, so the same admission (concurrency ceiling and the
+   * resource monitor's reduced/paused levels) applies. The task is queued first; when admission refuses, it
+   * stays `queued` and the scheduler timer starts it once the load drops. Returns the task id at once and
+   * `settled`, which resolves with the result when the task has run to its end.
+   */
+  private async runThroughScheduler(opts: {
+    workflowId: string;
+    agentId: string;
+    prompt: string;
+    cwd: string;
+  }): Promise<{ taskId: string; settled: Promise<RunResult | undefined> }> {
+    // `enqueue` stores the prompt as the task's `task.request` (and the UI receives it), so a secret the
+    // user typed is masked here, exactly as the Peer Review goal is; the agent then runs the masked prompt.
+    const taskId = this.orchestrator.enqueue({ ...opts, prompt: this.redactor.text(opts.prompt) });
+    const settled = new Promise<RunResult | undefined>((resolve) =>
+      this.settleWaiters.set(taskId, resolve),
+    );
+    this.scheduler.start(this.opts.schedulerIntervalMs);
+    await this.scheduler.tick();
+    return { taskId, settled };
+  }
+
+  /** Defaults: the monitor's own default thresholds and the embedding's concurrency (2 when it names none). */
+  private defaultResourceSettings(): ResourceSettings {
+    const { cpu, memory, releaseMarginPercent } = DEFAULT_THRESHOLDS;
+    return {
+      concurrency: this.opts.schedulerConcurrency ?? 2,
+      thresholds: { cpu: { ...cpu }, memory: { ...memory }, releaseMarginPercent },
+    };
+  }
+
+  /** What Settings saved earlier. Anything unreadable or out of bounds falls back to the defaults, with a warning. */
+  private loadResourceSettings(): ResourceSettings {
+    const text = this.repo.getSetting(RESOURCE_SETTINGS_KEY);
+    if (text === undefined) return this.defaultResourceSettings();
+    try {
+      return ResourceSettings.parse(JSON.parse(text));
+    } catch (err) {
+      this.log.warn(
+        { err: this.redactor.text(String(err)) },
+        "stored load limits are invalid: using the defaults",
+      );
+      return this.defaultResourceSettings();
+    }
+  }
+
+  private queuedCount(): number {
+    return this.db.$client
+      .prepare("select count(*) from tasks where state = 'queued'")
+      .pluck()
+      .get() as number;
+  }
+
+  /** Models Ollama has loaded, only when the person configured one (opt-in); `null` when not asked or unreachable. */
+  private async ollamaLoaded() {
+    const o = this.opts.ollama;
+    if (!o?.model) return null;
+    const models = await readOllamaPs({ ...(o.baseUrl ? { baseUrl: o.baseUrl } : {}) });
+    return models ? { scope: "ollama-models", models } : null;
+  }
+
+  /** The limits in force and what the resource monitor says now (level and the reasons for it). */
+  private async resourceReport() {
+    const snap = this.resourceMonitor?.snapshot();
+    const base = this.resourceSettings.concurrency;
+    const queued = this.queuedCount();
+    return {
+      settings: this.resourceSettings,
+      defaults: this.defaultResourceSettings(),
+      status: {
+        concurrency: base,
+        effectiveConcurrency: this.resourceMonitor
+          ? this.resourceMonitor.maxConcurrency(base)
+          : base,
+        running: this.scheduler.runningCount,
+        queued,
+        monitor: snap
+          ? {
+              level: snap.level,
+              reasons: snap.reasons,
+              measured: snap.measured,
+              ...snap.metrics,
+              sampledAtMs: snap.sampledAtMs,
+            }
+          : null,
+        // Two readings with different scope, never merged: `gpu` is the whole GPU as nvidia-smi sees it (every
+        // program; the only one that can raise pressure), `ollama` is what Ollama says its loaded models take.
+        gpu: snap?.gpu
+          ? { usedBytes: snap.gpu.usedBytes, totalBytes: snap.gpu.totalBytes, scope: "whole-gpu" }
+          : null,
+        ollama: await this.ollamaLoaded(),
+      },
+    };
+  }
+
   private spikeWorkflow(): string {
     this.spikeWorkflowId ??= this.repo.createWorkflow(
       this.repo.createProject(`spike-${process.pid}`, `spike://${process.pid}-${Date.now()}`),
@@ -521,20 +879,33 @@ export class SidecarService {
           };
         }
         case "runStub": {
-          const r = await this.orchestrator.runTask({
+          const { taskId, settled } = await this.runThroughScheduler({
             workflowId: this.spikeWorkflow(),
             agentId: "stub",
             prompt: req.params.prompt,
             cwd: process.cwd(),
           });
+          // IPC requests are served one at a time (sidecar-main), so a task that admission is holding back must
+          // not be awaited here: it would block `tasks.cancel` and everything behind it. It stays queued.
+          if (this.repo.getTaskState(taskId) === "queued") {
+            this.settleWaiters.delete(taskId);
+            return ok(req.id, {
+              taskId,
+              finalState: "queued",
+              eventCount: 0,
+              messageCount: this.repo.listMessages(taskId).length,
+            });
+          }
+          const r = await settled;
+          const finalState = r?.finalState ?? this.repo.getTaskState(taskId) ?? "failed";
           return {
             response: {
               id: req.id,
               result: {
-                taskId: r.taskId,
-                finalState: r.finalState,
-                eventCount: r.events.length,
-                messageCount: this.repo.listMessages(r.taskId).length,
+                taskId,
+                finalState,
+                eventCount: r?.events.length ?? 0,
+                messageCount: this.repo.listMessages(taskId).length,
               },
             },
             shutdown: false,
@@ -572,16 +943,9 @@ export class SidecarService {
           const wanted = req.params.providers ?? ["claude", "codex"];
           const results = [];
           for (const p of wanted) {
-            const r = await this.probes[p]();
-            this.repo.saveAgentProbe({
-              provider: r.provider,
-              status: r.status,
-              ...(r.path !== undefined ? { path: r.path } : {}),
-              ...(r.version !== undefined ? { version: r.version } : {}),
-              capabilities: r.capabilities,
-              ...(r.error !== undefined ? { error: r.error } : {}),
-              probedAt: r.probedAt,
-            });
+            // Same probe as the one that will launch tasks: stored command/env when set, else PATH.
+            const r = await this.probeStored(p);
+            this.saveProbe(r);
             results.push(r);
           }
           return ok(req.id, { results });
@@ -596,7 +960,17 @@ export class SidecarService {
               "select count(*) as n from tasks where state in ('queued','running','waiting_approval')",
             )
             .get() as { n: number };
-          return ok(req.id, { count: Math.max(row.n, this.active.size) });
+          return ok(req.id, { count: row.n });
+        }
+        case "confirm.describe": {
+          // The inner call must be exactly what the real call would accept; anything else is refused.
+          const inner = SidecarRequest.safeParse({
+            id: 0,
+            method: req.params.method,
+            params: req.params.params,
+          });
+          if (!inner.success) return fail(req.id, `invalid ${req.params.method} request`);
+          return ok(req.id, await this.describeForConfirmation(inner.data));
         }
         case "agents.getSettings":
           return ok(req.id, { settings: this.repo.getAgentSettings(req.params.provider) ?? null });
@@ -610,6 +984,7 @@ export class SidecarService {
           if (settings === null) {
             this.repo.clearAgentSettings(provider);
             this.registry.replace(this.buildCliAdapter(provider));
+            this.refreshAppServer(provider);
             return ok(req.id, { ok: true, settings: null });
           }
           const r = await this.tryAgentSettings(provider, settings);
@@ -640,6 +1015,7 @@ export class SidecarService {
             probedAt: r.probe.probedAt,
           });
           this.registry.replace(this.buildCliAdapter(provider, r.checked.settings));
+          this.refreshAppServer(provider);
           return ok(req.id, {
             ok: true,
             resolvedPath: r.checked.resolvedPath,
@@ -682,37 +1058,18 @@ export class SidecarService {
           const bad = this.rootProblem(root.rootPath);
           if (bad) return fail(req.id, bad);
           // Runs in the background so `tasks.cancel` and other requests are served meanwhile.
-          const ac = new AbortController();
-          let taskId = "";
-          const run = this.orchestrator
-            .runTask({
-              workflowId: req.params.workflowId,
-              agentId: agentId,
-              prompt: req.params.prompt,
-              cwd: root.rootPath,
-              signal: ac.signal,
-              onCreated: (id) => {
-                taskId = id;
-                this.active.set(id, { abort: ac, done: Promise.resolve() });
-              },
-            })
-            .catch((err: unknown) =>
-              this.log.error({ err: this.redactor.text(String(err)) }, "background task failed"),
-            )
-            .finally(() => this.active.delete(taskId));
-          const entry = this.active.get(taskId);
-          if (entry) entry.done = run.then(() => undefined);
+          const { taskId } = await this.runThroughScheduler({
+            workflowId: req.params.workflowId,
+            agentId,
+            prompt: req.params.prompt,
+            cwd: root.rootPath,
+          });
           return ok(req.id, { taskId });
         }
         case "tasks.cancel": {
           const state = this.repo.getTaskState(req.params.taskId);
           if (state === undefined) return fail(req.id, `Unknown task: ${req.params.taskId}`);
           if (this.scheduler.cancel(req.params.taskId)) {
-            return ok(req.id, { requested: true, state });
-          }
-          const live = this.active.get(req.params.taskId);
-          if (live) {
-            live.abort.abort(); // the adapter reports "cancelled"; the orchestrator settles the state
             return ok(req.id, { requested: true, state });
           }
           if (state === "queued") {
@@ -837,6 +1194,33 @@ export class SidecarService {
           return ok(req.id, { worktrees: this.repo.listWorktrees(req.params.workflowId) });
         case "diagnostics.export":
           return ok(req.id, this.exportDiagnosticsBundle());
+        case "ollama.models": {
+          const o = this.opts.ollama;
+          const models = await listOllamaModels({ ...(o?.baseUrl ? { baseUrl: o.baseUrl } : {}) });
+          return ok(req.id, {
+            reachable: models !== undefined,
+            models: models ?? [],
+            configured: o?.model ?? null,
+          });
+        }
+        case "resources.get":
+          return ok(req.id, await this.resourceReport());
+        case "resources.set": {
+          const next = req.params.settings;
+          // Monitor first: it re-validates and throws before anything is stored or applied.
+          this.resourceMonitor?.setThresholds(next.thresholds);
+          this.scheduler.setConcurrency(next.concurrency);
+          this.repo.setSetting(RESOURCE_SETTINGS_KEY, JSON.stringify(next));
+          this.resourceSettings = next;
+          this.resourceMonitor?.sample(); // decide with the new numbers now, not a second later
+          this.log.info({ concurrency: next.concurrency }, "load limits changed");
+          // A raised ceiling (or looser brakes) may free a slot for tasks that were being held back.
+          if (this.queuedCount() > 0) {
+            this.scheduler.start(this.opts.schedulerIntervalMs);
+            await this.scheduler.tick();
+          }
+          return ok(req.id, await this.resourceReport());
+        }
         case "shutdown":
           return { response: { id: req.id, result: { ok: true } }, shutdown: true };
       }
@@ -850,14 +1234,15 @@ export class SidecarService {
 
   /** Resolves when every background task has settled (tests, graceful shutdown). */
   async idle(): Promise<void> {
-    await Promise.all([...this.active.values()].map((a) => a.done));
+    await this.scheduler.idle();
   }
 
   close(): void {
     this.approvals.stopTimer();
     this.scheduler.stop();
     this.resourceMonitor?.stop();
-    for (const a of this.active.values()) a.abort.abort();
+    for (const resolve of this.settleWaiters.values()) resolve(undefined);
+    this.settleWaiters.clear();
     if (this.db.$client.open) this.db.$client.close();
   }
 }

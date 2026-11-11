@@ -163,13 +163,23 @@ export class AntigravityAdapter implements AgentAdapter {
       }
       const result = await proc.done;
       if (task.signal.aborted && !final) {
-        yield { type: "error", message: "cancelled" };
+        yield {
+          type: "error",
+          message: result.killError
+            ? `cancelled; the process could not be stopped (${result.killError}) and may still be running`
+            : "cancelled",
+        };
       } else if (final) {
         yield final;
       } else if (result.outcome === "spawn_error") {
         yield { type: "error", message: `could not start agy: ${result.error ?? "unknown"}` };
       } else if (result.outcome === "cancelled") {
-        yield { type: "error", message: "cancelled" };
+        yield {
+          type: "error",
+          message: result.killError
+            ? `cancelled; the process could not be stopped (${result.killError}) and may still be running`
+            : "cancelled",
+        };
       } else {
         const detail = result.stderr.trim().slice(-300);
         yield {

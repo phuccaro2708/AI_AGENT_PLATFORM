@@ -9,7 +9,7 @@
 - **Phase 2: đóng 2026-11-03 (có ngoại lệ, xem PHASE2_REPORT).** Tiếp theo: 7 → 8 → 9 (10 song song 5–6).
 - Cập nhật 2026-11-04: nhánh gốc `claude/loving-lovelace-32lh71` đã ở `868daef` (gồm 7A, 7B, quét CLI, redaction, bỏ Gemini); PR #1 đã MERGED. Kiểm cục bộ: lint, typecheck, 383 test, build đều qua; `cargo clippy -D warnings` sạch, `cargo test` 12 qua / 1 bỏ qua. CI `babca05` đỏ vì Prettier lệch ở `docs/HANDOFF.md`; `868daef` (đã format lại) xanh 5/5 job.
 - **Thứ tự chốt lại 2026-11-04** (ROADMAP, mục "Thứ tự thực hiện"; ADR-005): Phase 7 (phần không cần policy) song song Phase 3 → Phase 4 (+ 7C-2, đóng Phase 7) → Phase 5 → Phase 6 → Phase 8 → Phase 9; Phase 10 xuyên suốt.
-- Ollama: hoãn, bỏ khỏi kế hoạch hiện tại vì máy chưa cài (không có để probe). Làm lại khi có môi trường.
+- Ollama: đã làm lại 2026-11-08 khi máy có Ollama 0.40.14 (S0–S6, xem PROGRESS); tool calling với model thật đã thử 2026-11-08 (`read_file`, 7/8 lượt, xem PHASE3_REPORT).
 
 ### Ngoại lệ chuyển từ Phase 1
 
@@ -31,7 +31,7 @@
 ### Việc làm ngoài ROADMAP (theo yêu cầu người dùng)
 
 - Làm lại UI: theme sáng/tối, sidebar kiểu Claude Code (Projects, Search, tab Agent/Multi-agent, "…" ẩn session), trang Settings + biệt danh hiển thị (mặc định "Admin", không có quyền hạn), bố cục 3 cột, Inspector thu gọn (Context/Activity/Tools/Logs), composer "task trước", trạng thái rỗng 3 bước, thẻ lỗi có hành động. Phần lấn sang Phase 5/7 về hình thức; chỉ là giao diện trên backend sẵn có.
-- Mode thứ hai của UI nay là Peer Review thật (Phase 2). Supervisor / Parallel Workers: Phase 9. Nợ Phase 2: engine resume sau restart, UI giải quyết reconciliation, chạy qua app Tauri thật.
+- Mode thứ hai của UI nay là Peer Review thật (Phase 2). Supervisor / Parallel Workers: Phase 9. Nợ Phase 2: chạy qua app Tauri thật. (Engine resume sau restart và UI giải quyết reconciliation đã có từ 7A.)
 - [ ] ADR-006 (Đề xuất, chờ duyệt, ngoài thứ tự phase ADR-005): một sidecar duy nhất sở hữu DB + cầu nối MCP cho DeepSeek Harness chỉ dùng allowlist. Xem `docs/DECISIONS.md#adr-006`. Đã duyệt (2026-11-06) chỉ khoá single-instance (mục 2d) làm trước; **2d đã triển khai** (`sidecar-lock.ts`, xem `PROGRESS.md`), chờ CI ubuntu xác nhận socket trừu tượng; phần kênh/vai/cầu nối chờ sau Phase 4.
 - Cố ý không giả lập vì backend chưa có: danh sách file thay đổi, tab Plan/Files, nhánh git, "Diagnose", sửa đường dẫn project, command palette, remote agent, terminal thật (`node-pty` chưa spike, Phase 5). Ô Logs chỉ là khung xem tool_call/tool_result chỉ đọc.
 
@@ -125,7 +125,7 @@
 - [x] Task DAG: cycle detection, ready-set, priority, lease/heartbeat (chưa có IPC `createDag`)
 - [~] Scheduler giới hạn concurrency (mặc định 2; chưa đọc từ settings)
 - [x] `git-worktrees`: create/remove/list, branch naming, dirty check, conflict detect, cleanup khi hủy (S4 hủy khi đang ghi với CLI thật: chưa)
-- [~] Workflow engine: Peer Review xong; **Supervisor, Parallel Workers chưa làm (Phase 9)**; engine chưa resume sau restart
+- [~] Workflow engine: Peer Review xong; **Supervisor, Parallel Workers chưa làm (Phase 9)**; engine resume sau restart đã có (`resumeAll`/`resume`, từ 7A)
 - [~] Message types: `task.*`, `review.*`, `approval.request` xong; `agent.message` chưa dùng
 - [x] Vai (role) trong workflow: hướng dẫn, quyền, agent cho phép; gán agent vào vai theo cấu hình lượt chạy (chưa có IPC `roles.upsert`)
 - [x] Bảng ngữ cảnh chung tối thiểu: lọc theo vai, có test
@@ -136,36 +136,38 @@
 - [x] Tests: kill giữa chừng (thật), duplicate delivery (fake), 2 agent song song (thật)
 - [x] PHASE2_REPORT.md → tag `mvp-phase2`
 
-Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết reconciliation (Phase 7); Supervisor/Parallel Workers (Phase 9); đường tạo approval từ CLI thật (Phase 4); perf-baseline sau bước 3 (R11).
+Nợ chuyển tiếp từ Phase 2: (engine resume + UI giải quyết reconciliation đã xong ở 7A); Supervisor/Parallel Workers (Phase 9); đường tạo approval từ CLI thật (Phase 4); perf-baseline sau bước 3 (R11).
 
 ## Phase 3 — Quét CLI & Local AI
 
+> 2026-11-08 (ADR-009): `agy` ngoài phạm vi gate đóng Phase 3; code giữ nguyên. Các mục `agy` dưới đây là nợ ngoài gate.
+
 - [x] Quét CLI agent theo danh sách ứng viên khai báo bằng dữ liệu (PATH + vị trí cài Windows), hiển thị "đã phát hiện, chưa hỗ trợ" (`agents.scan`, `packages/cli-probe/src/candidates.ts`, Settings → Agents)
 - [x] Probe Antigravity (`agy`, quan sát `--print`, `--output-format stream-json`; đã có fixture `--help` 1.4.8 + capability từ help, đã quan sát output thật 2026-11-04: 2 lượt `--print`, xem ASSUMPTIONS; adapter dựng 2026-11-04, chỉ kiểm bằng CLI giả) rồi `adapter-antigravity` + fixtures + contract tests
-- [ ] `adapter-ollama`: HTTP client, discover models, stream
-- [ ] Tool loop riêng cho Ollama (whitelist tool, read-only mặc định, giới hạn vòng lặp)
+- [x] `adapter-ollama`: HTTP client, stream, một model một lúc (2026-11-08; discover models làm sau đó qua HTTP `/api/tags` (`ollama.models`, thẻ Settings), không gọi `ollama list`; model vẫn do người dùng đặt qua `AGENT_STUDIO_OLLAMA_MODEL`)
+- [x] Tool loop riêng cho Ollama (whitelist tool, read-only, giới hạn vòng lặp): xong với server giả; CHƯA thử với model thật
 - [x] Capability-based router (`services/orchestrator/src/capability-router.ts`); nối vào `workflows.start` 2026-11-05 (phiên cloud, nhánh `claude/gracious-ritchie-ut3238`): bỏ trống `agentId` thì router chọn agent sẵn sàng có `streaming` (loại `stub`), lỗi dùng `describeCapabilityGap`. Không thêm method IPC. `agentId` chỉ định rõ vẫn được giữ nguyên, không kiểm capability ở backend. UI có lựa chọn "Auto" và nút bật/tắt `agy` từ 2026-11-05 (`91317e4`, `excludeAgents` trong `workflows.start`; chưa xem trong app Tauri thật); chưa chạy `agy` thật
-- [~] Resource monitor (RAM/VRAM) + Resource-Aware Scheduler — phần mã thuần xong 2026-11-05 (`packages/resource-monitor`: CPU/RAM hệ thống + RSS/CPU tiến trình con, ngưỡng cấu hình, giảm/tạm hoãn; điểm móc `SchedulerOptions.admission`). đã nối vào sidecar 2026-11-05 (`SidecarService` tạo monitor khi có `resourceSource`, `sidecar-main` truyền `NodeResourceSource`, ngưỡng mặc định; chưa truyền `trackedPids`), chưa có cấu hình trong settings, chưa hiển thị trong UI, chưa đo VRAM (không có API Node), chưa đo trên Windows, chưa ép bằng Job Object
+- [~] Resource monitor (RAM/VRAM) + Resource-Aware Scheduler — phần mã thuần xong 2026-11-05 (`packages/resource-monitor`: CPU/RAM hệ thống + RSS/CPU tiến trình con, ngưỡng cấu hình, giảm/tạm hoãn; điểm móc `SchedulerOptions.admission`). đã nối vào sidecar 2026-11-05 (`SidecarService` tạo monitor khi có `resourceSource`, `sidecar-main` truyền `NodeResourceSource`, ngưỡng mặc định; chưa truyền `trackedPids`), chưa có cấu hình trong settings, chưa hiển thị trong UI, VRAM: đã đo cả GPU bằng `nvidia-smi` và model Ollama bằng `/api/ps` (2026-11-08), chưa đo trên Windows, chưa ép bằng Job Object
 - [x] UI hiển thị capability thiếu (helper `describeCapabilityGap`) — `apps/desktop/src/capabilityGap.ts` (+ test, nối vào AgentView/PeerReviewView, chặn Run kèm lý do); đã xem trong app Tauri thật 2026-11-04 (Peer Review với `agy` thật trên máy: nhãn `(thiếu capability)`, Start review bị khoá kèm lý do; xem PROGRESS.md). Riêng nhánh AgentView (cần `streaming`) chưa chạm được vì không adapter nào thiếu `streaming`; chỉ có unit test
 - [x] Test thêm adapter giả không sửa core (cho routing; xem PHASE3_REPORT về giới hạn của sidecar)
-- [~] PHASE3_REPORT.md (có bản nháp trung thực; Phase 3 chưa đóng: còn Ollama, phần còn lại của resource monitor (VRAM, `trackedPids`, UI, cấu hình), adapter `agy` chưa chạy CLI thật)
+- [x] PHASE3_REPORT.md (Phase 3 ĐÓNG 2026-11-10 có ngoại lệ, ADR-010; ghi chú 2026-11-08: Ollama/VRAM đã có mã + test (S1–S6), còn kiểm giao diện Settings "Load limits" trong app thật và tool calling thật. Đã xong 2026-11-08: admission cho `workflows.start`/`runStub`, `trackedPids` Windows, ngưỡng + concurrency trong Settings, `agy` thật qua adapter (một phần, xem ASSUMPTIONS))
 
 ## Phase 4 — Security & Reliability
 
-- [~] P4-1 (c)/(d) probe xong (2026-11-05, `e8843a7`, claude 2.1.318, codex-cli 0.166.0): `--permission-prompt-tool` và codex `app-server` có vòng phê duyệt; chưa nối mã, CHỜ người dùng duyệt hướng
-- [~] Policy engine: 4 mức quyền, path scope, command policy, network policy — phần mã thuần xong 2026-11-05 (`packages/policy-engine`, 41 test trên Linux); đã nối cổng kiểm trước/sau khi chạy vào orchestrator (P4-1 a+b) đã ghép vào nhánh chính (`98539d3`); vòng phê duyệt từng lệnh (P4-1 c/d) chờ probe (ASSUMPTIONS, mục Phase 4)
+- [~] P4-1 (c)/(d) probe xong (2026-11-05, `e8843a7`, claude 2.1.318, codex-cli 0.166.0) và đã nối mã ở dạng opt-in, TẮT mặc định (2026-11-06): codex `app-server` + `--permission-prompt-tool` của Claude (tuỳ chọn `askEveryTool`). Đã chạy với CLI thật (ASSUMPTIONS d3/d4/d6): với cổng thật + claude thật cả 6 tool thử (Write/Read/Bash/Edit/Glob/Grep) đều tới cổng; Edit/Glob/Grep bị từ chối lúc đó vì `requestFor` chưa phủ, nay đã ánh xạ (Edit = ghi, Glob/Grep = đọc; chỉ test bằng stub, chưa kiểm lại với claude thật); nhánh `accept` lệnh của Codex đã quan sát với allow list thử nghiệm. Còn hở: sidecar chưa truyền `askEveryTool`, tool ngoài 6 tool chưa thử, cổng thật không có hạn thời gian; chưa quyết bật mặc định. **Cập nhật 2026-11-07:** nay BẬT mặc định (ADR-007); `codex` chạy bằng app-server khi cổng bật (ADR-008); hạn thời gian phía host + hạn mỗi lời gọi cổng đã có (ASSUMPTIONS d12); codex thật qua `agent-job-wrap` đã đo (d13)
+- [~] Policy engine: 4 mức quyền, path scope, command policy, network policy — phần mã thuần xong 2026-11-05 (`packages/policy-engine`, 41 test trên Linux); đã nối cổng kiểm trước/sau khi chạy vào orchestrator (P4-1 a+b) đã ghép vào nhánh chính (`98539d3`); vòng phê duyệt từng lệnh (P4-1 c/d) đã nối opt-in và TẮT mặc định (xem dòng P4-1 c/d phía trên)
 - [x] Canonical path validation + test traversal/symlink — Linux đã chạy; Windows 2026-11-05: `..` theo Win32, từ chối `\?\`/`\.\`, `realpath.native`, UNC/ADS fail-closed, test xanh; test 8.3 bị bỏ qua trên máy này (chưa chạy thật) — CI Windows `ee6ed72`/`b370082` (2026-11-05): test 8.3 chạy và qua (không bỏ qua); timeout 60 giây vì `powershell.exe` khởi động chậm
 - [~] Env var allowlist, executable allowlist theo adapter — xong và đã ghép (`98539d3`): manifest ở `process-manager`, test
-- [~] Windows Job Object giới hạn process tree/RAM — sidecar (KILL_ON_JOB_CLOSE + giới hạn RAM theo tiến trình) và binary phụ `agent-job-wrap` có test thật trên Windows (2026-11-05); CHƯA nối vào orchestrator/gói cài đặt, chưa có giới hạn RAM cả cây, kill đột ngột app -> sidecar chết theo đã kiểm trong app Tauri thật (2026-11-05). Không phải sandbox
+- [~] Windows Job Object giới hạn process tree/RAM — sidecar (KILL_ON_JOB_CLOSE + giới hạn RAM theo tiến trình) và binary phụ `agent-job-wrap` có test thật trên Windows (2026-11-05); đã nối vào orchestrator ở dạng opt-in `jobWrap` (2026-11-06, test với binary thật), BẬT mặc định trong sidecar khi tìm thấy binary cạnh exe (2026-11-06; `tauri build --no-bundle` đặt binary cạnh exe, installer thật chưa build (BLOCKED: cần tải NSIS/WiX); đã chạy claude/codex THẬT qua wrapper, Ctrl+C, CTRL_BREAK, kill wrapper và kill lồng đều dọn sạch cây, 2026-11-06, ASSUMPTIONS d9; mã thoát 32 bit giữ nguyên sau khi sửa); giới hạn RAM cả cây có watchdog opt-in phía host (`treeMemoryLimitMb`, 2026-11-06, test thật trên Windows, thăm dò chứ không phải trần cứng, TẮT mặc định) và trần cứng cho cả cây bằng `--job-mem-limit-mb` (`JOB_OBJECT_LIMIT_JOB_MEMORY`, R4, đã đo; làm cấp phát vượt trần THẤT BẠI chứ không giết tiến trình; chưa nối vào cấu hình mặc định của orchestrator), kill đột ngột app -> sidecar chết theo đã kiểm trong app Tauri thật (2026-11-05). Không phải sandbox
 - [x] Spike AppContainer / Windows Sandbox — chỉ tài liệu hoá vào `docs/SECURITY.md` (2026-11-05), ghi phần chưa đạt; không có prototype
 - [~] Credential Manager cho secrets (7B); redaction test: DB + log + IPC + sự kiện đã có test với agent giả (`sidecar-redaction.test.ts`, che theo giá trị chính xác ≥ 6 ký tự); diagnostics export đã có test rò secret (nối IPC 2026-11-05) và còn giới hạn đã ghi ở SECURITY.md
 - [x] Siết Tauri capabilities — `default` chỉ còn event listen/unlisten (2026-11-05, kiểm bằng WebView2 CDP); không có WS. Từ chối `emit`/`window|close`/`fs` và method ngoài danh sách đã kiểm lại trong app Tauri thật 2026-11-05 (CDP)
-- [~] Recovery 5 bước + UI resume/retry/abandon — 5 bước + UI xong, test sidecar kill/restart với agent giả (2026-11-05); 5 bước là giả định của lane IPC chờ người dùng duyệt; đã kiểm trong app Tauri thật 2026-11-05 (inspect/abandon/từ chối retry không xác nhận, khởi động lại, RecoveryPanel; chưa bấm resume/retry vì sẽ chạy CLI thật); engine resume Peer Review (P4-8 b) chưa làm
+- [~] Recovery 5 bước + UI resume/retry/abandon — 5 bước + UI xong, test sidecar kill/restart với agent giả (2026-11-05); 5 bước là giả định của lane IPC chờ người dùng duyệt; đã kiểm trong app Tauri thật 2026-11-05 (inspect/abandon/từ chối retry không xác nhận, khởi động lại, RecoveryPanel; chưa bấm resume/retry vì sẽ chạy CLI thật); engine resume Peer Review (P4-8 b) đã có từ 7A, test thêm cho reviewer bị ngắt (2026-11-06); `maxRounds` tuỳ chỉnh nay được lưu trong DB (2026-11-07) và có test resume vòng ≥ 2 với agent giả; đã có lượt CLI thật ở vòng ≥ 2 (A5, 2026-11-07, PARTIAL: cơ chế resume đúng, 1/2 cặp kết thúc `failed` chưa rõ nguyên nhân)
 - [~] Log rotation, retention, diagnostics export (redacted) — gói `diagnostics` + logger xoay vòng có test đã ghép (`98539d3`); đã nối method IPC `diagnostics.export` + nút Settings (2026-11-05); đã kiểm trong app Tauri thật 2026-11-05 (nút + bundle verified, không rò đường dẫn); redaction secret thật trong bundle mới có test đơn vị
-- [~] Security tests: prompt injection, output độc hại, path escape — xong với agent giả đã ghép (`98539d3`); chưa chạy CLI thật
-- [~] Soak test 100 workflow — xong với agent giả (`tests/soak`) đã ghép (`98539d3`); chưa chạy CLI thật
-- [~] `pnpm audit` + rà dependency; SECURITY.md cập nhật — audit + ghim Actions theo SHA + `docs/DEPS_AUDIT.md` + `docs/SECURITY.md` xong (2026-11-05), 4 cảnh báo ghi chấp nhận; còn: threat model đầy đủ, tuổi gói transitive
-- [ ] PHASE4_REPORT.md
+- [~] Security tests: prompt injection, output độc hại, path escape — xong với agent giả đã ghép (`98539d3`); nghi vấn symlink của artifact là THẬT và đã sửa (fail-closed, `worktree-hash.ts`, ASSUMPTIONS d8); TOCTOU/hard link/mount point đã vá ở `worktree-hash.ts` (A6, 2026-11-07; mount point thật chưa có test); `GitWorktrees.diff` đọc file ngoài worktree qua junction đã vá 2026-11-10 (ASSUMPTIONS); còn khe TOCTOU nhỏ ở đường diff
+- [~] Soak test 100 workflow — xong với agent giả (`tests/soak`); với CLI thật mới chạy 5 workflow (ASSUMPTIONS d8, xanh, bất biến an toàn giữ nguyên) và đã chạy lại có số liệu từng workflow (trạng thái, ms, task, 0 CLI mồ côi thấy được; 1 lần chạy); 100 workflow thật cố ý chưa chạy (tốn chi phí)
+- [~] `pnpm audit` + rà dependency; SECURITY.md cập nhật — audit + ghim Actions theo SHA + `docs/DEPS_AUDIT.md` + `docs/SECURITY.md` xong (2026-11-05), 4 cảnh báo ghi chấp nhận; threat model xong và đã được người dùng duyệt (2026-11-06); tuổi gói transitive: npm sạch, 13 crate Cargo trẻ trong allowlist có hạn (CI thật NOT_RUN)
+- [x] PHASE4_REPORT.md (viết 2026-11-10; Phase 4 ĐÓNG 2026-11-11 có ngoại lệ, ADR-013, ba gate đã tick kèm ngoại lệ)
 
 ## Phase 5 — Desktop Beta
 
@@ -193,7 +195,7 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 
 - [x] `tasks.history` + `logs.search` (lọc project/agent/state, phân trang; tìm log bằng LIKE trên `payload_json`, chưa có index, chưa benchmark) — tab History trong UI
 - [x] `tasks.resolveReconciliation` (quyết định tường minh + ghi chú bắt buộc; `requeue` mới tăng `attempt`)
-- [x] Peer Review engine resume sau restart và sau quyết định reconciliation (`resumeAll`/`resume`); giới hạn: `maxRounds` tùy chỉnh không được lưu qua restart
+- [x] Peer Review engine resume sau restart và sau quyết định reconciliation (`resumeAll`/`resume`); `maxRounds` tùy chỉnh được lưu trong DB từ 2026-11-07 (migration 0007); test resume vòng ≥ 2 với agent giả; CLI thật mới kiểm vòng 1
 - [x] UI: thẻ "Needs your decision" (diff trước, không quyết định mặc định, requeue cần xác nhận)
 - [x] Kiểm với CLI thật (2026-11-04: claude→codex và codex→claude đều: kill → needs_reconciliation → requeue → workflow completed, exit 0): `node scripts/e2e-peer-review.mjs resume <impl> <rev>` (script đã viết, đã chạy 2026-11-03 với claude→codex: kill → needs_reconciliation → requeue → workflow completed; một lần thoát mã 1 chỉ do dọn thư mục tạm bị EPERM, đã sửa)
 - [x] Chạy UI 7A trong app Tauri thật (2026-11-03, bản debug build từ `1009755`, WebView2 + CDP cổng 9334, DB tạm, PATH chỉ có System32 nên không CLI thật nào chạy; không dùng chuột/bàn phím người dùng). Đạt: (a) History liệt kê 9 task, lọc project/agent/state và tổ hợp đều đúng, "No tasks match." khi rỗng; (b) tìm log không phân biệt hoa/thường, `%` `_` khớp nghĩa đen, không khớp → "No log line contains that text."; (c) task `running` có lease hết hạn → sau khi mở lại app thành `needs_reconciliation`, thẻ "Needs your decision" hiện; nút Confirm bị khoá tới khi chọn + có ghi chú; cả 4 quyết định completed/failed/cancelled/requeue ghi `events` với `reason = "reconciled by user: <note>"`; requeue cần tick xác nhận, tăng `attempt` 0→1; (d) tắt/mở lại app: 9 task, 4 message, 10 event giữ nguyên, danh sách run Peer Review giữ nguyên. Giới hạn: workflow seed không có `workflow_roles` nên sau `completed` workflow chuyển `failed` (không kiểm hand-over sang reviewer ở UI); task requeue chạy xong `failed` ("task has no task.request message") vì dữ liệu seed; "kill app giữa lúc task chạy" được mô phỏng bằng seed `running` + khởi động lại, không kill tiến trình thật; ô Search im lặng với truy vấn 1 ký tự (đúng thiết kế 2+ ký tự); chưa kiểm Open log và Newer/Older ở bộ dữ liệu >1 trang
@@ -265,3 +267,12 @@ Nợ chuyển tiếp từ Phase 2: engine resume sau restart + UI giải quyết
 
 - [ ] A2A gateway + compatibility tests đúng phiên bản spec
 - [ ] Nếu spike khả thi: cô lập AppContainer / Windows Sandbox
+
+## Loop Runner (repo riêng `D:\Program\loop-runner`, 2026-11-09)
+
+- [x] Task 1–10: scaffold, probe CLI, config, exec/redact, gates, tasks/phase, budget, worktree + diff guard, adapter claude/codex, `runLoop` (đã review; implementer báo 203 test pass, chưa tự chạy lại)
+- [x] Task 11–13: CLI `check`/`run`, `loop.config.json` + AGENTS.md/`implementer.toml` 3 lần sửa + ASSUMPTIONS, nghiệm thu chạy thật (báo cáo `docs/reports/LOOP_RUNNER_ACCEPTANCE.md`, bước 1 PARTIAL)
+- [x] Review cả nhánh một lượt + một đợt sửa I-1..I-7 (loop-runner `cb5a61b`), ADR-012 cho quy tắc 10
+- [x] I-8: bước `setup` + chạy lại nghiệm thu bước 1 (lần 3: gate, review, guard PASS; exit 2 vì phase-3 chưa có lệnh tiêu chí)
+- [ ] Hỏi người dùng trước khi cài lệnh global `loop-runner`
+- [ ] Viết tiêu chí Phase 3–10 thành lệnh chạy được

@@ -35,6 +35,7 @@
 - **Trạng thái:** Đề xuất, duyệt từng phần. Người dùng đã duyệt (2026-11-06) chỉ **làm mục 2d, khoá single-instance, trước** và cho phép ngoài thứ tự phase cho riêng mục này; kênh pipe, token, vai `bridge`/`ui` và cầu nối (2c, 2e, 2f) chờ sau Phase 4 và chưa được duyệt. Chủ DB (2a), 2b, việc spawn sớm sidecar và cách xử lý yêu cầu lặp (mục 5) chưa được hỏi, vẫn là đề xuất. Lưu ý khi lập kế hoạch cho 2d: cơ chế khoá đề xuất dùng một pipe chỉ để lắng nghe (chưa có giao thức, token hay vai), nên không kéo theo việc duyệt kênh 2c; việc chọn đúng cơ chế khoá là quyết định của kế hoạch riêng đó. **Cập nhật 2026-11-06: mục 2d đã được triển khai** (xem "Đã triển khai" trong 2d); phần còn lại chưa có mã. KHÔNG triển khai phần chưa duyệt. ADR này nằm ngoài thứ tự phase của [ADR-005](#adr-005-thứ-tự-phase-chốt-lại-2026-11-04): không đổi thứ tự phase, không đóng phase nào, và chưa có mục nào trong `docs/ROADMAP.md`.
 - **Phạm vi phiên viết:** chỉ tài liệu. Chưa có mã khoá, kênh hay cầu nối nào. Không tuyên bố "tương thích MCP" cho đến khi qua test (nguyên tắc 9 trong `CLAUDE.md`, ADR-003).
 - **Quy ước nguồn:** khẳng định về mã Agent Workspace có `file:dòng` đã đọc lại ngày 2026-11-06 (số dòng nằm trong phần chữ của link). Khẳng định về Harness đều ghi "theo tài liệu, chưa kiểm" vì chưa chạy thử với bản đã cài (xem `docs/ASSUMPTIONS.md`, mục probe 2026-11-06, và `docs/REFERENCES.md`).
+- **Cập nhật 2026-11-10 (Phase 4 hạng mục 5, ADR-010 mục 9 đã duyệt A1/A7/A8):** **A1 (chủ DB, mục 2a):** chốt; không cần mã mới, vì sidecar do Tauri spawn đã là chủ DB duy nhất và khoá single-instance (2d) đã có. **A8 (yêu cầu lặp `workflows.start`):** chốt theo hành vi hiện có và ghim bằng test `sidecar.test.ts` ("a repeated identical workflows.start is two independent tasks"): hai lần gọi giống hệt tạo hai task riêng, không dedupe, không retry ngầm; chống gọi lặp là việc của client/cầu nối (lựa chọn của tôi trong phạm vi đã duyệt, đổi được nếu người dùng muốn idempotency key). **A7 (spawn sớm sidecar):** duyệt về nguyên tắc nhưng CHƯA có mã: hiện không có tích hợp Harness nào để bật, nên spawn sớm vô điều kiện chỉ tốn tài nguyên và đổi vòng đời lười ([lib.rs](../apps/desktop/src-tauri/src/lib.rs), `ensure_sidecar`) mà không có người dùng; sẽ làm cùng bước 2 của "Việc phải làm" (kênh/cầu nối), dưới cờ bật tích hợp. A2/A4/A5/A6 vẫn để sau Phase 4.
 
 ### 1. Bối cảnh và vấn đề
 
@@ -143,3 +144,77 @@ Gate chung: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm bui
 - Tool MCP có hiện thẻ phê duyệt trong Harness hay chạy ngầm tuỳ preset (`workspace-write` + `ask` là mặc định theo tài liệu).
 - Hành vi khi cầu nối rơi giữa chừng (reconnect, tool call treo, `probe` đóng kết nối).
 - Chưa kiểm trong repo này: ACL mặc định của named pipe do Node tạo; tên pipe được giải phóng khi tiến trình chết trên Windows thật; cách tiến trình Node đọc credential store.
+
+## ADR-007: Bật mặc định hai cổng quyền và trần RAM cả cây (Q3, 2026-11-07)
+
+- **Bối cảnh:** hai cổng quyền (Codex `app-server`, Claude `--permission-prompt-tool` với `askEveryTool`) đã có bằng chứng chạy CLI thật (ASSUMPTIONS d3, d6, d9) nhưng mặc định TẮT; `jobMemLimitMb` đo được (R4) nhưng chưa nối vào cấu hình.
+- **Quyết định (người dùng chọn):** đặt mặc định BẬT cả hai cổng và nối `jobMemLimitMb`. Codex: người dùng chọn đăng ký thêm agent `codex-app-server` mặc định, KHÔNG chuyển `codex` (exec) sang app-server. Ràng buộc: fail-closed (thiếu launcher/`--safe-mode` đã lưu thì từ chối task), có công tắc tắt (`AGENT_STUDIO_CLAUDE_GATE`, `AGENT_STUDIO_CODEX_GATE`, `AGENT_STUDIO_JOB_MEM_LIMIT_MB`; `SidecarOptions` `false`), không tuyên bố sandbox hay "duyệt từng lệnh".
+- **Đánh đổi:** cổng Claude chỉ phủ sáu tool và cần `--safe-mode` tắt (thay bằng `--setting-sources local`); task Codex chọn `codex` vẫn không qua cổng; trần RAM 8192 MB rộng vì chưa có số liệu commit thật; tác dụng phụ: `agents.list` có thêm `codex-app-server`.
+- **Xem lại nếu:** kiểm lại bằng CLI thật cho thấy mặc định mới làm hỏng task hợp lệ, `.claude/settings.local.json` nới được quyền, hoặc muốn ép task Codex đi qua cổng (khi đó mất `agent-job-wrap` cho Codex).
+
+## ADR-008: `codex` chạy bằng adapter app-server khi cổng Codex bật (2026-11-07)
+
+- **Bối cảnh:** ADR-007 chọn "thêm agent `codex-app-server`, không chuyển `codex`". Hệ quả: task chọn `codex` (exec) không qua cổng, `codex-app-server` không qua `agent-job-wrap`, nên review báo "cổng chưa nối production".
+- **Quyết định (người dùng chọn, 2026-11-07, "Chuyển `codex` sang app-server"):** khi cổng Codex bật (mặc định), agent `codex` dựng `CodexAppServerAdapter` (id `codex`), chạy trong `agent-job-wrap` và có watchdog RSS cả cây (`AGENT_STUDIO_CLI_TREE_MEM_MB`, tùy chọn). `codex-app-server` vẫn được đăng ký. Tắt: `AGENT_STUDIO_CODEX_GATE=0` / `codexAppServer:false` đưa `codex` về `codex exec` và bỏ `codex-app-server`. Thay thế một phần ADR-007 (phần "không chuyển `codex`").
+- **Đánh đổi:** `args` đã lưu của `codex` (dành cho `codex exec`) không dùng khi cổng bật; production policy vẫn từ chối mọi lệnh (allow list rỗng) nên task Codex cần chạy lệnh sẽ bị decline; hành vi app-server khác `exec --json` (sự kiện, `approvalPolicy: untrusted`). Không phải sandbox.
+- **Xem lại nếu:** task Codex hợp lệ hỏng vì decline lệnh, hoặc app-server thay đổi giao thức giữa các phiên bản codex.
+
+## ADR-009: `agy` (Antigravity) ra khỏi điều kiện đóng Phase 3 (2026-11-08)
+
+- **Bối cảnh:** `agy` chỉ kiểm bằng CLI giả và một phần CLI thật (PARTIAL); ép quyền không kiểm chứng được, adapter fail-closed với `task.permissions`; đăng ký thật còn hard-code trong `sidecar.ts`.
+- **Quyết định (người dùng chọn):** chỉ bỏ `agy` khỏi **phạm vi gate Phase 3**. Code `packages/adapter-antigravity`, đăng ký trong sidecar và UI giữ nguyên, không xoá, không ẩn. Gate Phase 3 tính trên Claude, Codex, Ollama.
+- **Đánh đổi:** `agy` vẫn chạy được nhưng không còn được bảo đảm bởi gate; phần PARTIAL (lỗi chưa đăng nhập/hết hạn mức, cây tiến trình con, ép quyền) trở thành nợ ngoài gate, không phải điều kiện đóng.
+- **Xem lại nếu:** muốn `agy` là agent hỗ trợ chính thức (khi đó đưa lại vào gate và hoàn tất kiểm thật), hoặc quyết định gỡ hẳn khỏi codebase.
+
+## ADR-010: Quyết định của người dùng 2026-11-10 (đóng Phase 3, keepAlive, quy tắc merge, duyệt tồn đọng)
+
+- **Bối cảnh:** sau khi đọc CI của PR #3 (head `c17ea94` xanh 5/5), người dùng trả lời lần lượt các câu hỏi tồn đọng bằng `AskUserQuestion`.
+- **Quyết định (người dùng chọn):**
+  1. **Phase 3 đóng có ngoại lệ:** ba tiêu chí gate đạt về mã và test; ngoại lệ là hai thẻ Settings ("Ollama models", "Load limits") và admission chưa kiểm trong app Tauri thật. Cùng phạm vi ngoại lệ: tool calling thật mới thử `read_file`; `agy` ngoài gate (ADR-009).
+  2. **`keepAlive` ngắn khi bật giới hạn VRAM** (để model Ollama được gỡ sớm, không giữ hệ thống `paused` ~5 phút). Đã quyết; ĐÃ làm 2026-11-10 ở `adapter-ollama` + sidecar (xem PROGRESS).
+  3. **Quy tắc merge mới:** mục "Git Branch & Merge Policy" trong CLAUDE.md/AGENTS.md (`c2891b1`). `main` = `claude/loving-lovelace-32lh71`; `develop` = nhánh tích hợp do phiên chỉ định (chưa có nhánh `develop` riêng). Merge vào `main` luôn cần người dùng phê duyệt; không force push, không xoá nhánh chưa merge, không bỏ qua test.
+  4. **Q2:** duyệt nguyên bản 5 bước recovery.
+  5. **CLI thật cho C1/C5:** cho phép, có giới hạn (không chạy 100 workflow thật).
+  6. **Installer C2 (NSIS/WiX):** kiểm máy có chưa, kiểm uy tín/nguyên bản của nguồn, báo cáo rồi hỏi lại trước khi cài.
+  7. **Dependency Tailwind/shadcn (7D) và Playwright:** duyệt có điều kiện (license, audit, pin ≥ 2 tuần, ghi `docs/REFERENCES.md`, báo trước khi cài).
+  8. **P4-1 c/d:** đổi hướng cổng quyền của claude (probe cách khác, vì `--permission-prompt-tool` không thấy mọi lời gọi); codex giữ app-server.
+  9. **ADR-006:** duyệt A1 (chủ DB), A7 (spawn sớm sidecar), A8 (yêu cầu lặp `workflows.start`); A2/A4/A5/A6 để sau Phase 4.
+  10. **Việc khác:** điều tra Security CI bị huỷ trước khi ghép PR #3; Phase 4 chỉ đóng sau C1/C5 + installer; 7C-2 lập kế hoạch rồi hỏi lại; cho phép probe `agy` lần 3; cho phép dọn thư mục worktree rỗng/cũ (liệt kê trước khi xoá).
+- **Đánh đổi:** đóng Phase 3 khi UI chưa kiểm thật chấp nhận rủi ro lỗi hiển thị/thao tác ở hai thẻ Settings; ghi vào PHASE3_REPORT là ngoại lệ.
+- **Xem lại nếu:** kiểm app thật phát hiện lỗi ở hai thẻ; cần nhánh `develop` riêng; hướng claude mới vẫn không phủ hết lời gọi.
+
+## ADR-011: Claude quyết bốn điểm tồn đọng theo ủy quyền của người dùng (2026-11-10)
+
+- **Bối cảnh:** người dùng được hỏi bằng `AskUserQuestion` về bốn điểm và chọn "Để Claude tự quyết" cho cả bốn. Đây là quyết định của Claude theo ủy quyền, KHÔNG phải người dùng đã đọc từng chi tiết; người dùng có thể đảo lại bất cứ lúc nào.
+- **Quyết định:**
+  1. **Ngữ nghĩa 4 mức quyền** (`ASSUMPTIONS.md`, mục policy): giữ nguyên bản. Lý do: mọi mức fail-closed, không có chế độ tự duyệt tất cả, deny/shell host/`protectedPaths` cố định ở mọi mức. **Phạm vi grant 7C-2 KHÔNG nằm trong quyết định này**, vẫn chờ kế hoạch và duyệt riêng.
+  2. **Hạ concurrency** (nửa, tối thiểu 1, hoãn = 0): giữ nguyên thuật toán. Khoảng trống đã biết (task `queued` chờ vô hạn khi hoãn kéo dài, chưa có chỉ báo lý do trong UI) ghi là nợ giao diện cho Phase 5; ngưỡng đã chỉnh được trong Settings. Không đổi mã bây giờ.
+  3. **Allowlist tuổi crate Cargo:** đã đo tuổi thật trên crates.io (2026-11-11 UTC): `brotli@9.1.1` 15 ngày, `brotli-decompressor@6.2.0` 16 ngày, `erased-serde@0.4.11` 16 ngày, cả ba đã đủ 14 ngày nên không cần gia hạn; mục hết hạn bị bộ kiểm lọc bỏ qua, để nguyên file. Các mục còn lại hết hạn 2026-11-13/14 (tuổi sẽ đủ cùng ngày); chưa đo, nếu CI đỏ thì đo lại từng crate, không gia hạn hàng loạt.
+  4. **Low IL đăng nhập/gọi model thật:** ghi là ngoại lệ của Phase 4 (chặn ghi, không chặn đọc/mạng; BLOCKED vì cần người dùng tự đăng nhập), không làm. **Nhánh `develop`:** không tạo; dùng nhánh tích hợp do phiên chỉ định như CLAUDE.md đã ghi.
+- **Đánh đổi:** chấp nhận ngữ nghĩa policy và hạ concurrency chưa qua đọc kỹ của người dùng; Low IL thành ngoại lệ khi đóng Phase 4.
+- **Xem lại nếu:** người dùng đọc lại và muốn đổi; CI báo allowlist/tuổi gói đỏ; muốn đưa Low IL vào gate.
+
+## ADR-012: Chế độ vòng lặp tự động trong CLAUDE.md nguyên tắc 10 (2026-11-09)
+
+- **Đánh số:** ban đầu ghi là ADR-010 (nhánh loop); đổi thành ADR-012 khi ghép vì ADR-010/011 đã dùng cho quyết định 2026-11-10 của nhánh p4.
+- **Trạng thái:** Người dùng đã duyệt (2026-11-09, trong hội thoại); đã ghi vào `CLAUDE.md` nguyên tắc 10.
+- **Bối cảnh:** công cụ `loop-runner` (repo riêng, xem `docs/superpowers/specs/2026-11-09-autonomous-loop-runner-design.md`) chạy vòng lặp task → gate → review để giảm việc duyệt tay từng task.
+- **Quyết định:** khi người dùng chủ động bật vòng lặp, điều phối viên được tự đóng phase và sang phase kế tiếp, nhưng chỉ khi mọi tiêu chí nghiệm thu trong `docs/ROADMAP.md` đã PASS bằng kết quả lệnh thật (không có mục NOT_RUN/BLOCKED) và `docs/PHASEn_REPORT.md` đã ghi. Mỗi task tối đa 3 lần tự sửa (`AGENTS.md`, `.codex/agents/implementer.toml`, `maxAttemptsPerTask` trong `loop.config.json`).
+- **Giới hạn:** không áp dụng cho phiên thường; đúng thứ tự ADR-005; không `git push`, không tạo PR, không thêm dependency; vai Codex không bao giờ tự đóng phase; task BLOCKED thì dừng. Tiêu chí chưa có lệnh chạy được vẫn là NOT_RUN nên phase đó không tự đóng. Các giả định chưa kiểm của công cụ: `docs/ASSUMPTIONS.md`, mục "Loop Runner: chưa kiểm chứng".
+- **Xem lại nếu:** vòng lặp làm hỏng cây làm việc, vượt giới hạn trên, hoặc có phép đo cho thấy cô lập CLI không đủ.
+
+## ADR-013: Đóng Phase 4 có ngoại lệ (2026-11-11)
+
+- **Trạng thái:** Đã quyết (người dùng, AskUserQuestion, câu trả lời "Đóng có ngoại lệ").
+- **Bối cảnh:** `docs/PHASE4_REPORT.md` có bằng chứng cho cả 9 hạng mục của ADR-010/011 nhưng ba gate ROADMAP còn thiếu: soak 100 workflow thật, Low IL, vài ca chưa có test.
+- **Quyết định:** đóng Phase 4, tick ba gate kèm ngoại lệ: (1) soak với CLI thật chỉ 5 workflow (100 vòng chạy với agent giả); (2) Low IL đăng nhập/gọi model BLOCKED (ADR-011); (3) chưa có test: nhánh mount point volume thật, khe TOCTOU nhỏ ở đường `GitWorktrees.diff`, đường `status()` khác (checkMerge, commit) chưa rà lại; (4) installer NSIS chưa ký, chưa chạy cài/gỡ, chưa đóng gói sidecar. Security CI (timeout 30 phút) chờ người dùng yêu cầu sửa workflow; PR #3 và push chưa làm.
+- **Đánh đổi:** gate "đạt" ở đây nghĩa là đạt trên bằng chứng ghi trong báo cáo, không phải bao phủ đầy đủ.
+- **Xem lại nếu:** soak thật lớn hơn lộ mất state; phát hiện thêm đường đọc ngoài worktree; Phase 5 cần installer chạy được (sidecar đóng gói).
+
+## ADR-014: Nhận ngoại lệ còn lại của giai đoạn A, sang giai đoạn B (2026-11-11)
+
+- **Trạng thái:** Đã quyết (người dùng, câu trả lời "Nhận ngoại lệ, sang B").
+- **Bối cảnh:** giai đoạn A của vòng lặp đã xong: Phase 3 ROADMAP sửa, vá `GitWorktrees.diff` bằng đọc handle có kiểm `dev/ino`, sidecar đóng gói và thử cài/gỡ NSIS, clippy và cargo test sạch, hai thẻ Settings kiểm trong app Tauri thật (PROGRESS 2026-11-11).
+- **Quyết định:** nhận hai mục còn hở là ngoại lệ, không ghi PASS: (1) mount point thật chưa có test (chỉ junction/symlink); (2) khe TOCTOU lật link ba lần chưa đóng, cần kiểm đường dẫn cuối qua handle bằng mã native (`GetFinalPathNameByHandle`) mà Node thuần không làm được.
+- **Đánh đổi:** `GitWorktrees.diff` có khe lý thuyết với kẻ tấn công cùng quyền ghi vào worktree và canh đúng thời điểm; worktree không phải sandbox bảo mật (CLAUDE.md nguyên tắc 5). Installer chưa ký, chưa thử trên máy thứ hai.
+- **Xem lại nếu:** thêm addon native/Rust vào sidecar, hoặc Phase 5 cần cam kết an toàn mạnh hơn cho đường đọc worktree.

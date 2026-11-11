@@ -25,6 +25,8 @@ export const workflows = sqliteTable(
       .references(() => projects.id),
     state: text("state").notNull(),
     createdAt: text("created_at").notNull(),
+    /** Peer Review round limit chosen for this workflow; NULL = the engine default (also for rows from before). */
+    maxRounds: integer("max_rounds"),
   },
   (t) => [
     check(

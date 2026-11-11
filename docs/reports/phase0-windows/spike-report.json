@@ -25,7 +25,7 @@
     {
       "name": "StubAdapter task completes",
       "ok": true,
-      "detail": "{\"taskId\":\"task_01M6ACV3AG9FHAYVRY0HEH84ST\",\"finalState\":\"completed\",\"eventCount\":5,\"messageCount\":6}"
+      "detail": "{\"taskId\":\"task_<id>\",\"finalState\":\"completed\",\"eventCount\":5,\"messageCount\":6}"
     },
     {
       "name": "shutdown request exits process with code 0",

@@ -1,0 +1,195 @@
+{
+  "setup": [
+    {
+      "name": "install",
+      "command": "pnpm",
+      "args": ["install", "--frozen-lockfile"],
+      "timeoutMs": 900000
+    }
+  ],
+  "gates": [
+    {
+      "name": "lint",
+      "command": "pnpm",
+      "args": ["lint"],
+      "timeoutMs": 300000
+    },
+    {
+      "name": "format",
+      "command": "pnpm",
+      "args": ["format"],
+      "timeoutMs": 300000
+    },
+    {
+      "name": "typecheck",
+      "command": "pnpm",
+      "args": ["typecheck"],
+      "timeoutMs": 600000
+    },
+    {
+      "name": "test",
+      "command": "pnpm",
+      "args": ["test", "--no-file-parallelism"],
+      "timeoutMs": 900000
+    },
+    {
+      "name": "build",
+      "command": "pnpm",
+      "args": ["build"],
+      "timeoutMs": 900000
+    }
+  ],
+  "taskFile": "docs/TODO.md",
+  "phases": [
+    {
+      "id": "phase-3",
+      "heading": "Phase 3 — Quét CLI & Local AI",
+      "criteria": [
+        {
+          "text": "Mọi adapter trong phạm vi gate (Claude, Codex, Ollama; agy ngoài gate, ADR-009) qua cùng bộ contract test.",
+          "command": "pnpm",
+          "args": [
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "tests/contract/adapter-claude.test.ts",
+            "tests/contract/adapter-codex.test.ts",
+            "tests/contract/adapter-ollama.test.ts"
+          ]
+        },
+        {
+          "text": "Thêm adapter mới không sửa Orchestrator core."
+        },
+        {
+          "text": "Hết VRAM/RAM thì hệ thống degrade có kiểm soát, không treo máy."
+        }
+      ]
+    },
+    {
+      "id": "phase-4",
+      "heading": "Phase 4 — Security & Reliability",
+      "criteria": [
+        {
+          "text": "Không sửa đổi ngoài phạm vi được cấp trong sandbox tests."
+        },
+        {
+          "text": "100 workflow không mất state."
+        },
+        {
+          "text": "Không còn lỗ hổng Critical/High chưa xử lý."
+        }
+      ]
+    },
+    {
+      "id": "phase-7",
+      "heading": "Phase 7 — Ngang AionUi về trải nghiệm cốt lõi (sau Phase 2)",
+      "criteria": [
+        {
+          "text": "Người dùng mới đi từ cài đặt, thêm project đến chạy task thật mà không đụng terminal (kịch bản E2E)."
+        },
+        {
+          "text": "Mọi yêu cầu phê duyệt hiển thị đủ lệnh/đường dẫn; từ chối không làm treo task."
+        },
+        {
+          "text": "Không có mật khẩu/token nào trong DB, log hoặc diagnostics (test redaction)."
+        }
+      ]
+    },
+    {
+      "id": "phase-5",
+      "heading": "Phase 5 — Desktop Beta",
+      "criteria": [
+        {
+          "text": "Approval, cancel, retry, diff, logs nhất quán."
+        },
+        {
+          "text": "Fresh install / upgrade / uninstall pass smoke test."
+        }
+      ]
+    },
+    {
+      "id": "phase-6",
+      "heading": "Phase 6 — Production 1.0",
+      "criteria": [
+        {
+          "text": "Toàn bộ bảng Production acceptance trong thiết kế đạt."
+        }
+      ]
+    },
+    {
+      "id": "phase-8",
+      "heading": "Phase 8 — Mở rộng agent: ACP, MCP, Skills",
+      "criteria": [
+        {
+          "text": "Thêm agent ACP thứ hai không sửa Orchestrator core."
+        },
+        {
+          "text": "Permission từ ACP bị chặn đúng theo policy trong test (path escape, lệnh bị cấm)."
+        },
+        {
+          "text": "Skill/MCP không rõ nguồn không thể kích hoạt âm thầm."
+        }
+      ]
+    },
+    {
+      "id": "phase-9",
+      "heading": "Phase 9 — Multi-agent có cấu trúc",
+      "criteria": [
+        {
+          "text": "3 workflow mẫu chạy thật trên dự án mẫu, kết quả có thể tái lập."
+        },
+        {
+          "text": "Kill app giữa workflow, mở lại: trạng thái đúng, không lặp side effect."
+        },
+        {
+          "text": "Lịch chạy không bao giờ vượt policy đã cấp, kể cả khi người dùng vắng mặt."
+        }
+      ]
+    },
+    {
+      "id": "phase-10",
+      "heading": "Phase 10 — Nhẹ, nhanh, hoàn thiện",
+      "criteria": [
+        {
+          "text": "Vượt ngân sách hiệu năng thì CI đỏ."
+        },
+        {
+          "text": "Diagnostics không chứa secret hoặc đường dẫn cá nhân (test)."
+        }
+      ]
+    }
+  ],
+  "progressFile": "docs/PROGRESS.md",
+  "reportTemplate": "docs/PHASE_REPORT_TEMPLATE.md",
+  "forbidden": {
+    "dependencyFiles": [
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "apps/desktop/package.json",
+      "apps/desktop/src-tauri/Cargo.toml",
+      "apps/desktop/src-tauri/Cargo.lock",
+      "apps/desktop/src-tauri/tauri.conf.json",
+      "services/orchestrator/package.json",
+      "packages/adapter-antigravity/package.json",
+      "packages/adapter-claude/package.json",
+      "packages/adapter-codex/package.json",
+      "packages/adapter-ollama/package.json",
+      "packages/agent-core/package.json",
+      "packages/cli-probe/package.json",
+      "packages/contracts/package.json",
+      "packages/diagnostics/package.json",
+      "packages/git-worktrees/package.json",
+      "packages/policy-engine/package.json",
+      "packages/process-manager/package.json",
+      "packages/resource-monitor/package.json",
+      "packages/shared-utils/package.json",
+      "packages/storage/package.json"
+    ]
+  },
+  "limits": {
+    "maxAttemptsPerTask": 3,
+    "stopOnRepeatedFailure": true
+  }
+}

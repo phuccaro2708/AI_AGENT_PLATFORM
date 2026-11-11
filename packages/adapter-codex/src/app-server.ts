@@ -8,10 +8,15 @@ import {
   createLineSplitter,
   extendManifest,
   filterEnv,
+  jobWrapArgs,
   killTree,
   resolveExecutable,
   unwrapNpmShim,
+  sampleTreeBytes,
+  trackLivePid,
+  type JobWrapOptions,
   type SpawnManifest,
+  type TreeMemorySampler,
 } from "@agent-studio/process-manager";
 import { CODEX_MANIFEST, codexSandboxFor, type CodexSandbox } from "./adapter.js";
 
@@ -57,6 +62,21 @@ export interface CodexAppServerOptions {
   ) => Promise<AppServerGateDecision>;
   /** How long one approval may take before it is declined (never retried). Default 60 000 ms. */
   approvalTimeoutMs?: number;
+  /**
+   * Start the server inside `agent-job-wrap` (kill-on-close Job Object, optional whole-tree commit cap), like the
+   * `codex exec` adapter. The wrapper inherits stdio, so the JSON-RPC pipe is unchanged. A bad path fails the task
+   * closed (`could not start codex`). Not a sandbox.
+   */
+  jobWrap?: JobWrapOptions;
+  /**
+   * Whole-tree RAM watchdog in MB (opt-in, same semantics as `startProcess`): it polls the resident memory of the
+   * server's process tree and kills the tree when it passes the limit; the task then ends with an error that needs
+   * reconciliation if the turn had started. A watchdog, not a hard cap. Positive integer.
+   */
+  treeMemoryLimitMb?: number;
+  memoryPollMs?: number;
+  /** Tests only. */
+  memorySampler?: TreeMemorySampler;
 }
 
 type Json = Record<string, unknown>;
@@ -87,16 +107,17 @@ export function splitPlainCommand(
 /**
  * The ONE wrapper seen from the real CLI on Windows (docs/ASSUMPTIONS.md c2/c3):
  * `"<path>\pwsh.exe" -Command '<inner>'` — double-quoted executable path, exactly `-Command`, one single-quoted
- * argument and nothing after it. Any other shape (other flags, `-EncodedCommand`, double-quoted inner, `''`
+ * argument and nothing after it. Second observed form (codex-cli 0.166.0, ASSUMPTIONS d6): a command that is ONE word
+ * comes WITHOUT quotes (`-Command Get-ChildItem`); only `[A-Za-z0-9_.-]+` is taken in that form. Any other shape (other flags, `-EncodedCommand`, double-quoted inner, `''`
  * escapes, another host) returns `undefined` and is declined. This only strips the wrapper; the inner text still has to
  * pass `splitPlainCommand` and the Policy Engine, and nothing is ever evaluated or re-joined into a shell string.
  */
-const PWSH_WRAPPER = /^"([^"]*)" -Command '([^']*)'$/;
+const PWSH_WRAPPER = /^"([^"]*)" -Command (?:'([^']*)'|([A-Za-z0-9_.-]+))$/;
 export function unwrapPowerShellCommand(command: string): string | undefined {
   const m = PWSH_WRAPPER.exec(command);
   if (!m) return undefined;
   const host = (m[1] ?? "").split(/[\\/]/).pop()?.toLowerCase();
-  const inner = (m[2] ?? "").trim();
+  const inner = (m[2] ?? m[3] ?? "").trim();
   return host === "pwsh.exe" && inner !== "" ? inner : undefined;
 }
 
@@ -195,7 +216,14 @@ export class CodexAppServerAdapter implements AgentAdapter {
       const target = resolved.kind === "shim" ? unwrapNpmShim(resolved) : resolved;
       if (!target) throw new Error(`unsupported launcher: ${resolved.path}`);
       const launch = this.describeLaunch();
-      child = spawn(target.path, [...(target.prefixArgs ?? []), ...launch.args], {
+      const program = [target.path, ...(target.prefixArgs ?? []), ...launch.args];
+      const wrapped = this.opts.jobWrap
+        ? {
+            file: this.opts.jobWrap.path,
+            args: [...jobWrapArgs(this.opts.jobWrap), "--", ...program],
+          }
+        : { file: program[0]!, args: program.slice(1) };
+      child = spawn(wrapped.file, wrapped.args, {
         shell: false,
         windowsHide: true,
         detached: process.platform !== "win32",
@@ -238,6 +266,42 @@ export class CodexAppServerAdapter implements AgentAdapter {
       if (child.pid !== undefined && !closed) await killTree(child.pid);
     };
     this.running.set(task.id, kill);
+    let memoryDetail: string | undefined;
+    let stopWatch: (() => void) | undefined;
+    const memMb = this.opts.treeMemoryLimitMb;
+    if (memMb !== undefined && child.pid !== undefined) {
+      if (!Number.isInteger(memMb) || memMb <= 0) {
+        memoryDetail = "treeMemoryLimitMb must be a positive integer";
+        void kill();
+      } else {
+        const rootPid = child.pid;
+        const sample = this.opts.memorySampler ?? sampleTreeBytes;
+        let busy = false;
+        let failures = 0;
+        const tick = async (): Promise<void> => {
+          if (busy || closed || memoryDetail !== undefined) return;
+          busy = true;
+          try {
+            const bytes = await sample(rootPid);
+            failures = 0;
+            if (bytes > memMb * 1024 * 1024) {
+              memoryDetail = `process tree uses ${Math.round(bytes / 1048576)} MB, limit ${memMb} MB`;
+              await kill();
+            }
+          } catch {
+            if (++failures >= 5) {
+              memoryDetail = "cannot measure the memory of the process tree";
+              await kill(); // fail closed, like startProcess
+            }
+          } finally {
+            busy = false;
+          }
+        };
+        const interval = setInterval(() => void tick(), this.opts.memoryPollMs ?? 1000);
+        interval.unref();
+        stopWatch = () => clearInterval(interval);
+      }
+    }
     const onAbort = () => void kill();
     task.signal.addEventListener("abort", onAbort, { once: true });
 
@@ -459,7 +523,9 @@ export class CodexAppServerAdapter implements AgentAdapter {
     child.on("error", (e) => {
       spawnError = e.message;
     });
+    const untrack = child.pid === undefined ? undefined : trackLivePid(child.pid);
     child.on("close", () => {
+      untrack?.();
       splitter.end();
       closed = true;
       for (const w of waiters.values()) w({ error: { message: "connection closed" } });
@@ -506,7 +572,13 @@ export class CodexAppServerAdapter implements AgentAdapter {
       }
       while (queue.length) yield queue.shift() as AgentEvent; // events that arrived with the terminal line
 
-      if (final) {
+      if (memoryDetail !== undefined) {
+        yield {
+          type: "error",
+          message: `codex stopped: ${memoryDetail}${turnSent ? "; side effects unverified" : ""}`,
+          ...(turnSent ? { needsReconciliation: true } : {}),
+        };
+      } else if (final) {
         yield final;
       } else if (task.signal.aborted) {
         yield { type: "error", message: "cancelled" };
@@ -528,6 +600,7 @@ export class CodexAppServerAdapter implements AgentAdapter {
         };
       }
     } finally {
+      stopWatch?.();
       task.signal.removeEventListener("abort", onAbort);
       this.running.delete(task.id);
       await kill(); // the server is long-lived: it never exits on its own after the turn

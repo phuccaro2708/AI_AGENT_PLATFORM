@@ -6,6 +6,7 @@ import {
   extendManifest,
   resolveExecutable,
   startProcess,
+  type JobWrapOptions,
   type RunningProcess,
   type SpawnManifest,
 } from "@agent-studio/process-manager";
@@ -61,9 +62,24 @@ export interface ClaudeAdapterOptions {
   safeMode?: boolean;
   /** Extra flags, e.g. a tool allowlist (`--tools Read --allowed-tools Read`). */
   extraArgs?: readonly string[];
+  /**
+   * Flags that depend on the task, added after `extraArgs` (P4-1 d: `--permission-prompt-tool`, `--mcp-config`
+   * for a gate built from this task's cwd and permissions). Must be pure data; it runs for `describeLaunch` too.
+   */
+  taskArgs?: (task: AgentTask) => readonly string[];
   env?: Record<string, string | undefined>;
   /** Variable names (besides the manifest's) that the host declares on purpose: stored settings, secrets. */
   envAllow?: readonly string[];
+  /** Run the CLI inside `agent-job-wrap` (P4-4 (b)): kill-on-close tree and per-process memory cap. Off by default. */
+  jobWrap?: JobWrapOptions;
+  /** Kill the CLI's whole process tree when its resident memory passes this many MB (P4-4 (b)). Off by default. */
+  treeMemoryLimitMb?: number;
+  /**
+   * Wall-clock limit of one run in ms (host side, from `startProcess`): the whole tree is killed and the run ends
+   * with an error, never retried. Backstop for a hung permission gate process, which `evaluateTimeoutMs` inside
+   * the gate cannot cover. Absent = no limit.
+   */
+  timeoutMs?: number;
 }
 
 /**
@@ -100,6 +116,7 @@ export class ClaudeAdapter implements AgentAdapter {
       ...(task.sessionId ? ["--resume", task.sessionId] : []),
       ...claudePermissionArgs(task.permissions),
       ...(this.opts.extraArgs ?? []),
+      ...(this.opts.taskArgs?.(task) ?? []),
     ];
   }
 
@@ -154,7 +171,12 @@ export class ClaudeAdapter implements AgentAdapter {
       command: this.opts.command ?? "claude",
       args: this.buildArgs(task),
       manifest: this.manifest,
+      ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
+      ...(this.opts.treeMemoryLimitMb === undefined
+        ? {}
+        : { treeMemoryLimitMb: this.opts.treeMemoryLimitMb }),
       cwd: task.cwd,
+      ...(this.opts.timeoutMs === undefined ? {} : { timeoutMs: this.opts.timeoutMs }),
       ...(this.opts.env ? { env: this.opts.env } : {}),
       stdin: task.prompt,
       signal: task.signal,
@@ -180,13 +202,35 @@ export class ClaudeAdapter implements AgentAdapter {
       }
       const result = await proc.done;
       if (task.signal.aborted && !final) {
-        yield { type: "error", message: "cancelled" };
+        yield {
+          type: "error",
+          message: result.killError
+            ? `cancelled; the process could not be stopped (${result.killError}) and may still be running`
+            : "cancelled",
+        };
       } else if (final) {
         yield final;
       } else if (result.outcome === "spawn_error") {
         yield { type: "error", message: `could not start claude: ${result.error ?? "unknown"}` };
+      } else if (result.outcome === "timeout") {
+        yield {
+          type: "error",
+          message: result.killError
+            ? `claude stopped: time limit reached; the process could not be stopped (${result.killError}) and may still be running`
+            : "claude stopped: time limit reached (a stuck permission gate also ends here); not retried",
+        };
+      } else if (result.outcome === "memory_limit") {
+        yield {
+          type: "error",
+          message: `claude stopped: ${result.detail ?? "memory limit exceeded"}`,
+        };
       } else if (result.outcome === "cancelled") {
-        yield { type: "error", message: "cancelled" };
+        yield {
+          type: "error",
+          message: result.killError
+            ? `cancelled; the process could not be stopped (${result.killError}) and may still be running`
+            : "cancelled",
+        };
       } else {
         const tail = result.stderr.trim().slice(-300);
         yield {

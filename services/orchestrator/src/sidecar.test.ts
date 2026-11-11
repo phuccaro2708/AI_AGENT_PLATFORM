@@ -139,6 +139,26 @@ describe("D1 IPC", () => {
     }
   });
 
+  it("a repeated identical workflows.start is two independent tasks: no dedupe, no hidden retry (ADR-006 A8)", async () => {
+    const { result: p } = await call(svc, "projects.create", {
+      name: "rep",
+      rootPath: folder("rep"),
+    });
+    const { result: w } = await call(svc, "workflows.create", { projectId: p?.projectId });
+    const params = { workflowId: w?.workflowId, agentId: "stub", prompt: "same request" };
+    const first = (await call(svc, "workflows.start", params)).result;
+    const second = (await call(svc, "workflows.start", params)).result;
+    await svc.idle();
+    expect(first?.taskId).toBeTruthy();
+    expect(second?.taskId).toBeTruthy();
+    expect(second?.taskId).not.toBe(first?.taskId);
+    const tasks = (await call(svc, "tasks.list", { workflowId: w?.workflowId })).result;
+    expect(tasks?.tasks).toHaveLength(2);
+    for (const id of [first?.taskId, second?.taskId]) {
+      expect((await call(svc, "queryTask", { taskId: id })).result?.state).toBe("completed");
+    }
+  });
+
   it("pushes task.message in sequence order and a final task.state (D2)", async () => {
     svc.close();
     const events: SidecarEvent[] = [];
@@ -160,7 +180,9 @@ describe("D1 IPC", () => {
     const seqs = mine.flatMap((e) => (e.event === "task.message" ? [e.sequence] : []));
     expect(seqs.length).toBeGreaterThan(2);
     expect(seqs).toEqual(seqs.map((_, i) => i)); // contiguous from 0
-    expect(mine.at(0)).toMatchObject({ event: "task.state", state: "running" });
+    // A single task is queued first (task.request, sequence 0) and then claimed by the scheduler.
+    expect(mine.at(0)).toMatchObject({ event: "task.message", sequence: 0 });
+    expect(mine.find((e) => e.event === "task.state")).toMatchObject({ state: "running" });
     expect(mine.at(-1)).toMatchObject({ event: "task.state", state: "completed" });
     // Same data the log view returns: events are a live view of persisted messages.
     const logged = (await call(svc, "logs.query", { taskId: s?.taskId })).result?.messages;
@@ -281,6 +303,8 @@ describe("D1 IPC", () => {
       "claude",
       "codex",
       "agy",
+      "ollama", // registered unavailable until AGENT_STUDIO_OLLAMA_MODEL is set (S3)
+      "codex-app-server", // registered by default since Q3 (2026-11-07)
     ]);
     expect(list.result?.cli).toHaveLength(2);
     expect(

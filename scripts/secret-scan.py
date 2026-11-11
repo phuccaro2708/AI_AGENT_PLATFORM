@@ -158,6 +158,11 @@ ACCEPTED_HISTORY = {
     ("426c200f", ".codex/agents/security-reviewer.toml", "Secret Keyword", 13),
     ("9db9c7c7", ".codex/agents/security-reviewer.toml", "Secret Keyword", 13),
     ("56cbc94e", ".codex/agents/security-reviewer.toml", "Secret Keyword", 13),
+    # R3 (2026-11-06): FAKE test literal "sk-ant-test-SECRETSECRET…" in sidecar-confirm.test.ts, committed
+    # before the inline pragma was added. Reviewed by hand: not a real key.
+    ("9394e634", "services/orchestrator/src/sidecar-confirm.test.ts", "Secret Keyword", 14),
+    ("2377ce9d", "services/orchestrator/src/sidecar-confirm.test.ts", "Secret Keyword", 14),
+    ("c7c6dfc9", "services/orchestrator/src/sidecar-confirm.test.ts", "Secret Keyword", 14),
 }
 
 # Reviewed by hand, valid at any commit: exact (file, type, line). Line 28 of the Phase 0 spike
@@ -166,6 +171,15 @@ ACCEPTED_ANYWHERE = {
     ("docs/reports/phase0-windows/spike-report.json", "Base64 High Entropy String", 28),
     # Line 42 asserts the namespaced branch name for fake ids (agent-studio/abc12345/def67890).
     ("packages/git-worktrees/src/git-worktrees.test.ts", "Base64 High Entropy String", 42),
+    # Reviewed by hand (2026-11-07): docs/SECURITY.md line 37 is prose that mentions a secret keyword, no value;
+    # sidecar-permission-gates.test.ts line 170 is the FAKE literal "SECRET-HELPER" used by a test. Both predate
+    # the Phase 4 close-prep goal (commits 8cf8206, baf26fc) and recur in every later snapshot.
+    ("docs/SECURITY.md", "Secret Keyword", 37),
+    ("services/orchestrator/src/sidecar-permission-gates.test.ts", "Secret Keyword", 170),
+    # Reviewed by hand (2026-11-09): line 72 of the opt-in real-Ollama test is the FAKE canary "ZX-4417-KESTREL" the
+    # model must read back from a temp file; no real secret. The inline pragma covers new snapshots, this entry the
+    # four already pushed (immutable) ones.
+    ("tests/contract/real-ollama-switch-tools.test.ts", "Secret Keyword", 72),
 }
 
 EXCLUDE = r"(pnpm-lock\.yaml|Cargo\.lock|\.png|\.ico|\.icns)$"
@@ -249,7 +263,8 @@ def main():
             json.dump(sorted(map(list, findings)), fh)
 
     def is_accepted(f):
-        return f in ACCEPTED_HISTORY or f[1:] in ACCEPTED_ANYWHERE
+        norm = (f[0], f[1].replace("\\", "/")) + tuple(f[2:])  # Windows worktree paths use backslashes
+        return norm in ACCEPTED_HISTORY or norm[1:] in ACCEPTED_ANYWHERE
 
     accepted = [f for f in findings if is_accepted(f)]
     findings = [f for f in findings if not is_accepted(f)]

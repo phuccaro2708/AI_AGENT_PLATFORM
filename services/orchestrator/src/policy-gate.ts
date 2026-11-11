@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import type { AgentEvent, TaskPermissions } from "@agent-studio/contracts";
 import type { AgentAdapter, AgentTask } from "@agent-studio/agent-core";
@@ -12,6 +10,7 @@ import {
 import type { Logger } from "@agent-studio/shared-utils";
 import type { Repo } from "@agent-studio/storage";
 import type { ApprovalService } from "./approvals.js";
+import { digestInsideWorktree } from "./worktree-hash.js";
 
 export interface GateWorkspaces {
   status(path: string): Promise<{ files: { path: string; code: string }[] }>;
@@ -251,14 +250,9 @@ export class PolicyGate {
   private async snapshot(cwd: string): Promise<Snapshot> {
     const out: Snapshot = new Map();
     for (const f of (await this.opts.workspaces().status(cwd)).files) {
-      let digest: string;
-      try {
-        digest = createHash("sha256")
-          .update(readFileSync(join(cwd, f.path)))
-          .digest("hex");
-      } catch {
-        digest = "unreadable"; // deleted, or a directory
-      }
+      // Never read through a link that leaves the worktree; the marker keeps a change of the link visible.
+      const d = digestInsideWorktree(cwd, f.path);
+      const digest = d.kind === "ok" ? d.sha256 : d.kind === "escapes" ? d.marker : "unreadable"; // deleted, or a directory
       out.set(f.path, digest);
     }
     return out;

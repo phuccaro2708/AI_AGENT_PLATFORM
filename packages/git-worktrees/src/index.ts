@@ -2,6 +2,7 @@ export {
   GitError,
   GitWorktrees,
   PathTooLongError,
+  UntrustedGitConfigError,
   WorktreeDirtyError,
   samePath,
 } from "./git-worktrees.js";

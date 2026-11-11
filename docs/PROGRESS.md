@@ -866,3 +866,10 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - `GitWorktrees.diff`: test race viết trước (đỏ: rò nội dung ngoài worktree), thêm kiểm lại `realpath` sau khi git đọc (xanh). Cổng: `pnpm lint` PASS, `pnpm typecheck` PASS, `pnpm test --no-file-parallelism` PASS (1046 pass, 107 file), `pnpm build` PASS, `prettier --check` trên file đổi PASS. `pnpm format` toàn repo chưa chạy lại (lỗi cũ do `.superpowers/`).
 - Codex (gpt-6.1-sol, read-only, medium) trên diff: báo chặn: hoán đổi rồi khôi phục giữa hai lần kiểm vẫn lọt. Đối chiếu mã: đúng. Chưa sửa được trong vòng này (cần đọc bằng handle + stdin); comment mã đã sửa cho đúng, ghi ASSUMPTIONS. Khe TOCTOU VẪN CÒN; ngoại lệ ADR-013 giữ nguyên.
 - Còn lại giai đoạn A: kiểm Settings + admission trong app Tauri thật, test mount point thật, clippy/test Rust, đóng gói sidecar, thử cài/gỡ NSIS. Chưa push.
+
+## 2026-11-11: Giai đoạn A, vòng 2 (đóng gói sidecar, cài/gỡ NSIS, Rust)
+
+- `cargo clippy --all-targets -- -D warnings` PASS; `cargo test --locked` PASS (không đổi mã Rust).
+- Test-first bằng đo thật: cấu hình glob cho installer thiếu `drizzle/`; sửa sang ánh xạ thư mục, build lại, cài thử, selftest bản đã cài PASS, gỡ sạch. Chi tiết và phần NOT_RUN ở ASSUMPTIONS ("Installer đóng gói sidecar…").
+- Codex review `tauri.conf.json`: không có kết luận. Cổng JS/TS không chạy lại (chỉ đổi JSON cấu hình, `prettier --check` PASS).
+- Còn lại giai đoạn A: kiểm Settings + admission trong app Tauri thật, test mount point thật, khe TOCTOU `diff` (cần handle + stdin). Chưa push.

@@ -805,3 +805,11 @@ Danh sách giả định của `D:\Program\loop-runner` mà chưa có phép đo.
 
 - **Đã làm:** thêm kiểm `realpath` lần hai sau `git diff --no-index`; nếu đường dẫn đã bị đổi thành link trỏ ra ngoài và vẫn là link, output bị bỏ. Test viết trước, đỏ (rò `SWAPPED-SECRET`) rồi xanh.
 - **Chưa đóng (Codex review độc lập, đối chiếu mã, đồng ý):** hoán đổi sang link ra ngoài rồi khôi phục về nguyên trạng giữa hai lần kiểm vẫn qua cả hai. Chữa đúng cần đọc bằng handle đã mở, gắn danh tính đã kiểm với byte được diff (cần nhận nội dung qua stdin hoặc tự dựng diff file mới); việc này thêm đường mới trong `runProcess`, chưa làm. Không tuyên bố khe TOCTOU đã vá.
+
+### Installer đóng gói sidecar, thử cài/gỡ NSIS (2026-11-11, Phase 4 giai đoạn A)
+
+- **Đổi:** `apps/desktop/src-tauri/tauri.conf.json` thêm `bundle.resources: {"../../../services/orchestrator/sidecar-dist": "sidecar"}` (ánh xạ cả thư mục). Dạng glob `sidecar-dist/*` đã thử trước và SAI: chỉ chép file, thiếu thư mục `drizzle/` (phát hiện khi cài thử).
+- **Điều kiện:** phải chạy `node scripts/build-sidecar.mjs` trước `pnpm tauri build` (chưa tự động hoá). `sidecar-dist` gồm `node.exe` (bản Node đang chạy lệnh build, 88 MB, chưa ký), `sidecar.mjs`, `better_sqlite3.node`, `drizzle/`.
+- **Đo thật:** installer `Agent Workspace_0.0.0_x64-setup.exe` 25,60 MiB (trước đó 2,42 MiB không có sidecar). Cài im lặng (`/S /D=<thư mục tạm>`, chế độ currentUser): có `agent-studio.exe`, `agent-job-wrap.exe`, `uninstall.exe`, `sidecar/{node.exe,sidecar.mjs,better_sqlite3.node,drizzle/*}`. Selftest bản đã cài, KHÔNG đặt `AGENT_STUDIO_SIDECAR_DIR`: exit 0, `ok=true`, sidecar WAL, task stub `completed`, không còn node/agent-studio dưới thư mục cài sau khi thoát. Gỡ im lặng (`uninstall.exe /S _?=<dir>`): exit 0, không còn mục `Agent Workspace` trong HKCU Uninstall, thư mục sạch (chỉ còn `uninstall.exe` do cờ `_?=`, đã xoá tay).
+- **Chưa làm / NOT_RUN:** installer chưa ký; `node.exe` chưa ký; chưa cài trên máy thứ hai; chưa thử cài đè bản cũ/nâng cấp; chưa thử đường dẫn có dấu cách/Unicode; không xoá dữ liệu người dùng khi gỡ (chưa kiểm hành vi). Codex review cấu hình: không có kết luận (phiên chỉ đọc file repo, không báo vấn đề).
+- `cargo clippy --all-targets -- -D warnings` PASS (exit 0); `cargo test --locked` PASS (24+2+9 test pass, 1 ignored), chạy 2026-11-11 trước khi đổi cấu hình.

@@ -210,3 +210,11 @@ Gate chung: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm bui
 - **Quyết định:** đóng Phase 4, tick ba gate kèm ngoại lệ: (1) soak với CLI thật chỉ 5 workflow (100 vòng chạy với agent giả); (2) Low IL đăng nhập/gọi model BLOCKED (ADR-011); (3) chưa có test: nhánh mount point volume thật, khe TOCTOU nhỏ ở đường `GitWorktrees.diff`, đường `status()` khác (checkMerge, commit) chưa rà lại; (4) installer NSIS chưa ký, chưa chạy cài/gỡ, chưa đóng gói sidecar. Security CI (timeout 30 phút) chờ người dùng yêu cầu sửa workflow; PR #3 và push chưa làm.
 - **Đánh đổi:** gate "đạt" ở đây nghĩa là đạt trên bằng chứng ghi trong báo cáo, không phải bao phủ đầy đủ.
 - **Xem lại nếu:** soak thật lớn hơn lộ mất state; phát hiện thêm đường đọc ngoài worktree; Phase 5 cần installer chạy được (sidecar đóng gói).
+
+## ADR-014: Nhận ngoại lệ còn lại của giai đoạn A, sang giai đoạn B (2026-11-11)
+
+- **Trạng thái:** Đã quyết (người dùng, câu trả lời "Nhận ngoại lệ, sang B").
+- **Bối cảnh:** giai đoạn A của vòng lặp đã xong: Phase 3 ROADMAP sửa, vá `GitWorktrees.diff` bằng đọc handle có kiểm `dev/ino`, sidecar đóng gói và thử cài/gỡ NSIS, clippy và cargo test sạch, hai thẻ Settings kiểm trong app Tauri thật (PROGRESS 2026-11-11).
+- **Quyết định:** nhận hai mục còn hở là ngoại lệ, không ghi PASS: (1) mount point thật chưa có test (chỉ junction/symlink); (2) khe TOCTOU lật link ba lần chưa đóng, cần kiểm đường dẫn cuối qua handle bằng mã native (`GetFinalPathNameByHandle`) mà Node thuần không làm được.
+- **Đánh đổi:** `GitWorktrees.diff` có khe lý thuyết với kẻ tấn công cùng quyền ghi vào worktree và canh đúng thời điểm; worktree không phải sandbox bảo mật (CLAUDE.md nguyên tắc 5). Installer chưa ký, chưa thử trên máy thứ hai.
+- **Xem lại nếu:** thêm addon native/Rust vào sidecar, hoặc Phase 5 cần cam kết an toàn mạnh hơn cho đường đọc worktree.

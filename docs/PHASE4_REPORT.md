@@ -2,7 +2,7 @@
 
 Nhánh: `claude/winapp-agentroom-check-f81031` (đã ghép `worktree-p4-close-prep`). Ngày: 2026-11-10.
 
-**Trạng thái: CHƯA ĐÓNG.** Báo cáo này chỉ ghi bằng chứng; việc đóng Phase 4 là quyết định của người dùng (ADR-010, CLAUDE.md nguyên tắc 10). Không tick gate nào trong `docs/ROADMAP.md` khi chưa có người dùng xác nhận.
+**Trạng thái: ĐÓNG 2026-11-11 có ngoại lệ.** Người dùng xác nhận đóng (chọn "Đóng có ngoại lệ" ở AskUserQuestion sau khi đã chọn "làm thêm" một vòng). Ba gate trong `docs/ROADMAP.md` được tick kèm ngoại lệ; chi tiết ngoại lệ ở bảng gate bên dưới và ADR-013. Các mục "Còn thiếu / NOT_RUN" ở bảng gate là ngoại lệ đã chấp nhận, không phải đã đạt.
 
 ## Hạng mục đã làm trong đợt này (ADR-010, ADR-011)
 

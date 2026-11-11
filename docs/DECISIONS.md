@@ -202,3 +202,11 @@ Gate chung: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm bui
 - **Quyết định:** khi người dùng chủ động bật vòng lặp, điều phối viên được tự đóng phase và sang phase kế tiếp, nhưng chỉ khi mọi tiêu chí nghiệm thu trong `docs/ROADMAP.md` đã PASS bằng kết quả lệnh thật (không có mục NOT_RUN/BLOCKED) và `docs/PHASEn_REPORT.md` đã ghi. Mỗi task tối đa 3 lần tự sửa (`AGENTS.md`, `.codex/agents/implementer.toml`, `maxAttemptsPerTask` trong `loop.config.json`).
 - **Giới hạn:** không áp dụng cho phiên thường; đúng thứ tự ADR-005; không `git push`, không tạo PR, không thêm dependency; vai Codex không bao giờ tự đóng phase; task BLOCKED thì dừng. Tiêu chí chưa có lệnh chạy được vẫn là NOT_RUN nên phase đó không tự đóng. Các giả định chưa kiểm của công cụ: `docs/ASSUMPTIONS.md`, mục "Loop Runner: chưa kiểm chứng".
 - **Xem lại nếu:** vòng lặp làm hỏng cây làm việc, vượt giới hạn trên, hoặc có phép đo cho thấy cô lập CLI không đủ.
+
+## ADR-013: Đóng Phase 4 có ngoại lệ (2026-11-11)
+
+- **Trạng thái:** Đã quyết (người dùng, AskUserQuestion, câu trả lời "Đóng có ngoại lệ").
+- **Bối cảnh:** `docs/PHASE4_REPORT.md` có bằng chứng cho cả 9 hạng mục của ADR-010/011 nhưng ba gate ROADMAP còn thiếu: soak 100 workflow thật, Low IL, vài ca chưa có test.
+- **Quyết định:** đóng Phase 4, tick ba gate kèm ngoại lệ: (1) soak với CLI thật chỉ 5 workflow (100 vòng chạy với agent giả); (2) Low IL đăng nhập/gọi model BLOCKED (ADR-011); (3) chưa có test: nhánh mount point volume thật, khe TOCTOU nhỏ ở đường `GitWorktrees.diff`, đường `status()` khác (checkMerge, commit) chưa rà lại; (4) installer NSIS chưa ký, chưa chạy cài/gỡ, chưa đóng gói sidecar. Security CI (timeout 30 phút) chờ người dùng yêu cầu sửa workflow; PR #3 và push chưa làm.
+- **Đánh đổi:** gate "đạt" ở đây nghĩa là đạt trên bằng chứng ghi trong báo cáo, không phải bao phủ đầy đủ.
+- **Xem lại nếu:** soak thật lớn hơn lộ mất state; phát hiện thêm đường đọc ngoài worktree; Phase 5 cần installer chạy được (sidecar đóng gói).

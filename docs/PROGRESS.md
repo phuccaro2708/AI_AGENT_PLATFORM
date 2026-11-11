@@ -835,3 +835,7 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 
 - Tiêu chí: bộ `real-agy.test.ts` pass trên bản agy hiện có, không còn `agy.exe` mồ côi. Kết quả: agy 1.5.3, 6/6 pass (72,8 s), `agy.exe` còn lại 0. Chi tiết và phần chưa kiểm ở `docs/ASSUMPTIONS.md` (mục "Probe `agy` lần 3"). Không đổi mã.
 - Dọn thư mục worktree (7b): chưa làm, chờ người dùng xác nhận danh sách.
+
+## 2026-11-10: Phase 4 hạng mục 7b (dọn thư mục worktree rỗng)
+
+- Đã liệt kê và người dùng xác nhận (AskUserQuestion). Đã `rmdir` (chỉ xoá được thư mục rỗng) 8 thư mục rỗng không đăng ký worktree: flaky-root-cause, p4-deps, p4-ipc, p4-probe, p4-rust, policy-win-hardening, probe-permissions, wire-resource-monitor. Giữ: `int` (không rỗng, có node_modules) và `winapp-agentroom-check-f81031-loop-worktrees` (rỗng, có thể là gốc worktree của Loop Runner), cùng mọi worktree đã đăng ký.

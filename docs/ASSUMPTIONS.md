@@ -705,6 +705,14 @@ Mã: ADR-008. `codex` = `CodexAppServerAdapter` khi cổng bật; RSS watchdog `
 - **Hành vi mới:** khi một lượt chạy model B ngay sau model A (cùng server, cùng tiến trình sidecar), adapter gỡ A (`keep_alive:0`, best effort, lỗi bị bỏ qua) trước khi gửi chat của B; cùng model thì không gỡ. `detect()` kiểm tên đã cấu hình có trong `/api/tags` (tên không tag = `:latest`); tên sai hoặc server không trả lời = không sẵn sàng.
 - **Chưa đo:** chạy liên tiếp hai model qua adapter thật rồi đọc `/api/ps` (mới có test server giả và phép đo gỡ model ở trên); chương trình khác dùng chung Ollama không bị thấy bởi `ModelSlot`.
 
+## Claude: probe lại cổng quyền theo hướng mới, claude 2.1.319 (2026-11-10, Phase 4 hạng mục 4)
+
+Hướng mới của P4-1 d (ADR-010 mục 8) = `askEveryTool` (`permissions.ask` cho 6 tool qua một `--settings`) với cổng MCP thật, đã có mã ở d4/d6 và bật mặc định trong sidecar. Việc làm ở đây chỉ là chạy lại bài thật trên bản claude mới hơn (lần đo trước 2.1.318); không có capability mới.
+
+- **Lệnh:** `AGENT_STUDIO_REAL_CLI_GATES=claude-askall AGENT_STUDIO_REAL_CLI_GATES_OUT=<thư mục tạm> pnpm exec vitest run services/orchestrator/src/real-cli-gates.test.ts --no-file-parallelism` (2 test pass, 50 bỏ qua; khoảng 23 giây; repo rỗng trong `%TEMP%`, model haiku, prompt nhỏ không chứa mã dự án; cổng thật = sidecar đóng gói sau bộ ghi log).
+- **Đã đo (mỗi prompt đúng một lần chạy; model tự chọn lời gọi):** prompt A (Write, Read, `echo`, `git status`): cổng nhận Read (allow), Bash `echo probe-ok` (deny, "No allow rule matches"), Bash `git status` (deny), Write (allow); `w.txt` có trong repo tạm, hai lời gọi Bash bị từ chối. Prompt B (Read, Edit, Glob, Grep): cổng nhận cả bốn, đều allow. `gateStarts` = 1 mỗi lượt, `updatedInputEqualsInput` = true. Tức là cả 6 tool đều tới cổng, không có tool nào claude tự quyết ngoài cổng.
+- **Chưa đo / giới hạn:** chỉ 6 tool; WebFetch, WebSearch, NotebookEdit, Task/Agent, tool MCP, PowerShell không thử với luật `ask` (phải giới hạn bằng `--tools`, xem d4); một lần chạy mỗi ô, không phải mẫu thống kê; chưa thử luật `ask` ký tự đại diện; không đo chi phí (ngân sách trần theo test); cổng là chính sách chứ không phải sandbox OS.
+
 ## Loop Runner probes (2026-11-09)
 
 Nguồn: `scripts/probe.ts` trong repo công cụ loop-runner (commit `feat: add CLI probe script`), chạy một lần trên Windows 11, Node 24, `claude` 2.1.319, `codex-cli` 0.167.0. Mọi lời gọi dùng argument array, `shell: false`, trong một thư mục tạm mới (`fs.mkdtemp`), prompt tối thiểu không chứa dữ liệu dự án; không dùng cờ bỏ qua quyền/sandbox. Mỗi chế độ đúng một lần gọi. Output CLI coi là dữ liệu không đáng tin.

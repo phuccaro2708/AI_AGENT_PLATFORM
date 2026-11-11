@@ -815,3 +815,7 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Mã: `adapter-ollama` nhận `keepAlive` kiểu hàm; `ollama-config.ts` thêm `VRAM_KEEP_ALIVE = "30s"` và `vramKeepAlive`; `sidecar.ts` truyền hàm đọc `resourceSettings.thresholds` mỗi lượt (đổi dải VRAM lúc chạy có hiệu lực ở lượt sau; tuỳ chọn `keepAlive` tường minh thắng).
 - Lựa chọn của tôi: 30 giây (không phải 0) để các task liên tiếp cùng model còn dùng lại; số này là giả định, chưa đo trên Ollama thật.
 - Kết quả: hai test mới đỏ trước khi sửa, xanh sau; vitest 7 file / 81 test (adapter-ollama, ollama-config, sidecar-admission, packages/adapter-ollama) pass; `pnpm typecheck` và eslint sạch, prettier áp dụng. Chưa có test sidecar xem thẳng body gửi Ollama (chỉ test hàm và adapter).
+
+## 2026-11-10: Phase 4 hạng mục 4 (probe lại cổng quyền claude, P4-1 d)
+
+- Tiêu chí: bài thật `claude-askall` pass và mọi lời gọi trong 6 tool xuất hiện trong log của cổng. Kết quả: 2 test pass; 8/8 lời gọi (Read, Bash x2, Write, Edit, Glob, Grep, Read) tới cổng; 2 Bash bị chính sách từ chối. claude 2.1.319 (đo trước: 2.1.318). Ghi ở ASSUMPTIONS "Claude: probe lại cổng quyền theo hướng mới"; không thêm capability, giới hạn (tool ngoài 6) giữ nguyên.

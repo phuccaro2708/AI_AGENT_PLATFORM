@@ -54,7 +54,7 @@ const insideRoot = (realRoot: string, real: string): boolean => {
  * again and must still be inside the root and name the SAME file (device + inode) as the handle, so a link swapped
  * in (and possibly swapped back) between the check and the open is detected instead of read. Not a security
  * boundary: a process that keeps swapping can only make the call fail, but a swap that is undone after the final
- * re-check still cannot change which file the open handle reads. docs/THREAT_MODEL.md T7.
+ * re-check still cannot change which file the open handle reads.
  */
 export function digestInsideWorktree(
   root: string,

@@ -55,7 +55,7 @@ export interface GitWorktreesOptions {
   maxPathLength?: number;
   /**
    * Filter drivers (e.g. `lfs`) the repo config may define. Any other `filter.<name>.smudge|clean|process`
-   * from repo-controlled config makes create/status/diff throw `UntrustedGitConfigError` (docs/THREAT_MODEL.md T19).
+   * from repo-controlled config makes create/status/diff throw `UntrustedGitConfigError`.
    */
   allowFilters?: readonly string[];
 }

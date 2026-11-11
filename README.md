@@ -1,11 +1,13 @@
 # Agent Workspace
 
-Desktop platform (Windows-first, local-first) cho phép Claude Code, Codex, các CLI agent khác tự quét được trên máy (như Antigravity) và Local AI (Ollama) phối hợp, chạy song song trên Git worktree riêng và kiểm tra chéo kết quả, có human-in-the-loop.
+Công cụ desktop cá nhân (Windows, chạy cục bộ) để giao việc cho **Claude Code** và **Codex** từ một giao diện: chạy task đơn, hoặc Peer Review (một agent viết trong Git worktree riêng, agent kia kiểm tra chỉ-đọc).
 
-**Trạng thái:** Phase 0–2 đã đóng, Phase 7 đang làm (xem [`docs/HANDOFF.md`](docs/HANDOFF.md) và [`docs/PROGRESS.md`](docs/PROGRESS.md)). Chỉ `claude` và `codex` chạy được task; các CLI khác mới được phát hiện.
+Phạm vi: dùng cho một người trên một máy. Không có installer, ký mã, auto-update hay sandbox hệ điều hành (xem [`docs/DECISIONS.md`](docs/DECISIONS.md) ADR-010).
 
-- Quy tắc cho Claude Code và chính sách tham khảo repo công khai: [`CLAUDE.md`](CLAUDE.md)
-- Roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md)
-- TODO chi tiết: [`docs/TODO.md`](docs/TODO.md)
+- Việc tiếp theo: [`docs/ROADMAP.md`](docs/ROADMAP.md), [`docs/TODO.md`](docs/TODO.md)
+- Đang ở đâu: [`docs/HANDOFF.md`](docs/HANDOFF.md)
+- Quy tắc làm việc cho agent: [`CLAUDE.md`](CLAUDE.md)
 
-Stack: Tauri 2 + React + TypeScript (UI), Node.js + TypeScript (orchestrator), Rust (native), SQLite + Drizzle, pnpm monorepo.
+Stack: Tauri 2 + React + TypeScript (UI), Node.js + TypeScript (sidecar), Rust (vỏ native), SQLite + Drizzle, pnpm monorepo.
+
+Chạy thử: `pnpm install`, rồi `pnpm --filter @agent-studio/desktop tauri dev`. Kiểm tra trước khi commit: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build`.

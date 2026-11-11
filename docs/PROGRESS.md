@@ -819,3 +819,9 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 ## 2026-11-10: Phase 4 hạng mục 4 (probe lại cổng quyền claude, P4-1 d)
 
 - Tiêu chí: bài thật `claude-askall` pass và mọi lời gọi trong 6 tool xuất hiện trong log của cổng. Kết quả: 2 test pass; 8/8 lời gọi (Read, Bash x2, Write, Edit, Glob, Grep, Read) tới cổng; 2 Bash bị chính sách từ chối. claude 2.1.319 (đo trước: 2.1.318). Ghi ở ASSUMPTIONS "Claude: probe lại cổng quyền theo hướng mới"; không thêm capability, giới hạn (tool ngoài 6) giữ nguyên.
+
+## 2026-11-10: Phase 4 hạng mục 5 (ADR-006 A1/A7/A8)
+
+- Tiêu chí: A8 có test ghim hành vi hiện có: hai lần `workflows.start` giống hệt cho hai `taskId` khác nhau, `tasks.list` có đúng 2 task, cả hai `completed` (không dedupe, không retry ngầm). Test mới pass (`sidecar.test.ts -t A8`, 1 pass); eslint, prettier, typecheck sạch.
+- A1: chốt, không cần mã (sidecar do Tauri spawn đã là chủ DB duy nhất, khoá 2d đã có). A7: duyệt về nguyên tắc, chưa có mã vì chưa có tích hợp Harness để bật; làm cùng kênh/cầu nối. Chi tiết ở ADR-006, mục "Cập nhật 2026-11-10".
+- Chưa chạy lại cả bộ test (chỉ test mới); bộ đầy đủ chạy ở cổng cuối.

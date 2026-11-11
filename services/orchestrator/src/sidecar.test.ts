@@ -139,6 +139,26 @@ describe("D1 IPC", () => {
     }
   });
 
+  it("a repeated identical workflows.start is two independent tasks: no dedupe, no hidden retry (ADR-006 A8)", async () => {
+    const { result: p } = await call(svc, "projects.create", {
+      name: "rep",
+      rootPath: folder("rep"),
+    });
+    const { result: w } = await call(svc, "workflows.create", { projectId: p?.projectId });
+    const params = { workflowId: w?.workflowId, agentId: "stub", prompt: "same request" };
+    const first = (await call(svc, "workflows.start", params)).result;
+    const second = (await call(svc, "workflows.start", params)).result;
+    await svc.idle();
+    expect(first?.taskId).toBeTruthy();
+    expect(second?.taskId).toBeTruthy();
+    expect(second?.taskId).not.toBe(first?.taskId);
+    const tasks = (await call(svc, "tasks.list", { workflowId: w?.workflowId })).result;
+    expect(tasks?.tasks).toHaveLength(2);
+    for (const id of [first?.taskId, second?.taskId]) {
+      expect((await call(svc, "queryTask", { taskId: id })).result?.state).toBe("completed");
+    }
+  });
+
   it("pushes task.message in sequence order and a final task.state (D2)", async () => {
     svc.close();
     const events: SidecarEvent[] = [];

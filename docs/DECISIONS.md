@@ -164,3 +164,20 @@ Gate chung: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm bui
 - **Quyết định (người dùng chọn):** chỉ bỏ `agy` khỏi **phạm vi gate Phase 3**. Code `packages/adapter-antigravity`, đăng ký trong sidecar và UI giữ nguyên, không xoá, không ẩn. Gate Phase 3 tính trên Claude, Codex, Ollama.
 - **Đánh đổi:** `agy` vẫn chạy được nhưng không còn được bảo đảm bởi gate; phần PARTIAL (lỗi chưa đăng nhập/hết hạn mức, cây tiến trình con, ép quyền) trở thành nợ ngoài gate, không phải điều kiện đóng.
 - **Xem lại nếu:** muốn `agy` là agent hỗ trợ chính thức (khi đó đưa lại vào gate và hoàn tất kiểm thật), hoặc quyết định gỡ hẳn khỏi codebase.
+
+## ADR-010: Quyết định của người dùng 2026-11-10 (đóng Phase 3, keepAlive, quy tắc merge, duyệt tồn đọng)
+
+- **Bối cảnh:** sau khi đọc CI của PR #3 (head `c17ea94` xanh 5/5), người dùng trả lời lần lượt các câu hỏi tồn đọng bằng `AskUserQuestion`.
+- **Quyết định (người dùng chọn):**
+  1. **Phase 3 đóng có ngoại lệ:** ba tiêu chí gate đạt về mã và test; ngoại lệ là hai thẻ Settings ("Ollama models", "Load limits") và admission chưa kiểm trong app Tauri thật. Cùng phạm vi ngoại lệ: tool calling thật mới thử `read_file`; `agy` ngoài gate (ADR-009).
+  2. **`keepAlive` ngắn khi bật giới hạn VRAM** (để model Ollama được gỡ sớm, không giữ hệ thống `paused` ~5 phút). Đã quyết, CHƯA làm (cần sửa `adapter-ollama`).
+  3. **Quy tắc merge mới:** mục "Git Branch & Merge Policy" trong CLAUDE.md/AGENTS.md (`c2891b1`). `main` = `claude/loving-lovelace-32lh71`; `develop` = nhánh tích hợp do phiên chỉ định (chưa có nhánh `develop` riêng). Merge vào `main` luôn cần người dùng phê duyệt; không force push, không xoá nhánh chưa merge, không bỏ qua test.
+  4. **Q2:** duyệt nguyên bản 5 bước recovery.
+  5. **CLI thật cho C1/C5:** cho phép, có giới hạn (không chạy 100 workflow thật).
+  6. **Installer C2 (NSIS/WiX):** kiểm máy có chưa, kiểm uy tín/nguyên bản của nguồn, báo cáo rồi hỏi lại trước khi cài.
+  7. **Dependency Tailwind/shadcn (7D) và Playwright:** duyệt có điều kiện (license, audit, pin ≥ 2 tuần, ghi `docs/REFERENCES.md`, báo trước khi cài).
+  8. **P4-1 c/d:** đổi hướng cổng quyền của claude (probe cách khác, vì `--permission-prompt-tool` không thấy mọi lời gọi); codex giữ app-server.
+  9. **ADR-006:** duyệt A1 (chủ DB), A7 (spawn sớm sidecar), A8 (yêu cầu lặp `workflows.start`); A2/A4/A5/A6 để sau Phase 4.
+  10. **Việc khác:** điều tra Security CI bị huỷ trước khi ghép PR #3; Phase 4 chỉ đóng sau C1/C5 + installer; 7C-2 lập kế hoạch rồi hỏi lại; cho phép probe `agy` lần 3; cho phép dọn thư mục worktree rỗng/cũ (liệt kê trước khi xoá).
+- **Đánh đổi:** đóng Phase 3 khi UI chưa kiểm thật chấp nhận rủi ro lỗi hiển thị/thao tác ở hai thẻ Settings; ghi vào PHASE3_REPORT là ngoại lệ.
+- **Xem lại nếu:** kiểm app thật phát hiện lỗi ở hai thẻ; cần nhánh `develop` riêng; hướng claude mới vẫn không phủ hết lời gọi.

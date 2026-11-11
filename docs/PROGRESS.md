@@ -734,3 +734,11 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - `101ab41`: secret-scan báo chuỗi giả "ZX-4417-KESTREL" (`tests/contract/real-ollama-switch-tools.test.ts` dòng 72); thêm pragma và một mục `ACCEPTED_ANYWHERE` cho 4 snapshot đã push. Chưa chạy scanner cục bộ (máy chưa cài `detect-secrets`).
 - Gate cục bộ sau `1d7f352`: lint, format, typecheck, test (107 file pass, 1046 test pass, 67 skip), build exit 0. Sau `92b8760` và `101ab41` chỉ chạy eslint, prettier, typecheck và vitest của file đã đổi.
 - CI đã đọc: `1d7f352` ubuntu xanh, windows đỏ đúng test `windows-process-source`; `92b8760` Security đỏ do secret scan; `101ab41` Docs sync đỏ vì PROGRESS dừng ở 2026-11-08 (mục này sửa lỗi đó). Kết quả CI sau `101ab41` của các job TypeScript, Tauri, spike CHƯA đọc.
+
+## 2026-11-10: đọc CI PR #3, quyết định tồn đọng, chính sách merge
+
+- Phiên con (chỉ đọc, GraphQL `checkSuites`/`checkRuns`) đọc CI của `c17ea94`: run 42644169820 xanh 5/5 (TypeScript ubuntu 1m56s, windows 3m37s, Tauri 5m05s, Security 21m54s, spike 3m58s); Docs sync xanh (6s). Run trùng 42644154419: Security CANCELLED sau 30m16s, các job khác xanh; `101ab41` có hai run bị huỷ Security và Docs sync đỏ (đã sửa ở `c17ea94`). Nguyên nhân huỷ chưa điều tra; 2 check suite QUEUED chưa rõ nguồn.
+- Người dùng trả lời 4 lô `AskUserQuestion`; toàn bộ ghi ở ADR-010 (đóng Phase 3 có ngoại lệ, `keepAlive` ngắn khi bật VRAM, Q2 duyệt, CLI thật có giới hạn, dependency Tailwind/shadcn + Playwright có điều kiện, ADR-006 A1/A7/A8, đổi hướng claude P4-1 c/d, probe `agy` lần 3, dọn worktree rỗng).
+- `c2891b1`: thêm "Git Branch & Merge Policy" vào CLAUDE.md (và sửa 3 chỗ mâu thuẫn) và một dòng vào AGENTS.md. `prettier --check` CLAUDE.md/AGENTS.md qua; `node scripts/docs-sync-check.mjs` OK. Edit tool từng ghi CLAUDE.md thành CRLF; đã chuẩn hoá về LF (repo `eol=lf`).
+- Docs cập nhật trong lần lưu này: HANDOFF, ROADMAP (gate Phase 3 tick), TODO, PHASE3_REPORT, DECISIONS (ADR-010).
+- Chưa làm (chỉ quyết định, chưa thực thi): điều tra Security huỷ, `keepAlive` ngắn, probe claude hướng mới, A1/A7/A8, C1/C5, kiểm NSIS/WiX, dọn worktree, dependency, đối chiếu `phase-2-kickoff`. Chưa chạy lại lint/typecheck/test/build (chỉ đổi docs). `c2891b1` và commit lưu này chưa push, chưa có CI.

@@ -2,17 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { Writable } from "node:stream";
 import type { AgentCapability, AgentEvent } from "@agent-studio/contracts";
 import type { AgentAdapter, AgentTask } from "@agent-studio/agent-core";
-import { AntigravityAdapter } from "@agent-studio/adapter-antigravity";
 import { createLogger } from "@agent-studio/shared-utils";
 import { SidecarService } from "./sidecar.js";
-
-const fakeAgy = fileURLToPath(
-  new URL("../../../packages/adapter-antigravity/test/fake-agy.mjs", import.meta.url),
-);
 
 /** Completes with a text saying who ran it. */
 class Fake implements AgentAdapter {
@@ -65,7 +59,7 @@ const agentOf = async (taskId: unknown) =>
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "as-route-"));
-  // Hermetic: the built-in claude/codex/agy adapters look their CLI up on PATH. With an empty
+  // Hermetic: the built-in claude/codex adapters look their CLI up on PATH. With an empty
   // PATH none is "available", so these tests can never start a real CLI on a developer machine.
   vi.stubEnv("PATH", dir);
 });
@@ -88,7 +82,7 @@ describe("workflows.start without agentId (capability router)", () => {
       id: string;
       available: boolean;
     }[];
-    for (const id of ["claude", "codex", "agy"]) {
+    for (const id of ["claude", "codex"]) {
       expect(list.find((a) => a.id === id)?.available).toBe(false);
     }
     const workflowId = await workflow();
@@ -96,25 +90,6 @@ describe("workflows.start without agentId (capability router)", () => {
     await svc!.idle();
     expect(r.error).toBeUndefined();
     expect(await agentOf(r.result?.["taskId"])).toBe("live");
-    expect((await call("queryTask", { taskId: r.result?.["taskId"] })).result?.["state"]).toBe(
-      "completed",
-    );
-  });
-
-  it("routes to an agy adapter running the fake CLI, chosen by capability and not by name", async () => {
-    open([
-      new AntigravityAdapter({
-        id: "agy-fake",
-        command: process.execPath,
-        baseArgs: [fakeAgy],
-        env: { ...process.env, FAKE_MODE: "ok" },
-      }),
-    ]);
-    const workflowId = await workflow();
-    const r = await call("workflows.start", { workflowId, prompt: "hi" });
-    await svc!.idle();
-    expect(r.error).toBeUndefined();
-    expect(await agentOf(r.result?.["taskId"])).toBe("agy-fake");
     expect((await call("queryTask", { taskId: r.result?.["taskId"] })).result?.["state"]).toBe(
       "completed",
     );
@@ -138,20 +113,6 @@ describe("workflows.start without agentId (capability router)", () => {
     const r = await call("workflows.start", { workflowId, prompt: "hi" });
     expect(r.error?.message).toContain("Không có agent phù hợp");
     expect(r.error?.message).not.toContain("stub");
-  });
-
-  it("skips agents listed in excludeAgents and reports the gap when nothing else qualifies", async () => {
-    open([new Fake("first", ["streaming"]), new Fake("second", ["streaming"])]);
-    const workflowId = await workflow();
-    const r = await call("workflows.start", { workflowId, prompt: "hi", excludeAgents: ["first"] });
-    await svc!.idle();
-    expect(await agentOf(r.result?.["taskId"])).toBe("second");
-    const none = await call("workflows.start", {
-      workflowId,
-      prompt: "hi",
-      excludeAgents: ["first", "second"],
-    });
-    expect(none.error?.message).toContain("Không có agent phù hợp");
   });
 
   it("still honours an explicit agentId, even one that declares no capabilities", async () => {

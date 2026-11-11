@@ -1,6 +1,8 @@
 import type { AgentMessage, TaskState } from "@agent-studio/contracts";
-import { AUTO_AGENT } from "./autoRoute";
 import { callSidecar as call } from "./sidecar";
+
+/** Picker value meaning "let the capability router choose" (no agent id is ever called this). */
+export const AUTO_AGENT = "auto";
 
 export interface Project {
   id: string;
@@ -38,57 +40,6 @@ export interface DiagnosticsExport {
   verified: boolean;
   problems: string[];
   limits: string;
-}
-
-export interface Band {
-  reduceAt: number;
-  pauseAt: number;
-}
-/** Load limits kept in the settings table (P3-4, P3-5). Percentages 0-100, concurrency 1-8. */
-export interface ResourceSettings {
-  concurrency: number;
-  /** `vram` is optional: absent = GPU memory never limits anything. */
-  thresholds: { cpu: Band; memory: Band; vram?: Band; releaseMarginPercent: number };
-}
-export interface OllamaModels {
-  reachable: boolean;
-  /** Model name set through `AGENT_STUDIO_OLLAMA_MODEL`, or null. */
-  configured: string | null;
-  models: { name: string; sizeBytes: number; parameterSize?: string; quantization?: string }[];
-}
-
-export interface ResourceReport {
-  settings: ResourceSettings;
-  defaults: ResourceSettings;
-  status: {
-    concurrency: number;
-    /** What the scheduler may start at once right now: the ceiling, halved or zero under load. */
-    effectiveConcurrency: number;
-    running: number;
-    queued: number;
-    monitor: {
-      level: "normal" | "reduced" | "paused";
-      reasons: string[];
-      measured: boolean;
-      cpuPercent?: number;
-      memoryPercent?: number;
-      /** Whole-GPU memory used (nvidia-smi); only present when there is an NVIDIA GPU. */
-      vramPercent?: number;
-      trackedRssBytes?: number;
-    } | null;
-    /** The whole GPU as nvidia-smi sees it (every program). `null` when there is no NVIDIA GPU. */
-    gpu: { usedBytes: number; totalBytes: number; scope: "whole-gpu" } | null;
-    /** What Ollama says its loaded models take. Only asked when an Ollama model is configured. */
-    ollama: {
-      scope: "ollama-models";
-      models: {
-        name: string;
-        sizeBytes: number;
-        sizeVramBytes: number;
-        contextLength?: number;
-      }[];
-    } | null;
-  };
 }
 
 export type RecoveryAction = "resume" | "retry" | "abandon";
@@ -209,18 +160,12 @@ export const api = {
   saveAgentSettings: (provider: Provider, settings: AgentLaunchSettings | null) =>
     call<SettingsOutcome>("agents.setSettings", { provider, settings }),
   /** One workflow per task for now; the sidecar runs it in the project's root. */
-  async startTask(
-    projectId: string,
-    agentId: string,
-    prompt: string,
-    /** Used only for `AUTO_AGENT`: ids the router must not pick. */
-    excludeAgents: string[] = [],
-  ): Promise<string> {
+  async startTask(projectId: string, agentId: string, prompt: string): Promise<string> {
     const { workflowId } = await call<{ workflowId: string }>("workflows.create", { projectId });
     const auto = agentId === AUTO_AGENT;
     const { taskId } = await call<{ taskId: string }>("workflows.start", {
       workflowId,
-      ...(auto ? { excludeAgents } : { agentId }),
+      ...(auto ? {} : { agentId }),
       prompt,
     });
     return taskId;
@@ -263,11 +208,6 @@ export const api = {
     call<{ state: TaskState }>("recovery.resolve", { taskId, action, note, confirmUnverified }),
   /** A redacted support bundle written next to the database; the UI cannot choose where. */
   exportDiagnostics: () => call<DiagnosticsExport>("diagnostics.export"),
-  /** Models installed in the local Ollama (HTTP only). `reachable:false` = Ollama is not answering. */
-  ollamaModels: () => call<OllamaModels>("ollama.models"),
-  getResources: () => call<ResourceReport>("resources.get"),
-  /** Validated by the backend; a bad value is rejected and nothing changes. Applies to later tasks at once. */
-  setResources: (settings: ResourceSettings) => call<ResourceReport>("resources.set", { settings }),
   cancel: (taskId: string) =>
     call<{ requested: boolean; state: TaskState }>("tasks.cancel", { taskId }),
   task: (taskId: string) => call<{ state: TaskState | null }>("queryTask", { taskId }),

@@ -5,3 +5,6 @@ coverage
 pnpm-lock.yaml
 **/src-tauri/gen
 sidecar-dist
+.claude/worktrees
+.claude/settings.local.json
+.agentsroom

@@ -10,6 +10,7 @@ export default tseslint.config(
       "**/coverage/**",
       "**/sidecar-dist/**",
       "apps/desktop/src-tauri/gen/**",
+      ".claude/worktrees/**",
     ],
   },
   js.configs.recommended,

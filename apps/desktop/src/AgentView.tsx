@@ -2,7 +2,7 @@ import { useState } from "react";
 import { draftAfterStart } from "./draft";
 import type { AdapterInfo, Project } from "./api";
 import { AGENT_TASK_REQUIRES, capabilityBlocker } from "./capabilityGap";
-import { AUTO_AGENT } from "./autoRoute";
+import { AUTO_AGENT } from "./api";
 import { Composer, StartSteps } from "./Composer";
 import type { Preset } from "./presets";
 import { TaskLogView, type TaskRef } from "./components";

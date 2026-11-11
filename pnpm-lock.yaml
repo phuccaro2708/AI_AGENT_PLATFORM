@@ -64,18 +64,6 @@ importers:
         specifier: 8.3.4
         version: 8.3.4(@types/node@22.20.4)(esbuild@0.28.2)(tsx@4.23.15)
 
-  packages/adapter-antigravity:
-    dependencies:
-      '@agent-studio/agent-core':
-        specifier: workspace:*
-        version: link:../agent-core
-      '@agent-studio/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@agent-studio/process-manager':
-        specifier: workspace:*
-        version: link:../process-manager
-
   packages/adapter-claude:
     dependencies:
       '@agent-studio/agent-core':
@@ -99,15 +87,6 @@ importers:
       '@agent-studio/process-manager':
         specifier: workspace:*
         version: link:../process-manager
-
-  packages/adapter-ollama:
-    dependencies:
-      '@agent-studio/agent-core':
-        specifier: workspace:*
-        version: link:../agent-core
-      '@agent-studio/contracts':
-        specifier: workspace:*
-        version: link:../contracts
 
   packages/agent-core:
     dependencies:
@@ -147,8 +126,6 @@ importers:
 
   packages/process-manager: {}
 
-  packages/resource-monitor: {}
-
   packages/shared-utils:
     dependencies:
       pino:
@@ -182,18 +159,12 @@ importers:
 
   services/orchestrator:
     dependencies:
-      '@agent-studio/adapter-antigravity':
-        specifier: workspace:*
-        version: link:../../packages/adapter-antigravity
       '@agent-studio/adapter-claude':
         specifier: workspace:*
         version: link:../../packages/adapter-claude
       '@agent-studio/adapter-codex':
         specifier: workspace:*
         version: link:../../packages/adapter-codex
-      '@agent-studio/adapter-ollama':
-        specifier: workspace:*
-        version: link:../../packages/adapter-ollama
       '@agent-studio/agent-core':
         specifier: workspace:*
         version: link:../../packages/agent-core
@@ -215,9 +186,6 @@ importers:
       '@agent-studio/process-manager':
         specifier: workspace:*
         version: link:../../packages/process-manager
-      '@agent-studio/resource-monitor':
-        specifier: workspace:*
-        version: link:../../packages/resource-monitor
       '@agent-studio/shared-utils':
         specifier: workspace:*
         version: link:../../packages/shared-utils

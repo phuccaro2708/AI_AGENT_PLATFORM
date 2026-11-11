@@ -105,16 +105,13 @@ const ALLOWED_METHODS: &[&str] = &[
     "diagnostics.export",
     "recovery.inspect",
     "recovery.resolve",
-    "resources.get",
-    "resources.set",
-    "ollama.models",
 ];
 
 fn is_allowed(method: &str) -> bool {
     ALLOWED_METHODS.contains(&method)
 }
 
-/// Decisions a hijacked webview must not be able to make on its own (THREAT_MODEL T12). Each one is
+/// Decisions a hijacked webview must not be able to make on its own. Each one is
 /// confirmed in a native dialog the shell opens, showing text the *sidecar* writes from its own
 /// database; only on "Allow" does the shell forward the call. All of these are also in
 /// `ALLOWED_METHODS`: being callable by the UI and being confirmed outside it are separate checks.
@@ -486,9 +483,6 @@ mod tests {
             "diagnostics.export",
             "recovery.inspect",
             "recovery.resolve",
-            "resources.get",
-            "resources.set",
-            "ollama.models",
             "agents.getSettings",
             "agents.setSettings",
             "agents.probe",

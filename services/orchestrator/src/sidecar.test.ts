@@ -282,8 +282,6 @@ describe("D1 IPC", () => {
     expect(list.result?.adapters.map((a: { id: string }) => a.id)).toEqual([
       "claude",
       "codex",
-      "agy",
-      "ollama", // registered unavailable until AGENT_STUDIO_OLLAMA_MODEL is set (S3)
       "codex-app-server", // registered by default since Q3 (2026-11-07)
     ]);
     expect(list.result?.cli).toHaveLength(2);
@@ -349,15 +347,12 @@ describe("D1 IPC", () => {
     const byId = new Map(r.result?.clis.map((c: { id: string }) => [c.id, c]));
     expect(byId.get("claude")).toMatchObject({ supported: true, usable: true });
     expect(byId.get("codex")).toMatchObject({ supported: true, usable: false });
-    expect(byId.get("agy")).toMatchObject({ supported: true, usable: true, version: "1.4.8" });
+    expect(byId.get("agy")).toMatchObject({ supported: false, usable: true, version: "1.4.8" });
     expect(byId.get("copilot")).toMatchObject({ supported: false, usable: false });
     expect(byId.has("ollama")).toBe(false); // the scan seam returned nothing for it
-    // a CLI without an adapter (copilot) cannot be started as an agent; agy has one since Phase 3
+    // a CLI without an adapter (copilot) cannot be started as an agent; agy is only detected, never run
     const start = await call(svc, "agents.capabilities", { provider: "claude" });
     expect(start.result?.probe).toMatchObject({ status: "ok" });
-    expect(
-      (await call(svc, "agents.list")).result?.adapters.map((a: { id: string }) => a.id),
-    ).toContain("agy");
     // stored like any other probe
     expect(
       (await call(svc, "agents.list")).result?.cli.map((c: { provider: string }) => c.provider),

@@ -1,6 +1,5 @@
 import {
   canTransitionWorkflow,
-  ResourceSettings,
   SidecarRequest,
   type AgentCapability,
   type SidecarEvent,
@@ -24,13 +23,6 @@ import { evaluate } from "@agent-studio/policy-engine";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAdapter, CodexAppServerAdapter } from "@agent-studio/adapter-codex";
 import type { CodexAppServerOptions } from "@agent-studio/adapter-codex";
-import { AntigravityAdapter } from "@agent-studio/adapter-antigravity";
-import {
-  OllamaAdapter,
-  readOllamaPs,
-  listOllamaModels,
-  type OllamaAdapterOptions,
-} from "@agent-studio/adapter-ollama";
 import {
   probeClaude,
   probeCodex,
@@ -39,15 +31,10 @@ import {
   type ProbeOptions,
   type ProbeResult,
 } from "@agent-studio/cli-probe";
-import {
-  DEFAULT_THRESHOLDS,
-  ResourceMonitor,
-  type ResourceSource,
-} from "@agent-studio/resource-monitor";
 import { exportDiagnostics, verifyDiagnostics } from "@agent-studio/diagnostics";
 import { createLogger, type Logger } from "@agent-studio/shared-utils";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
-import { liveChildPids, type JobWrapOptions } from "@agent-studio/process-manager";
+import type { JobWrapOptions } from "@agent-studio/process-manager";
 import { dirname, join } from "node:path";
 import { ApprovalService } from "./approvals.js";
 import { ArtifactRegistry } from "./artifacts.js";
@@ -75,8 +62,6 @@ export interface SidecarOptions {
   migrationsFolder?: string;
   /** Test seam: adapters to register in addition to the stub. */
   extraAdapters?: AgentAdapter[];
-  /** The local Ollama agent (`ollama`): model, loopback URL, opt-in tools. Without a model it is registered but unavailable. */
-  ollama?: OllamaAdapterOptions;
   /** Receives server-pushed events (the transport decides how to deliver / drop them). */
   onEvent?: (event: SidecarEvent) => void;
   /** Test seam: replaces the real CLI probes. */
@@ -91,16 +76,7 @@ export interface SidecarOptions {
   schedulerIntervalMs?: number;
   /** Interval of the approval expiry sweep (default 5 s). */
   approvalSweepMs?: number;
-  /**
-   * Where CPU/RAM readings come from. When given, a {@link ResourceMonitor} (default thresholds) samples it
-   * and the scheduler starts fewer tasks under load; when absent there is no monitor and the scheduler runs
-   * at its fixed concurrency. The real process passes `NodeResourceSource` (sidecar-main); tests pass a fake
-   * or nothing, so they never read the real machine.
-   */
-  resourceSource?: ResourceSource;
-  /** How often the resource monitor samples. Default 1000. */
-  resourceSampleMs?: number;
-  /** Tasks the scheduler runs at once at most (the resource monitor can only lower it). Default 2. */
+  /** Tasks the scheduler runs at once at most. Default 2. */
   schedulerConcurrency?: number;
   /** Test seam: replaces the Policy Engine's `evaluate` in the pre-run gate (the real one never throws). */
   policyEvaluate?: typeof evaluate;
@@ -137,7 +113,7 @@ export interface SidecarOptions {
    * P4-4 (b): start the `claude` and `codex` CLIs inside `agent-job-wrap` (Windows Job Object, kill on close).
    * Unset here = off. `sidecar-main` sets it by default when the installed binary is found (`job-wrap-config.ts`;
    * `AGENT_STUDIO_JOB_WRAP=0` turns it off; missing binary = warning and no wrap). Not applied to
-   * `codex-app-server` or Antigravity.
+   * `codex-app-server`.
    */
   jobWrap?: JobWrapOptions;
   /**
@@ -159,7 +135,6 @@ export interface SidecarOptions {
 const DEFAULT_COMMANDS: Readonly<Record<string, string>> = {
   claude: "claude",
   codex: "codex",
-  agy: "agy",
   "codex-app-server": "codex",
 };
 
@@ -171,9 +146,6 @@ const fail = (id: number, message: string) => ({
   response: { id, error: { message } } as SidecarResponse,
   shutdown: false,
 });
-
-/** Where the load limits are stored (the `settings` table); the value is the JSON of a `ResourceSettings`. */
-const RESOURCE_SETTINGS_KEY = "resources.v1";
 
 /** Transport-independent request handler (unit-testable). */
 /** ~120 characters of stored payload around the first (case-insensitive) match. */
@@ -190,12 +162,6 @@ const REQUIRED_CAPABILITIES = {
   codex: ["execSubcommand", "execJson"],
 } as const;
 
-/**
- * CLIs that have an adapter but no settings-aware probe yet: scanned like any other candidate
- * (generic help-based probe), yet allowed to run tasks. Their launch settings are not configurable.
- */
-const SCAN_ONLY_ADAPTERS: ReadonlySet<string> = new Set(["agy"]);
-
 /** Same requirement the UI applies to a single-agent task (`AGENT_TASK_REQUIRES`): a live log. */
 const AUTO_AGENT_REQUIRES: readonly AgentCapability[] = ["streaming"];
 
@@ -207,14 +173,11 @@ export class SidecarService {
   private readonly registry = new AdapterRegistry();
   private readonly orchestrator: Orchestrator;
   private readonly scheduler: Scheduler;
-  private readonly resourceMonitor: ResourceMonitor | undefined;
   private readonly engine: PeerReviewEngine;
   private readonly approvals: ApprovalService;
   private readonly artifacts: ArtifactRegistry;
   /** Phase 0 spike workflow for `runStub`; created on first use so a normal start adds no project. */
   private spikeWorkflowId: string | undefined;
-  /** The limits in force (P3-4, P3-5): what Settings saved, else the defaults. */
-  private resourceSettings!: ResourceSettings;
   private readonly recoveredTasks: number;
   private readonly secrets: ProviderSecrets;
   private readonly redactor: SecretRedactor;
@@ -305,7 +268,7 @@ export class SidecarService {
    * and their probe stored. Only `supported` CLIs may be picked to run tasks.
    */
   private async scanAll() {
-    const supported = (id: string) => id in this.probes || SCAN_ONLY_ADAPTERS.has(id);
+    const supported = (id: string) => id in this.probes;
     const scanned = new Map(
       (
         await (this.opts.scan ?? scanClis)({
@@ -474,8 +437,6 @@ export class SidecarService {
     this.registry.register(new StubAdapter());
     this.registry.register(this.buildCliAdapter("claude", this.repo.getAgentSettings("claude")));
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
-    this.registry.register(this.gate.wrap(new AntigravityAdapter()));
-    this.registry.register(this.gate.wrap(new OllamaAdapter(opts.ollama ?? {})));
     if (opts.codexAppServer !== false) {
       this.registry.register(this.buildAppServerAdapter(this.repo.getAgentSettings("codex")));
     }
@@ -507,27 +468,10 @@ export class SidecarService {
       board: new ContextBoard(this.repo),
       workspaces,
     });
-    this.resourceSettings = this.loadResourceSettings();
-    if (opts.resourceSource) {
-      this.resourceMonitor = new ResourceMonitor({
-        source: opts.resourceSource,
-        thresholds: this.resourceSettings.thresholds,
-        trackedPids: liveChildPids, // the CLI agents' root pids (P3-2)
-        onHealthChange: (healthy, d) =>
-          healthy
-            ? this.log.info("resource monitor measuring again")
-            : this.log.warn(
-                { failures: d.consecutiveFailures, err: this.redactor.text(String(d.error)) },
-                "resource monitor cannot read the source: concurrency is reduced until it recovers",
-              ),
-      });
-      this.resourceMonitor.start(opts.resourceSampleMs);
-    }
     this.scheduler = new Scheduler({
       repo: this.repo,
       orchestrator: this.orchestrator,
-      concurrency: this.resourceSettings.concurrency,
-      ...(this.resourceMonitor ? { admission: this.resourceMonitor } : {}),
+      concurrency: opts.schedulerConcurrency ?? 2,
       onStarted: (id) => opts.onEvent?.({ event: "task.state", taskId: id, state: "running" }),
       onSettled: (id, result) => {
         const waiter = this.settleWaiters.get(id);
@@ -737,8 +681,8 @@ export class SidecarService {
   }
 
   /**
-   * Every single-task path goes through the scheduler, so the same admission (concurrency ceiling and the
-   * resource monitor's reduced/paused levels) applies. The task is queued first; when admission refuses, it
+   * Every single-task path goes through the scheduler, so its concurrency ceiling applies. The task is queued
+   * first; when no slot is free it
    * stays `queued` and the scheduler timer starts it once the load drops. Returns the task id at once and
    * `settled`, which resolves with the result when the task has run to its end.
    */
@@ -759,77 +703,11 @@ export class SidecarService {
     return { taskId, settled };
   }
 
-  /** Defaults: the monitor's own default thresholds and the embedding's concurrency (2 when it names none). */
-  private defaultResourceSettings(): ResourceSettings {
-    const { cpu, memory, releaseMarginPercent } = DEFAULT_THRESHOLDS;
-    return {
-      concurrency: this.opts.schedulerConcurrency ?? 2,
-      thresholds: { cpu: { ...cpu }, memory: { ...memory }, releaseMarginPercent },
-    };
-  }
-
-  /** What Settings saved earlier. Anything unreadable or out of bounds falls back to the defaults, with a warning. */
-  private loadResourceSettings(): ResourceSettings {
-    const text = this.repo.getSetting(RESOURCE_SETTINGS_KEY);
-    if (text === undefined) return this.defaultResourceSettings();
-    try {
-      return ResourceSettings.parse(JSON.parse(text));
-    } catch (err) {
-      this.log.warn(
-        { err: this.redactor.text(String(err)) },
-        "stored load limits are invalid: using the defaults",
-      );
-      return this.defaultResourceSettings();
-    }
-  }
-
   private queuedCount(): number {
     return this.db.$client
       .prepare("select count(*) from tasks where state = 'queued'")
       .pluck()
       .get() as number;
-  }
-
-  /** Models Ollama has loaded, only when the person configured one (opt-in); `null` when not asked or unreachable. */
-  private async ollamaLoaded() {
-    const o = this.opts.ollama;
-    if (!o?.model) return null;
-    const models = await readOllamaPs({ ...(o.baseUrl ? { baseUrl: o.baseUrl } : {}) });
-    return models ? { scope: "ollama-models", models } : null;
-  }
-
-  /** The limits in force and what the resource monitor says now (level and the reasons for it). */
-  private async resourceReport() {
-    const snap = this.resourceMonitor?.snapshot();
-    const base = this.resourceSettings.concurrency;
-    const queued = this.queuedCount();
-    return {
-      settings: this.resourceSettings,
-      defaults: this.defaultResourceSettings(),
-      status: {
-        concurrency: base,
-        effectiveConcurrency: this.resourceMonitor
-          ? this.resourceMonitor.maxConcurrency(base)
-          : base,
-        running: this.scheduler.runningCount,
-        queued,
-        monitor: snap
-          ? {
-              level: snap.level,
-              reasons: snap.reasons,
-              measured: snap.measured,
-              ...snap.metrics,
-              sampledAtMs: snap.sampledAtMs,
-            }
-          : null,
-        // Two readings with different scope, never merged: `gpu` is the whole GPU as nvidia-smi sees it (every
-        // program; the only one that can raise pressure), `ollama` is what Ollama says its loaded models take.
-        gpu: snap?.gpu
-          ? { usedBytes: snap.gpu.usedBytes, totalBytes: snap.gpu.totalBytes, scope: "whole-gpu" }
-          : null,
-        ollama: await this.ollamaLoaded(),
-      },
-    };
   }
 
   private spikeWorkflow(): string {
@@ -1038,7 +916,7 @@ export class SidecarService {
             // No agent named: pick by declared capability, never by name. The stub is an internal
             // fixture and is not a candidate. A named agent is honoured as before (the UI gates it).
             const route = selectAgent(await snapshotAdapters(this.registry), AUTO_AGENT_REQUIRES, {
-              exclude: ["stub", ...(req.params.excludeAgents ?? [])],
+              exclude: ["stub"],
             });
             if (!route.ok) return fail(req.id, describeRouteFailure(route, AUTO_AGENT_REQUIRES));
             agentId = route.agentId;
@@ -1184,33 +1062,6 @@ export class SidecarService {
           return ok(req.id, { worktrees: this.repo.listWorktrees(req.params.workflowId) });
         case "diagnostics.export":
           return ok(req.id, this.exportDiagnosticsBundle());
-        case "ollama.models": {
-          const o = this.opts.ollama;
-          const models = await listOllamaModels({ ...(o?.baseUrl ? { baseUrl: o.baseUrl } : {}) });
-          return ok(req.id, {
-            reachable: models !== undefined,
-            models: models ?? [],
-            configured: o?.model ?? null,
-          });
-        }
-        case "resources.get":
-          return ok(req.id, await this.resourceReport());
-        case "resources.set": {
-          const next = req.params.settings;
-          // Monitor first: it re-validates and throws before anything is stored or applied.
-          this.resourceMonitor?.setThresholds(next.thresholds);
-          this.scheduler.setConcurrency(next.concurrency);
-          this.repo.setSetting(RESOURCE_SETTINGS_KEY, JSON.stringify(next));
-          this.resourceSettings = next;
-          this.resourceMonitor?.sample(); // decide with the new numbers now, not a second later
-          this.log.info({ concurrency: next.concurrency }, "load limits changed");
-          // A raised ceiling (or looser brakes) may free a slot for tasks that were being held back.
-          if (this.queuedCount() > 0) {
-            this.scheduler.start(this.opts.schedulerIntervalMs);
-            await this.scheduler.tick();
-          }
-          return ok(req.id, await this.resourceReport());
-        }
         case "shutdown":
           return { response: { id: req.id, result: { ok: true } }, shutdown: true };
       }
@@ -1230,7 +1081,6 @@ export class SidecarService {
   close(): void {
     this.approvals.stopTimer();
     this.scheduler.stop();
-    this.resourceMonitor?.stop();
     for (const resolve of this.settleWaiters.values()) resolve(undefined);
     this.settleWaiters.clear();
     if (this.db.$client.open) this.db.$client.close();

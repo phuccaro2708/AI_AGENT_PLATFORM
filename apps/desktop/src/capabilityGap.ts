@@ -16,7 +16,7 @@ export interface CapabilityGap {
  * What each screen needs from the agent it lets you pick. UI-level requirement, not a backend rule:
  * - single agent: the task log is rendered live, so `streaming`;
  * - Peer Review: both roles work in a worktree with `permissions` set (workspace-write / read-only)
- *   and run tools, so `tool_execution`. The `agy` adapter refuses tasks with `permissions` set.
+ *   and run tools, so `tool_execution`.
  */
 export const AGENT_TASK_REQUIRES: readonly AgentCapability[] = ["streaming"];
 export const PEER_REVIEW_REQUIRES: readonly AgentCapability[] = ["tool_execution"];

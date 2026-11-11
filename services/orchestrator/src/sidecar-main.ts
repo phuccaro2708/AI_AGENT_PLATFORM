@@ -1,10 +1,8 @@
 import { createInterface } from "node:readline";
-import { NodeResourceSource } from "@agent-studio/resource-monitor";
 import { createLogger } from "@agent-studio/shared-utils";
 import { runPermissionGate } from "./claude-permission-gate.js";
 import { createEventWriter } from "./event-writer.js";
 import { resolveJobWrap, resolveTreeMemoryLimitMb } from "./job-wrap-config.js";
-import { resolveOllama } from "./ollama-config.js";
 import { resolvePermissionGates } from "./permission-gates-config.js";
 import { createSecretRedactor, redactingDestination, takeSecretsFromEnv } from "./secrets.js";
 import { acquireSidecarLock, SidecarLockError } from "./sidecar-lock.js";
@@ -71,14 +69,12 @@ const service = new SidecarService(
     dbPath,
     secrets,
     onEvent: events.emit,
-    resourceSource: new NodeResourceSource(),
     ...(nativeBinding ? { nativeBinding } : {}),
     ...(migrationsFolder ? { migrationsFolder } : {}),
     ...(jobWrap ? { jobWrap } : {}),
     // Q3: both permission gates are ON unless AGENT_STUDIO_CLAUDE_GATE / AGENT_STUDIO_CODEX_GATE says off.
     ...resolvePermissionGates(process.env),
     ...(cliTreeMemoryLimitMb === undefined ? {} : { cliTreeMemoryLimitMb }),
-    ollama: resolveOllama(process.env, log),
   },
   log,
 );

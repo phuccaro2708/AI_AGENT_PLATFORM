@@ -1,5 +1,7 @@
 # Kế hoạch giải quyết theo phase (soạn 2026-11-05)
 
+Kế hoạch chi tiết Phase 5, 6, 8, 9 và 10: [PHASE_5_6_8_9_10_PLAN.md](PHASE_5_6_8_9_10_PLAN.md) (2026-11-09). Tài liệu mới mở rộng phần phác hướng bên dưới, không tự thay quyết định ADR hoặc đánh dấu đã triển khai.
+
 File này CHỈ chứa vấn đề, các hướng giải quyết, khuyến nghị và cách kiểm chứng. Trạng thái hiện tại nằm ở `docs/HANDOFF.md`; lịch sử ở `docs/PROGRESS.md`; thứ tự phase theo ADR-005 (không đổi ở đây, đổi thứ tự là quyết định của người dùng). Thay thế các bước trong `docs/NEXT_PLAN.md`.
 
 Quy ước mỗi vấn đề: **Hướng** (2–3 cách, kèm đánh đổi) → **Khuyến nghị** → **Người dùng quyết?** → **File chạm** → **Kiểm chứng** → **Phụ thuộc**. Chỗ nào là dependency, probe, lượt dùng CLI hay chi phí thì chỉ liệt kê lựa chọn và đánh dấu "người dùng quyết", không chọn ngầm (`CLAUDE.md`). Mọi hành vi của CLI chưa probe đều ghi "CHƯA XÁC MINH".

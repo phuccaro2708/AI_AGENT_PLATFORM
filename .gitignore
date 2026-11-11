@@ -10,3 +10,9 @@ coverage/
 *.log
 .DS_Store
 services/orchestrator/sidecar-dist/
+.mcp.json
+.agentsroom/handoff-transcript-*.txt
+.agentsroom/handoff-summary-*.md
+.agentsroom/fork-context-*.txt
+.agentsroom/transfer-context-*.txt
+.agentsroom/handoff-context-*.txt

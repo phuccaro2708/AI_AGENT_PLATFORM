@@ -2,6 +2,46 @@
 
 Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy đủ: `docs/ARCHITECTURE.md`. Kế hoạch: `docs/ROADMAP.md`, việc cần làm: `docs/TODO.md`.
 
+## Bản đồ dữ liệu cho agent
+
+Định vị trước: `git status --short --branch`, `git rev-parse HEAD`, `git worktree list`. Tài liệu có thể ghi trạng thái của nhánh khác hoặc một thời điểm cũ; đối chiếu nhánh, commit và mã nguồn trước khi kết luận hiện trạng. Đọc nhánh cần thiết của cây, không nạp toàn bộ repo cho mọi yêu cầu.
+
+```text
+AI_AGENT_PLATFORM/
+├─ AGENTS.md, CLAUDE.md        Quy tắc làm việc; đọc trước khi thao tác.
+├─ README.md                   Giới thiệu và cách bắt đầu.
+├─ docs/                       Tài liệu theo câu hỏi cần trả lời:
+│  ├─ Hiện trạng               HANDOFF (điểm bàn giao), PROGRESS (nhật ký), TODO (việc mở).
+│  ├─ Kế hoạch                 ROADMAP (phase/gate), NEXT_PLAN (chặng gần),
+│  │                           PHASE_PLANS và PHASE_5_6_8_9_10_PLAN (kế hoạch chi tiết).
+│  ├─ Thiết kế                 ARCHITECTURE (lớp/phụ thuộc), DECISIONS và ADR-* (quyết định),
+│  │                           PROTOCOL (message/IPC), DATABASE (schema).
+│  ├─ Bảo mật / bằng chứng     SECURITY, THREAT_MODEL, ASSUMPTIONS (probe/chưa xác minh),
+│  │                           DEPS_AUDIT, PERF_BUDGET, REFERENCES.
+│  └─ Nghiệm thu / bàn giao    PHASE*_REPORT, CLOUD_HANDOFF, reports/ (bằng chứng đi kèm).
+├─ apps/desktop/
+│  ├─ src/                      React UI, trạng thái và cầu nối tới sidecar.
+│  └─ src-tauri/                Rust host, IPC, đóng gói và kiểm tra native.
+├─ services/orchestrator/src/  Sidecar: workflow, điều phối, approval, policy và recovery.
+├─ packages/                   Thư viện theo ranh giới trách nhiệm:
+│  ├─ contracts, agent-core    Schema/giao ước và vòng đời adapter.
+│  ├─ adapter-*, cli-probe     Claude, Codex, Antigravity, Ollama và phát hiện CLI.
+│  ├─ policy-engine           Quyết định quyền và phạm vi đường dẫn/lệnh.
+│  ├─ process-manager         Sinh, theo dõi và dừng cây tiến trình.
+│  ├─ git-worktrees           Quản lý worktree; không phải sandbox.
+│  ├─ storage                 Schema, migration và truy cập SQLite.
+│  └─ diagnostics, resource-monitor, shared-utils
+│                             Chẩn đoán, đo tài nguyên và tiện ích dùng chung.
+├─ tests/                      Contract, soak và kiểm tra tích hợp theo phạm vi.
+├─ scripts/                    Build sidecar, kiểm tài liệu, secret, dependency, hiệu năng.
+├─ .github/workflows/          Gate CI và kiểm đồng bộ tài liệu.
+├─ .codex/agents/              Định nghĩa vai agent; .claude/ là cấu hình Claude.
+└─ package.json, pnpm-workspace.yaml, vitest.config.ts
+                              Lệnh/gói workspace và cấu hình test thực tế.
+```
+
+Lối đọc theo công việc: sửa UI → `apps/desktop/src` và IPC liên quan; sửa luồng chạy → `services/orchestrator/src` rồi adapter/contract/storage liên quan; sửa policy hoặc an toàn tiến trình → `packages/policy-engine`, `packages/process-manager`, `docs/SECURITY.md` và `docs/THREAT_MODEL.md`; đánh giá phase → `docs/ROADMAP.md`, báo cáo phase, `docs/HANDOFF.md`, sau đó kiểm source/test tại HEAD. Tìm file/caller cụ thể bằng `rg --files` và `rg`; dùng tài liệu làm chỉ mục, mã nguồn và phép kiểm hiện tại làm bằng chứng hành vi.
+
 ## Stack (đã chốt)
 
 - Desktop: Tauri 2 + Rust + React + TypeScript + Vite; Tailwind/shadcn + Zustand + TanStack Query (kế hoạch Phase 7D, chưa có)

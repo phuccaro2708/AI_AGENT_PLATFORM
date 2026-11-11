@@ -844,3 +844,8 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 
 - Lệnh: `pnpm tauri build --bundles nsis --ci` trong `apps/desktop` (NSIS 3.13 đã cài ở hạng mục 2 trên PATH). Thoát 0; `beforeBuildCommand` (`pnpm build`) chạy; Tauri tải thêm `nsis-3.13.zip` và `nsis_tauri_utils.dll` từ repo `tauri-apps` trên GitHub, log báo "validating hash". Đầu ra: `Agent Workspace_0.0.0_x64-setup.exe` (2,42 MiB) dưới `apps/desktop/src-tauri/target/release/bundle/nsis/` (git-ignored, không commit).
 - NOT_RUN: chạy cài đặt/gỡ cài đặt installer, mở app đã cài, ký số (installer chưa ký, sẽ bị SmartScreen cảnh báo), bundle WiX/MSI. Sidecar Node chưa được đóng gói vào installer (cấu hình bundle không có `externalBin`/resources), nên app cài ra chưa tự chạy được orchestrator: đây là nợ đóng gói, chưa xử lý.
+
+## 2026-11-10: Phase 4 hạng mục 9 (PHASE4_REPORT.md, cổng cuối)
+
+- Viết `docs/PHASE4_REPORT.md`. Cổng cuối: lint, typecheck, test (`--no-file-parallelism`: 107 file pass, 1044 test pass, 6 expected fail, 72 skip), build đều PASS; `pnpm format` exit 1 chỉ vì 29 file `.superpowers/` (git-ignored). `pnpm audit`: 2 moderate, 0 high/critical. cargo clippy/test không chạy (không sửa Rust).
+- Ba gate Phase 4 và các mục `[~]` trong TODO KHÔNG được tick: thiếu bằng chứng cho TOCTOU/hard link/mount point, soak 100 thật, `cargo audit` hôm nay. Chờ người dùng quyết đóng hay không.

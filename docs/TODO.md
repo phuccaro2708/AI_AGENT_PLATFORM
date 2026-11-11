@@ -167,7 +167,7 @@ Nợ chuyển tiếp từ Phase 2: (engine resume + UI giải quyết reconcilia
 - [~] Security tests: prompt injection, output độc hại, path escape — xong với agent giả đã ghép (`98539d3`); nghi vấn symlink của artifact là THẬT và đã sửa (fail-closed, `worktree-hash.ts`, ASSUMPTIONS d8); còn hở: TOCTOU, hard link, mount point
 - [~] Soak test 100 workflow — xong với agent giả (`tests/soak`); với CLI thật mới chạy 5 workflow (ASSUMPTIONS d8, xanh, bất biến an toàn giữ nguyên) và đã chạy lại có số liệu từng workflow (trạng thái, ms, task, 0 CLI mồ côi thấy được; 1 lần chạy); 100 workflow thật cố ý chưa chạy (tốn chi phí)
 - [~] `pnpm audit` + rà dependency; SECURITY.md cập nhật — audit + ghim Actions theo SHA + `docs/DEPS_AUDIT.md` + `docs/SECURITY.md` xong (2026-11-05), 4 cảnh báo ghi chấp nhận; threat model xong và đã được người dùng duyệt (2026-11-06); tuổi gói transitive: npm sạch, 13 crate Cargo trẻ trong allowlist có hạn (CI thật NOT_RUN)
-- [ ] PHASE4_REPORT.md
+- [x] PHASE4_REPORT.md (viết 2026-11-10 với bằng chứng và NOT_RUN; Phase 4 CHƯA đóng, ba gate chưa tick, chờ người dùng xác nhận)
 
 ## Phase 5 — Desktop Beta
 

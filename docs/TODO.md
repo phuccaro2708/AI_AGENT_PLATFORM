@@ -273,6 +273,6 @@ Nợ chuyển tiếp từ Phase 2: (engine resume + UI giải quyết reconcilia
 - [x] Task 1–10: scaffold, probe CLI, config, exec/redact, gates, tasks/phase, budget, worktree + diff guard, adapter claude/codex, `runLoop` (đã review; implementer báo 203 test pass, chưa tự chạy lại)
 - [x] Task 11–13: CLI `check`/`run`, `loop.config.json` + AGENTS.md/`implementer.toml` 3 lần sửa + ASSUMPTIONS, nghiệm thu chạy thật (báo cáo `docs/reports/LOOP_RUNNER_ACCEPTANCE.md`, bước 1 PARTIAL)
 - [x] Review cả nhánh một lượt + một đợt sửa I-1..I-7 (loop-runner `cb5a61b`), ADR-010 cho quy tắc 10
-- [ ] I-8: bước cài phụ thuộc trong run worktree rồi chạy lại nghiệm thu bước 1
+- [x] I-8: bước `setup` + chạy lại nghiệm thu bước 1 (lần 3: gate, review, guard PASS; exit 2 vì phase-3 chưa có lệnh tiêu chí)
 - [ ] Hỏi người dùng trước khi cài lệnh global `loop-runner`
 - [ ] Viết tiêu chí Phase 3–10 thành lệnh chạy được

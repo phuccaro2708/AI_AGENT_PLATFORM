@@ -46,7 +46,17 @@
       "heading": "Phase 3 — Quét CLI & Local AI",
       "criteria": [
         {
-          "text": "Mọi adapter trong phạm vi gate (Claude, Codex, Ollama; agy ngoài gate, ADR-009) qua cùng bộ contract test."
+          "text": "Mọi adapter trong phạm vi gate (Claude, Codex, Ollama; agy ngoài gate, ADR-009) qua cùng bộ contract test.",
+          "command": "pnpm",
+          "args": [
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "tests/contract/adapter-claude.test.ts",
+            "tests/contract/adapter-codex.test.ts",
+            "tests/contract/adapter-ollama.test.ts"
+          ]
         },
         {
           "text": "Thêm adapter mới không sửa Orchestrator core."
@@ -82,7 +92,18 @@
           "text": "Mọi yêu cầu phê duyệt hiển thị đủ lệnh/đường dẫn; từ chối không làm treo task."
         },
         {
-          "text": "Không có mật khẩu/token nào trong DB, log hoặc diagnostics (test redaction)."
+          "text": "Không có mật khẩu/token nào trong DB, log hoặc diagnostics (test redaction).",
+          "command": "pnpm",
+          "args": [
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "services/orchestrator/src/sidecar-redaction.test.ts",
+            "services/orchestrator/src/sidecar-secret-leak.test.ts",
+            "services/orchestrator/src/sidecar-diagnostics.test.ts",
+            "packages/diagnostics/src/diagnostics.test.ts"
+          ]
         }
       ]
     },

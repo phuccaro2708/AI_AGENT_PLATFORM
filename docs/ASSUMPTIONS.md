@@ -161,7 +161,7 @@ Probe: `packages/adapter-antigravity/src/real-agy.test.ts` (chỉ chạy khi `AG
 
 - **Chỉ là hàm quyết định, chưa được nối vào đâu.** `evaluate(policy, request, ctx)` trả `allow | ask | deny`. Chưa có nơi nào trong orchestrator, sidecar, IPC hay UI gọi nó; chưa có gì ép một agent CLI phải đi qua nó. Việc ép buộc (Job Object, allowlist executable/env, sandbox của từng CLI) vẫn là phần còn lại của Phase 4 và cần máy Windows. Theo ADR-002 đây KHÔNG phải sandbox cấp OS và approval không thay sandbox.
 - **Chưa quan sát yêu cầu quyền thật của CLI.** `PolicyRequest` (`fs.read`, `fs.write`, `command`, `network`) là hình dạng do chúng ta chọn, không phải sự kiện có thật từ Claude/Codex/`agy` (xem mục Approval phía trên: chưa quan sát cơ chế xin quyền của CLI nào). Khi nối, phải có bước ánh xạ từ sự kiện thật sang `PolicyRequest` và bước đó cần probe riêng.
-- **Ngữ nghĩa 4 mức quyền là quyết định thiết kế của phiên này, chưa được người dùng duyệt:**
+- **Ngữ nghĩa 4 mức quyền là quyết định thiết kế của phiên này, Claude duyệt theo ủy quyền 2026-11-10 (ADR-011), người dùng chưa đọc từng chi tiết:**
   - `read_only`: chỉ đọc trong workspace (và `extraReadRoots`); ghi, lệnh, mạng đều bị từ chối kể cả có rule allow.
   - `workspace_write`: đọc/ghi trong workspace; lệnh/host chỉ khi khớp rule allow; mọi thứ khác bị từ chối, không bao giờ hỏi.
   - `restricted_tools`: như trên nhưng lệnh/host không khớp thì hỏi (`ask`); file ngoài workspace vẫn bị từ chối.
@@ -189,7 +189,7 @@ Probe: `packages/adapter-antigravity/src/real-agy.test.ts` (chỉ chạy khi `AG
 - **CPU hệ thống là trung bình giữa hai lần lấy mẫu** từ `os.cpus().times` (lần đầu không có số CPU nên không gây áp lực). Chu kỳ mặc định của `start()` là 1 s; chưa đo chi phí của nó. Một đỉnh CPU ngắn có thể bị bỏ sót hoặc, ngược lại, một lần lấy mẫu cao đơn lẻ làm giảm concurrency ngay (chưa có làm mượt/đếm số mẫu liên tiếp; chỉ có hysteresis khi thoát).
   [Cập nhật 2026-11-08: giá trị mặc định không đổi, nhưng nay đọc từ settings, xem mục P3-4/P3-5 ngay dưới.] - **Ngưỡng mặc định (`DEFAULT_THRESHOLDS`) chỉ là điểm xuất phát, chưa chỉnh theo số đo thật:** CPU giảm ≥ 85 %, hoãn ≥ 95 %; RAM dùng giảm ≥ 80 %, hoãn ≥ 90 %; lề thoát 5 điểm. Chưa đọc từ settings.
 - **Lỗi đọc:** nếu nguồn ném lỗi, giữ nguyên mức trước (không coi là "bình thường"); chỉ số không đo được thì không gây áp lực. Hệ quả: nếu nguồn hỏng ngay từ đầu, monitor luôn ở "normal", tức là không bảo vệ gì. `lastError` có để kiểm, nhưng chưa có ai đọc nó.
-- **Ngữ nghĩa hạ concurrency** (nửa, tối thiểu 1; hoãn = 0) là quyết định thiết kế của phiên này, chưa người dùng duyệt. Khi hoãn kéo dài, task `queued` đứng chờ vô hạn; chưa có thông báo/UI nào cho người dùng thấy lý do.
+- **Ngữ nghĩa hạ concurrency** (nửa, tối thiểu 1; hoãn = 0) là quyết định thiết kế của phiên này, Claude duyệt theo ủy quyền 2026-11-10 (ADR-011); nợ UI Phase 5. Khi hoãn kéo dài, task `queued` đứng chờ vô hạn; chưa có thông báo/UI nào cho người dùng thấy lý do.
 
 ## Phase 3 (P0, P3-2, P3-4, P3-5): nối admission, đo pid con trên Windows, giới hạn tải trong Settings (2026-11-08)
 

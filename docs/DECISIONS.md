@@ -181,3 +181,14 @@ Gate chung: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm bui
   10. **Việc khác:** điều tra Security CI bị huỷ trước khi ghép PR #3; Phase 4 chỉ đóng sau C1/C5 + installer; 7C-2 lập kế hoạch rồi hỏi lại; cho phép probe `agy` lần 3; cho phép dọn thư mục worktree rỗng/cũ (liệt kê trước khi xoá).
 - **Đánh đổi:** đóng Phase 3 khi UI chưa kiểm thật chấp nhận rủi ro lỗi hiển thị/thao tác ở hai thẻ Settings; ghi vào PHASE3_REPORT là ngoại lệ.
 - **Xem lại nếu:** kiểm app thật phát hiện lỗi ở hai thẻ; cần nhánh `develop` riêng; hướng claude mới vẫn không phủ hết lời gọi.
+
+## ADR-011: Claude quyết bốn điểm tồn đọng theo ủy quyền của người dùng (2026-11-10)
+
+- **Bối cảnh:** người dùng được hỏi bằng `AskUserQuestion` về bốn điểm và chọn "Để Claude tự quyết" cho cả bốn. Đây là quyết định của Claude theo ủy quyền, KHÔNG phải người dùng đã đọc từng chi tiết; người dùng có thể đảo lại bất cứ lúc nào.
+- **Quyết định:**
+  1. **Ngữ nghĩa 4 mức quyền** (`ASSUMPTIONS.md`, mục policy): giữ nguyên bản. Lý do: mọi mức fail-closed, không có chế độ tự duyệt tất cả, deny/shell host/`protectedPaths` cố định ở mọi mức. **Phạm vi grant 7C-2 KHÔNG nằm trong quyết định này**, vẫn chờ kế hoạch và duyệt riêng.
+  2. **Hạ concurrency** (nửa, tối thiểu 1, hoãn = 0): giữ nguyên thuật toán. Khoảng trống đã biết (task `queued` chờ vô hạn khi hoãn kéo dài, chưa có chỉ báo lý do trong UI) ghi là nợ giao diện cho Phase 5; ngưỡng đã chỉnh được trong Settings. Không đổi mã bây giờ.
+  3. **Allowlist tuổi crate Cargo:** đã đo tuổi thật trên crates.io (2026-11-11 UTC): `brotli@9.1.1` 15 ngày, `brotli-decompressor@6.2.0` 16 ngày, `erased-serde@0.4.11` 16 ngày, cả ba đã đủ 14 ngày nên không cần gia hạn; mục hết hạn bị bộ kiểm lọc bỏ qua, để nguyên file. Các mục còn lại hết hạn 2026-11-13/14 (tuổi sẽ đủ cùng ngày); chưa đo, nếu CI đỏ thì đo lại từng crate, không gia hạn hàng loạt.
+  4. **Low IL đăng nhập/gọi model thật:** ghi là ngoại lệ của Phase 4 (chặn ghi, không chặn đọc/mạng; BLOCKED vì cần người dùng tự đăng nhập), không làm. **Nhánh `develop`:** không tạo; dùng nhánh tích hợp do phiên chỉ định như CLAUDE.md đã ghi.
+- **Đánh đổi:** chấp nhận ngữ nghĩa policy và hạ concurrency chưa qua đọc kỹ của người dùng; Low IL thành ngoại lệ khi đóng Phase 4.
+- **Xem lại nếu:** người dùng đọc lại và muốn đổi; CI báo allowlist/tuổi gói đỏ; muốn đưa Low IL vào gate.

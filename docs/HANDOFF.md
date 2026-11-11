@@ -80,7 +80,7 @@ Cập nhật: 2026-11-10 (đã đối chiếu với git). Nhánh `worktree-p4-cl
 
 ## Chờ người dùng quyết
 
-- 2026-11-10: đa số mục dưới đã được người dùng quyết (ADR-010): Q2 recovery duyệt nguyên bản; CLI thật cho C1/C5 cho phép có giới hạn; Tailwind/shadcn + Playwright duyệt có điều kiện; ADR-006 A1/A7/A8 duyệt; hướng claude P4-1 c/d đổi; `agy` probe lần 3 cho phép; dọn thư mục worktree rỗng cho phép; `phase-2-kickoff`: đổi quy tắc merge thay vì quyết nhánh (chưa ghép, vẫn phải đối chiếu). Phần còn mở nằm ở dòng "Chờ người dùng" của mục Phase 4. Các dòng dưới giữ làm lịch sử.
+- 2026-11-10: đa số mục dưới đã được người dùng quyết (ADR-010): Q2 recovery duyệt nguyên bản; CLI thật cho C1/C5 cho phép có giới hạn; Tailwind/shadcn + Playwright duyệt có điều kiện; ADR-006 A1/A7/A8 duyệt; hướng claude P4-1 c/d đổi; `agy` probe lần 3 cho phép; dọn thư mục worktree rỗng cho phép; `phase-2-kickoff`: đổi quy tắc merge thay vì quyết nhánh (chưa ghép, vẫn phải đối chiếu). Phần còn mở nằm ở dòng "Chờ người dùng" của mục Phase 4. Cùng ngày, ADR-011: bốn điểm (4 mức quyền, hạ concurrency, allowlist Cargo, Low IL + develop) do Claude quyết theo ủy quyền của người dùng; phạm vi grant 7C-2 vẫn chờ người dùng. Các dòng dưới giữ làm lịch sử.
 
 - Secret scan sau S1–S7 (người dùng ĐÃ XÁC NHẬN 2026-11-08): script in `findings: 0 (accepted fixture hits: 878)`; dòng thô trên cây làm việc đúng 2 (`docs/SECURITY.md:37`, `sidecar-permission-gates.test.ts:170`), đã nằm trong allowlist. Cách đọc "chỉ còn 2 phát hiện đã biết" = 0 phát hiện chưa chấp nhận được chấp nhận; allowlist giữ nguyên.
 - ADR-006 phần chưa duyệt: A1 chủ DB, A7 spawn sớm sidecar, A8 yêu cầu lặp `workflows.start` chưa được hỏi; A2/A4/A5/A6 (kênh, token, vai, allowlist/cầu nối) chờ sau Phase 4.

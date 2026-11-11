@@ -742,3 +742,10 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - `c2891b1`: thêm "Git Branch & Merge Policy" vào CLAUDE.md (và sửa 3 chỗ mâu thuẫn) và một dòng vào AGENTS.md. `prettier --check` CLAUDE.md/AGENTS.md qua; `node scripts/docs-sync-check.mjs` OK. Edit tool từng ghi CLAUDE.md thành CRLF; đã chuẩn hoá về LF (repo `eol=lf`).
 - Docs cập nhật trong lần lưu này: HANDOFF, ROADMAP (gate Phase 3 tick), TODO, PHASE3_REPORT, DECISIONS (ADR-010).
 - Chưa làm (chỉ quyết định, chưa thực thi): điều tra Security huỷ, `keepAlive` ngắn, probe claude hướng mới, A1/A7/A8, C1/C5, kiểm NSIS/WiX, dọn worktree, dependency, đối chiếu `phase-2-kickoff`. Chưa chạy lại lint/typecheck/test/build (chỉ đổi docs). `c2891b1` và commit lưu này chưa push, chưa có CI.
+
+## 2026-11-10 (tiếp): kiểm điều kiện Phase 4 và quyết bốn điểm tồn đọng
+
+- Kiểm điều kiện Phase 4 từ docs: ba ô acceptance gate vẫn `[ ]`; TODO còn 1 `[ ]` (`PHASE4_REPORT.md`), 9 `[~]`, 3 `[x]`. Phase 4 chưa đóng.
+- Đo tuổi crate trên crates.io (curl, chỉ đọc, 2026-11-11 UTC): `brotli@9.1.1` 15 ngày, `brotli-decompressor@6.2.0` 16 ngày, `erased-serde@0.4.11` 16 ngày. `node scripts/deps-age-audit.mjs` hết thời gian chờ 100 giây, chưa có kết quả đầy đủ (chưa chạy xong).
+- Người dùng ủy quyền cho Claude quyết bốn điểm (4 mức quyền, hạ concurrency, allowlist Cargo, Low IL + develop); ghi ở ADR-011. Phạm vi grant 7C-2 vẫn chờ người dùng.
+- Chưa làm: điều tra Security bị huỷ, các việc thực thi của ADR-010. Chưa chạy lint/typecheck/test/build (chỉ đổi docs).

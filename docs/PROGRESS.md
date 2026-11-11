@@ -854,4 +854,4 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 
 - `cargo audit` (apps/desktop/src-tauri) hôm nay: 0 vulnerability, 2 allowed warning (proc-macro-error, glib; đã chấp nhận, chỉ Linux/GTK).
 - Rà lỗ hở symlink: TOCTOU/hard link/mount point đã vá từ A6 (TODO ghi cũ). Tìm ra hở MỚI: `GitWorktrees.diff` đọc file ngoài worktree qua junction. Test viết trước, đỏ; sửa `packages/git-worktrees/src/git-worktrees.ts` (`insideWorktree`); `packages/git-worktrees` + `artifacts.test.ts`: 26 test pass; typecheck, eslint, prettier sạch. Chi tiết và phần còn hở ở ASSUMPTIONS.
-- Chưa chạy lại cổng đầy đủ sau thay đổi này; PHASE4_REPORT.md chưa cập nhật số cổng cuối (số cũ là trước sửa).
+- Cổng chạy lại sau sửa: lint, typecheck, test (1045 pass), build đều PASS; PHASE4_REPORT.md đã cập nhật.

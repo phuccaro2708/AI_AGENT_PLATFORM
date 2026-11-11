@@ -797,3 +797,8 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Nhánh p4 tiến thêm `c2891b1`, `7665b1b`, `a09f3f8` (chỉ docs) sau lần ghép trước; ghép lại bằng `git merge --no-ff`, xung đột ở `CLAUDE.md`, `DECISIONS.md`, `HANDOFF.md`, `PROGRESS.md`.
 - Trùng số ADR: nhánh p4 dùng ADR-010 (quyết định 2026-11-10) và ADR-011; ADR "chế độ vòng lặp tự động" của nhánh này đổi thành ADR-012 (ghi chú trong chính ADR). Các ghi chú cũ ở PROGRESS và repo `loop-runner` còn gọi nó là ADR-010 (lịch sử, không sửa).
 - `CLAUDE.md`: lấy bản chính sách merge của p4, giữ ngoại lệ "trừ chế độ vòng lặp tự động ở nguyên tắc 10" trong mục KHÔNG tự làm. Chỉ đổi docs nên chưa chạy lại gate mã.
+
+## 2026-11-10: Phase 4 hạng mục 1 (Security CI bị CANCELLED)
+
+- Tiêu chí: có bằng chứng đọc từ GitHub (GraphQL) về thời lượng và conclusion, và đọc cấu hình workflow. Phiên con chỉ đọc đã làm; tôi chưa tự đọc lại số liệu.
+- Kết quả: do `timeout-minutes: 30`, không do concurrency; bước chậm chưa đo. Chi tiết và đề xuất ở HANDOFF mục CI. Không sửa workflow (file được bảo vệ).

@@ -31,6 +31,7 @@ import {
   listOllamaModels,
   type OllamaAdapterOptions,
 } from "@agent-studio/adapter-ollama";
+import { vramKeepAlive } from "./ollama-config.js";
 import {
   probeClaude,
   probeCodex,
@@ -475,7 +476,16 @@ export class SidecarService {
     this.registry.register(this.buildCliAdapter("claude", this.repo.getAgentSettings("claude")));
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
     this.registry.register(this.gate.wrap(new AntigravityAdapter()));
-    this.registry.register(this.gate.wrap(new OllamaAdapter(opts.ollama ?? {})));
+    // Short keep_alive while a VRAM band is saved (read per call, the band can change at runtime); an explicit option wins.
+    this.registry.register(
+      this.gate.wrap(
+        new OllamaAdapter({
+          ...opts.ollama,
+          keepAlive:
+            opts.ollama?.keepAlive ?? (() => vramKeepAlive(this.resourceSettings.thresholds)),
+        }),
+      ),
+    );
     if (opts.codexAppServer !== false) {
       this.registry.register(this.buildAppServerAdapter(this.repo.getAgentSettings("codex")));
     }

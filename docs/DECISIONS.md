@@ -170,7 +170,7 @@ Gate chung: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm bui
 - **Bối cảnh:** sau khi đọc CI của PR #3 (head `c17ea94` xanh 5/5), người dùng trả lời lần lượt các câu hỏi tồn đọng bằng `AskUserQuestion`.
 - **Quyết định (người dùng chọn):**
   1. **Phase 3 đóng có ngoại lệ:** ba tiêu chí gate đạt về mã và test; ngoại lệ là hai thẻ Settings ("Ollama models", "Load limits") và admission chưa kiểm trong app Tauri thật. Cùng phạm vi ngoại lệ: tool calling thật mới thử `read_file`; `agy` ngoài gate (ADR-009).
-  2. **`keepAlive` ngắn khi bật giới hạn VRAM** (để model Ollama được gỡ sớm, không giữ hệ thống `paused` ~5 phút). Đã quyết, CHƯA làm (cần sửa `adapter-ollama`).
+  2. **`keepAlive` ngắn khi bật giới hạn VRAM** (để model Ollama được gỡ sớm, không giữ hệ thống `paused` ~5 phút). Đã quyết; ĐÃ làm 2026-11-10 ở `adapter-ollama` + sidecar (xem PROGRESS).
   3. **Quy tắc merge mới:** mục "Git Branch & Merge Policy" trong CLAUDE.md/AGENTS.md (`c2891b1`). `main` = `claude/loving-lovelace-32lh71`; `develop` = nhánh tích hợp do phiên chỉ định (chưa có nhánh `develop` riêng). Merge vào `main` luôn cần người dùng phê duyệt; không force push, không xoá nhánh chưa merge, không bỏ qua test.
   4. **Q2:** duyệt nguyên bản 5 bước recovery.
   5. **CLI thật cho C1/C5:** cho phép, có giới hạn (không chạy 100 workflow thật).

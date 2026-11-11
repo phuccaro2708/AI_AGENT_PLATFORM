@@ -808,3 +808,10 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Kiểm: `makensis`, `candle`, `light`, `wix` không có trên PATH; không có thư mục NSIS/WiX chuẩn. Người dùng đã duyệt (AskUserQuestion) cài NSIS 3.13.
 - Nguồn: winget `NSIS.NSIS` 3.13 (phát hành 2026-09-27, Nullsoft and Contributors, zlib/libpng), URL sourceforge.net/projects/nsis. `winget download` báo "Successfully verified installer hash"; tôi tự tính SHA256 file tải về = `db9a1038bbc0e53fef24f423fd609979bd578e942f1be1198db186d1c42652a3`, khớp manifest. Chữ ký Authenticode: NotSigned (trình cài NSIS không ký; chỉ dựa vào hash manifest winget).
 - Cài: `/S`, exit 0; `makensis /VERSION` = v3.13 ở `C:\Program Files (x86)\NSIS`. WiX không cài.
+
+## 2026-11-10: Phase 4 hạng mục 3 (keepAlive ngắn khi bật giới hạn VRAM)
+
+- Tiêu chí (viết test trước, thấy đỏ rồi mới sửa): (a) `tests/contract/adapter-ollama.test.ts`: `keepAlive` là hàm, đọc mỗi lượt chat; có giá trị thì gửi `keep_alive`, `undefined` thì không gửi; (b) `services/orchestrator/src/ollama-config.test.ts`: `vramKeepAlive` trả `"30s"` chỉ khi ngưỡng đã lưu có dải `vram`.
+- Mã: `adapter-ollama` nhận `keepAlive` kiểu hàm; `ollama-config.ts` thêm `VRAM_KEEP_ALIVE = "30s"` và `vramKeepAlive`; `sidecar.ts` truyền hàm đọc `resourceSettings.thresholds` mỗi lượt (đổi dải VRAM lúc chạy có hiệu lực ở lượt sau; tuỳ chọn `keepAlive` tường minh thắng).
+- Lựa chọn của tôi: 30 giây (không phải 0) để các task liên tiếp cùng model còn dùng lại; số này là giả định, chưa đo trên Ollama thật.
+- Kết quả: hai test mới đỏ trước khi sửa, xanh sau; vitest 7 file / 81 test (adapter-ollama, ollama-config, sidecar-admission, packages/adapter-ollama) pass; `pnpm typecheck` và eslint sạch, prettier áp dụng. Chưa có test sidecar xem thẳng body gửi Ollama (chỉ test hàm và adapter).

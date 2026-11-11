@@ -825,3 +825,8 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Tiêu chí: A8 có test ghim hành vi hiện có: hai lần `workflows.start` giống hệt cho hai `taskId` khác nhau, `tasks.list` có đúng 2 task, cả hai `completed` (không dedupe, không retry ngầm). Test mới pass (`sidecar.test.ts -t A8`, 1 pass); eslint, prettier, typecheck sạch.
 - A1: chốt, không cần mã (sidecar do Tauri spawn đã là chủ DB duy nhất, khoá 2d đã có). A7: duyệt về nguyên tắc, chưa có mã vì chưa có tích hợp Harness để bật; làm cùng kênh/cầu nối. Chi tiết ở ADR-006, mục "Cập nhật 2026-11-10".
 - Chưa chạy lại cả bộ test (chỉ test mới); bộ đầy đủ chạy ở cổng cuối.
+
+## 2026-11-10: Phase 4 hạng mục 6 (C1/C5 với CLI thật, có giới hạn)
+
+- Tiêu chí: soak thật 5 workflow (trần cứng của bộ test), mọi task terminal, 0 CLI mồ côi, ghi số thật. Kết quả: 1 test pass (184,8 s); 5/5 `completed`, 0 mồ côi; bảng ở `docs/ASSUMPTIONS.md` (mục "Soak CLI thật 5 workflow, Phase 4 hạng mục 6").
+- C1: kiểm lại cổng quyền với claude 2.1.319 ở hạng mục 4 (8/8 lời gọi tới cổng). Vẫn NOT_RUN: cổng thật bị treo, các khoá khác của settings.local.json. C5 100 workflow thật: cố ý không chạy (chi phí); bản 100 workflow giả có sẵn.

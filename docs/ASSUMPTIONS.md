@@ -713,6 +713,23 @@ Hướng mới của P4-1 d (ADR-010 mục 8) = `askEveryTool` (`permissions.ask
 - **Đã đo (mỗi prompt đúng một lần chạy; model tự chọn lời gọi):** prompt A (Write, Read, `echo`, `git status`): cổng nhận Read (allow), Bash `echo probe-ok` (deny, "No allow rule matches"), Bash `git status` (deny), Write (allow); `w.txt` có trong repo tạm, hai lời gọi Bash bị từ chối. Prompt B (Read, Edit, Glob, Grep): cổng nhận cả bốn, đều allow. `gateStarts` = 1 mỗi lượt, `updatedInputEqualsInput` = true. Tức là cả 6 tool đều tới cổng, không có tool nào claude tự quyết ngoài cổng.
 - **Chưa đo / giới hạn:** chỉ 6 tool; WebFetch, WebSearch, NotebookEdit, Task/Agent, tool MCP, PowerShell không thử với luật `ask` (phải giới hạn bằng `--tools`, xem d4); một lần chạy mỗi ô, không phải mẫu thống kê; chưa thử luật `ask` ký tự đại diện; không đo chi phí (ngân sách trần theo test); cổng là chính sách chứ không phải sandbox OS.
 
+## Soak CLI thật 5 workflow, Phase 4 hạng mục 6 (2026-11-10)
+
+Lệnh: `AGENT_STUDIO_REAL_CLI_SOAK=5 AGENT_STUDIO_REAL_CLI_SOAK_OUT=<ngoài repo> pnpm exec vitest run tests/soak/sidecar-soak-real-cli.test.ts` (kế hoạch hỗn hợp, trần cứng 5; prompt nhỏ, repo tạm rỗng; claude 2.1.319, codex-cli 0.166.0). Kết quả: 1 file, 1 test pass, 184,8 s.
+
+| #   | workflow                      | kind   | agent               | final state | ms    | tasks | task states          | orphan CLI procs |
+| --- | ----------------------------- | ------ | ------------------- | ----------- | ----- | ----- | -------------------- | ---------------- |
+| 1   | wf_01M74CCGC2CCMGPSJD1BX83FFH | plain  | rclaude             | pending     | 12847 | 1     | completed            | 0                |
+| 2   | wf_01M74CCYQ19HKW6JWG0Y89BCST | plain  | rcodex              | pending     | 29661 | 1     | completed            | 0                |
+| 3   | wf_01M74CDXQETNPG46MEDTKECDSV | plain  | rclaude             | pending     | 7616  | 1     | completed            | 0                |
+| 4   | wf_01M74CE6YKYFKEEWRR44NBPZW9 | plain  | rcodex              | pending     | 17729 | 1     | completed            | 0                |
+| 5   | wf_01M74CETB5MEDNWDNKSPWDEFB4 | review | rclaude-impl+rcodex | completed   | 36677 | 2     | completed, completed | 0                |
+
+CLI processes alive after svc.close(): 0; descendants seen: 508
+
+- Cả 5 workflow có task `completed`, 0 CLI mồ côi sau từng workflow và sau `svc.close()` (lấy mẫu ~0,7 s, 508 tiến trình con thấy). "pending" ở workflow thường là trạng thái workflow không có bước engine, không phải lỗi (giống lần d8).
+- Phạm vi: đây KHÔNG phải soak 100 workflow thật (người dùng cho phép có giới hạn, ADR-010 mục 5); 100 workflow giả vẫn do `tests/soak/sidecar-soak.test.ts`. Chưa đo RAM theo thời gian, chưa chạy kế hoạch `peer` (trần 10), chưa thử cổng thật bị treo. Số ms là một lần chạy, phụ thuộc mạng và model.
+
 ## Loop Runner probes (2026-11-09)
 
 Nguồn: `scripts/probe.ts` trong repo công cụ loop-runner (commit `feat: add CLI probe script`), chạy một lần trên Windows 11, Node 24, `claude` 2.1.319, `codex-cli` 0.167.0. Mọi lời gọi dùng argument array, `shell: false`, trong một thư mục tạm mới (`fs.mkdtemp`), prompt tối thiểu không chứa dữ liệu dự án; không dùng cờ bỏ qua quyền/sandbox. Mỗi chế độ đúng một lần gọi. Output CLI coi là dữ liệu không đáng tin.

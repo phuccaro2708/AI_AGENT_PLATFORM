@@ -9,7 +9,7 @@
 - **Phase 2: đóng 2026-11-03 (có ngoại lệ, xem PHASE2_REPORT).** Tiếp theo: 7 → 8 → 9 (10 song song 5–6).
 - Cập nhật 2026-11-04: nhánh gốc `claude/loving-lovelace-32lh71` đã ở `868daef` (gồm 7A, 7B, quét CLI, redaction, bỏ Gemini); PR #1 đã MERGED. Kiểm cục bộ: lint, typecheck, 383 test, build đều qua; `cargo clippy -D warnings` sạch, `cargo test` 12 qua / 1 bỏ qua. CI `babca05` đỏ vì Prettier lệch ở `docs/HANDOFF.md`; `868daef` (đã format lại) xanh 5/5 job.
 - **Thứ tự chốt lại 2026-11-04** (ROADMAP, mục "Thứ tự thực hiện"; ADR-005): Phase 7 (phần không cần policy) song song Phase 3 → Phase 4 (+ 7C-2, đóng Phase 7) → Phase 5 → Phase 6 → Phase 8 → Phase 9; Phase 10 xuyên suốt.
-- Ollama: đã làm lại 2026-11-08 khi máy có Ollama 0.40.14 (S0–S6, xem PROGRESS); tool calling với model thật vẫn chưa thử.
+- Ollama: đã làm lại 2026-11-08 khi máy có Ollama 0.40.14 (S0–S6, xem PROGRESS); tool calling với model thật đã thử 2026-11-08 (`read_file`, 7/8 lượt, xem PHASE3_REPORT).
 
 ### Ngoại lệ chuyển từ Phase 1
 

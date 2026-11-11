@@ -136,7 +136,7 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 - [ ] Thêm adapter mới không sửa Orchestrator core.
 - [ ] Hết VRAM/RAM → hệ thống degrade có kiểm soát, không treo máy.
 
-> Tình trạng 2026-11-08 (KHÔNG tick gate): RAM/CPU degrade đã nối qua admission, đo pid con Windows và ngưỡng/concurrency trong Settings; VRAM, Ollama (kể cả discover models qua `/api/tags`) và một model một lúc đã có mã + test (S1–S6, `e2fe785`); VRAM mặc định TẮT (người dùng giữ nguyên, 2026-11-08); còn kiểm giao diện trong app thật và tool calling thật. Xem `docs/PHASE3_REPORT.md`.
+> Tình trạng 2026-11-08 (KHÔNG tick gate): RAM/CPU degrade đã nối qua admission, đo pid con Windows và ngưỡng/concurrency trong Settings; VRAM, Ollama (kể cả discover models qua `/api/tags`) và một model một lúc đã có mã + test (S1–S6, `e2fe785`); VRAM mặc định TẮT (người dùng giữ nguyên, 2026-11-08); tool calling thật và admission trên sidecar thật đã đo 2026-11-08; còn kiểm giao diện trong app Tauri thật. Xem `docs/PHASE3_REPORT.md`.
 
 ## Phase 4 — Security & Reliability (2–3 tuần)
 

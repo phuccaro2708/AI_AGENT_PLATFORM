@@ -755,3 +755,9 @@ Danh sách giả định của `D:\Program\loop-runner` mà chưa có phép đo.
 - **`core.hooksPath=.` không được bảo vệ.** Cấu hình git cục bộ có thể trỏ hook về thư mục làm việc.
 - **Git driver ở phạm vi global (filter/diff/merge driver) ngoài phạm vi.** Công cụ không kiểm cấu hình git toàn cục của người dùng.
 - **Cách tính token khác nhau theo CLI.** claude báo `usage` và `total_cost_usd`, codex báo `usage` theo sự kiện; cộng dồn chéo hai CLI là ước lượng, không so sánh trực tiếp được.
+
+### Ollama: tool calling thật và áp lực tài nguyên thật (2026-11-08)
+
+- **Đã đo:** `read_file` qua tool loop với model thật: `qwen3.5:4b` 4/4, `qwen3:4b` 3/4 (1 lần hết 512 token trong lập luận, không gọi tool). Hai model liên tiếp: `/api/ps` chỉ còn model sau. Admission trên sidecar thật: VRAM 64,1 % ≥ pause 38 % giữ task chờ, gỡ model thì task chạy sau ~6,6 s; RAM tương tự (~5 s).
+- **Bất ngờ:** model còn trong VRAM sau lượt chạy (keep_alive) giữ trạng thái `paused` khi dải VRAM bật; RAM máy này nằm sẵn 80–88 %.
+- **Chưa đo:** `list_dir` và từ chối đường dẫn ngoài thư mục với model thật; app Tauri thật; mẫu nhỏ (4 lượt mỗi model).

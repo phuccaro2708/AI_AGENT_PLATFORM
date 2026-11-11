@@ -176,6 +176,10 @@ ACCEPTED_ANYWHERE = {
     # the Phase 4 close-prep goal (commits 8cf8206, baf26fc) and recur in every later snapshot.
     ("docs/SECURITY.md", "Secret Keyword", 37),
     ("services/orchestrator/src/sidecar-permission-gates.test.ts", "Secret Keyword", 170),
+    # Reviewed by hand (2026-11-09): line 72 of the opt-in real-Ollama test is the FAKE canary "ZX-4417-KESTREL" the
+    # model must read back from a temp file; no real secret. The inline pragma covers new snapshots, this entry the
+    # four already pushed (immutable) ones.
+    ("tests/contract/real-ollama-switch-tools.test.ts", "Secret Keyword", 72),
 }
 
 EXCLUDE = r"(pnpm-lock\.yaml|Cargo\.lock|\.png|\.ico|\.icns)$"

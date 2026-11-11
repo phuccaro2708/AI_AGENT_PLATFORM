@@ -753,3 +753,26 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Commit repo này: `99fd6ae` (lần 2: setup PASS, test gate FAIL do flaky), `0a14f0a` (gate test thêm `--no-file-parallelism`), `0190c65` (lần 3). Điều tra flaky: 4 worker vitest quá tải Windows (sidecar-resume timeout 5 giây, test CPU-time của resource-monitor); chạy tuần tự xanh 1041 test (433 giây, một lần). CI `windows-latest` có thể flaky tương tự, chưa kiểm.
 - Lần 3 (clone tạm, claude/codex thật, `pnpm install` thật ~20 giây không junction), theo báo cáo agent: 5 gate PASS (đọc từ dòng PROGRESS của runner, không có log từng gate), Codex review PASS, commit trên nhánh chạy + dòng PROGRESS có, guard sau commit không báo nhầm. Exit 2 vì phase-3 không có lệnh tiêu chí. Tôi chưa tự chạy lại.
 - Chưa làm/NOT_RUN: runner chưa in thời gian từng gate và chi phí guard; đường exit 0 trên Agent Workspace cần tiêu chí có lệnh; cài lệnh global; sửa flaky ở mức test (timeout, `rmSync` retry). Không push, không PR, không ghép.
+
+## 2026-11-08: kiểm các mục còn lại trước khi đóng Phase 3
+
+- Thêm hai bài test opt-in (bỏ qua nếu không đặt biến môi trường): `tests/contract/real-ollama-switch-tools.test.ts` (hai model liên tiếp, tool calling thật) và `tests/contract/real-resource-pressure.test.ts` (sidecar thật, RAM của OS, `nvidia-smi`, Ollama thật).
+- Kết quả thật: xem `docs/PHASE3_REPORT.md` mục "Kiểm chứng thật 2026-11-08" (đổi model đúng, tool calling 7/8, admission VRAM và RAM đúng, phát hiện giữ `paused` do keep_alive).
+- `cargo clippy --all-targets --locked -- -D warnings` sạch. Hai thẻ Settings xem trong preview trình duyệt (mô phỏng), KHÔNG trong app Tauri thật. Chưa đọc CI; chưa push.
+- Gate đầy đủ trên cây làm việc: lint, format, typecheck, test (107 file pass, 1046 test pass, 67 skip), build exit 0.
+
+## 2026-11-09: sửa các lỗi CI của PR #3 (Auto-fix)
+
+- Đọc log CI thật của PR #3 ở head `e210aea`: TypeScript ubuntu và windows đỏ ở test của Phase 4, KHÔNG phải phần Ollama; các head cũ hơn (`4c841e7`, `fd6b767`, `574e643`) cũng đỏ. Nguyên nhân đều ở test, không ở mã sản phẩm.
+- `1d7f352`: `sidecar-job-wrap.test.ts` đặt file giả `claude`/`codex` lên đầu PATH (runner không có CLI; codex app-server cần spawn thật nên dùng `node`); `app-server.test.ts` chỉ báo RAM vượt giới hạn sau khi server nhận `turn/start`; `hostile-config.test.ts` ghi hook với mode 0o755 (git bỏ qua hook không thực thi trên Linux); `windows-process-source.test.ts` bỏ yêu cầu 2 lần đọc.
+- `92b8760`: `windows-process-source.test.ts` lấy mốc CPU qua bắt tay stdin (child báo "ready", chỉ đốt CPU sau "go"), vì sleep cố định không đủ trên runner Windows lạnh (delta CPU = 0 ở `1d7f352`).
+- `101ab41`: secret-scan báo chuỗi giả "ZX-4417-KESTREL" (`tests/contract/real-ollama-switch-tools.test.ts` dòng 72); thêm pragma và một mục `ACCEPTED_ANYWHERE` cho 4 snapshot đã push. Chưa chạy scanner cục bộ (máy chưa cài `detect-secrets`).
+- Gate cục bộ sau `1d7f352`: lint, format, typecheck, test (107 file pass, 1046 test pass, 67 skip), build exit 0. Sau `92b8760` và `101ab41` chỉ chạy eslint, prettier, typecheck và vitest của file đã đổi.
+- CI đã đọc: `1d7f352` ubuntu xanh, windows đỏ đúng test `windows-process-source`; `92b8760` Security đỏ do secret scan; `101ab41` Docs sync đỏ vì PROGRESS dừng ở 2026-11-08 (mục này sửa lỗi đó). Kết quả CI sau `101ab41` của các job TypeScript, Tauri, spike CHƯA đọc.
+
+## 2026-11-10: ghép nhánh `worktree-p4-close-prep` vào nhánh này (cục bộ)
+
+- Đối chiếu trước khi ghép: nhánh p4 hơn 5 commit riêng (`986c301`, `1d7f352`, `92b8760`, `101ab41`, `c17ea94`), tụt 21 commit; `git merge-tree` báo xung đột nội dung chỉ ở `docs/ASSUMPTIONS.md`, `docs/HANDOFF.md`, `docs/PROGRESS.md`; không có xung đột ở mã.
+- Giải xung đột: ASSUMPTIONS và PROGRESS giữ cả hai phía (nối thêm); HANDOFF giữ đoạn đầu của nhánh này (cùng nội dung Phase 4, ngày 2026-11-10) và bỏ bản cũ hơn của nhánh p4. `git merge --no-ff`, không push.
+- Gate trên cây làm việc sau khi ghép: `pnpm lint` exit 0; `pnpm typecheck` exit 0; `pnpm test --no-file-parallelism` 107 file pass, 1041 test pass, 72 skip; `pnpm build` exit 0. `pnpm format` chỉ báo 29 file trong `.superpowers/` (thư mục scratch git ignore), không file nào được theo dõi; `prettier --check` ba file docs đã sửa sạch.
+- Chưa chạy: `cargo clippy` và `cargo test` (merge không đụng `src-tauri`); chưa đọc CI; nhánh p4 giữ nguyên vì worktree `p4-close-prep` vẫn đang checkout nó.

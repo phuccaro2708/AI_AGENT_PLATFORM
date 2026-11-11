@@ -802,3 +802,9 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 
 - Tiêu chí: có bằng chứng đọc từ GitHub (GraphQL) về thời lượng và conclusion, và đọc cấu hình workflow. Phiên con chỉ đọc đã làm; tôi chưa tự đọc lại số liệu.
 - Kết quả: do `timeout-minutes: 30`, không do concurrency; bước chậm chưa đo. Chi tiết và đề xuất ở HANDOFF mục CI. Không sửa workflow (file được bảo vệ).
+
+## 2026-11-10: Phase 4 hạng mục 2 (NSIS/WiX)
+
+- Kiểm: `makensis`, `candle`, `light`, `wix` không có trên PATH; không có thư mục NSIS/WiX chuẩn. Người dùng đã duyệt (AskUserQuestion) cài NSIS 3.13.
+- Nguồn: winget `NSIS.NSIS` 3.13 (phát hành 2026-09-27, Nullsoft and Contributors, zlib/libpng), URL sourceforge.net/projects/nsis. `winget download` báo "Successfully verified installer hash"; tôi tự tính SHA256 file tải về = `db9a1038bbc0e53fef24f423fd609979bd578e942f1be1198db186d1c42652a3`, khớp manifest. Chữ ký Authenticode: NotSigned (trình cài NSIS không ký; chỉ dựa vào hash manifest winget).
+- Cài: `/S`, exit 0; `makensis /VERSION` = v3.13 ở `C:\Program Files (x86)\NSIS`. WiX không cài.

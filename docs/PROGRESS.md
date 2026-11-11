@@ -839,3 +839,8 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 ## 2026-11-10: Phase 4 hạng mục 7b (dọn thư mục worktree rỗng)
 
 - Đã liệt kê và người dùng xác nhận (AskUserQuestion). Đã `rmdir` (chỉ xoá được thư mục rỗng) 8 thư mục rỗng không đăng ký worktree: flaky-root-cause, p4-deps, p4-ipc, p4-probe, p4-rust, policy-win-hardening, probe-permissions, wire-resource-monitor. Giữ: `int` (không rỗng, có node_modules) và `winapp-agentroom-check-f81031-loop-worktrees` (rỗng, có thể là gốc worktree của Loop Runner), cùng mọi worktree đã đăng ký.
+
+## 2026-11-10: Phase 4 hạng mục 8 (installer thật)
+
+- Lệnh: `pnpm tauri build --bundles nsis --ci` trong `apps/desktop` (NSIS 3.13 đã cài ở hạng mục 2 trên PATH). Thoát 0; `beforeBuildCommand` (`pnpm build`) chạy; Tauri tải thêm `nsis-3.13.zip` và `nsis_tauri_utils.dll` từ repo `tauri-apps` trên GitHub, log báo "validating hash". Đầu ra: `Agent Workspace_0.0.0_x64-setup.exe` (2,42 MiB) dưới `apps/desktop/src-tauri/target/release/bundle/nsis/` (git-ignored, không commit).
+- NOT_RUN: chạy cài đặt/gỡ cài đặt installer, mở app đã cài, ký số (installer chưa ký, sẽ bị SmartScreen cảnh báo), bundle WiX/MSI. Sidecar Node chưa được đóng gói vào installer (cấu hình bundle không có `externalBin`/resources), nên app cài ra chưa tự chạy được orchestrator: đây là nợ đóng gói, chưa xử lý.

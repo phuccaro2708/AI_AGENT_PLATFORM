@@ -165,8 +165,37 @@ Gate chung: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm bui
 - **Đánh đổi:** `agy` vẫn chạy được nhưng không còn được bảo đảm bởi gate; phần PARTIAL (lỗi chưa đăng nhập/hết hạn mức, cây tiến trình con, ép quyền) trở thành nợ ngoài gate, không phải điều kiện đóng.
 - **Xem lại nếu:** muốn `agy` là agent hỗ trợ chính thức (khi đó đưa lại vào gate và hoàn tất kiểm thật), hoặc quyết định gỡ hẳn khỏi codebase.
 
-## ADR-010: Chế độ vòng lặp tự động trong CLAUDE.md nguyên tắc 10 (2026-11-09)
+## ADR-010: Quyết định của người dùng 2026-11-10 (đóng Phase 3, keepAlive, quy tắc merge, duyệt tồn đọng)
 
+- **Bối cảnh:** sau khi đọc CI của PR #3 (head `c17ea94` xanh 5/5), người dùng trả lời lần lượt các câu hỏi tồn đọng bằng `AskUserQuestion`.
+- **Quyết định (người dùng chọn):**
+  1. **Phase 3 đóng có ngoại lệ:** ba tiêu chí gate đạt về mã và test; ngoại lệ là hai thẻ Settings ("Ollama models", "Load limits") và admission chưa kiểm trong app Tauri thật. Cùng phạm vi ngoại lệ: tool calling thật mới thử `read_file`; `agy` ngoài gate (ADR-009).
+  2. **`keepAlive` ngắn khi bật giới hạn VRAM** (để model Ollama được gỡ sớm, không giữ hệ thống `paused` ~5 phút). Đã quyết, CHƯA làm (cần sửa `adapter-ollama`).
+  3. **Quy tắc merge mới:** mục "Git Branch & Merge Policy" trong CLAUDE.md/AGENTS.md (`c2891b1`). `main` = `claude/loving-lovelace-32lh71`; `develop` = nhánh tích hợp do phiên chỉ định (chưa có nhánh `develop` riêng). Merge vào `main` luôn cần người dùng phê duyệt; không force push, không xoá nhánh chưa merge, không bỏ qua test.
+  4. **Q2:** duyệt nguyên bản 5 bước recovery.
+  5. **CLI thật cho C1/C5:** cho phép, có giới hạn (không chạy 100 workflow thật).
+  6. **Installer C2 (NSIS/WiX):** kiểm máy có chưa, kiểm uy tín/nguyên bản của nguồn, báo cáo rồi hỏi lại trước khi cài.
+  7. **Dependency Tailwind/shadcn (7D) và Playwright:** duyệt có điều kiện (license, audit, pin ≥ 2 tuần, ghi `docs/REFERENCES.md`, báo trước khi cài).
+  8. **P4-1 c/d:** đổi hướng cổng quyền của claude (probe cách khác, vì `--permission-prompt-tool` không thấy mọi lời gọi); codex giữ app-server.
+  9. **ADR-006:** duyệt A1 (chủ DB), A7 (spawn sớm sidecar), A8 (yêu cầu lặp `workflows.start`); A2/A4/A5/A6 để sau Phase 4.
+  10. **Việc khác:** điều tra Security CI bị huỷ trước khi ghép PR #3; Phase 4 chỉ đóng sau C1/C5 + installer; 7C-2 lập kế hoạch rồi hỏi lại; cho phép probe `agy` lần 3; cho phép dọn thư mục worktree rỗng/cũ (liệt kê trước khi xoá).
+- **Đánh đổi:** đóng Phase 3 khi UI chưa kiểm thật chấp nhận rủi ro lỗi hiển thị/thao tác ở hai thẻ Settings; ghi vào PHASE3_REPORT là ngoại lệ.
+- **Xem lại nếu:** kiểm app thật phát hiện lỗi ở hai thẻ; cần nhánh `develop` riêng; hướng claude mới vẫn không phủ hết lời gọi.
+
+## ADR-011: Claude quyết bốn điểm tồn đọng theo ủy quyền của người dùng (2026-11-10)
+
+- **Bối cảnh:** người dùng được hỏi bằng `AskUserQuestion` về bốn điểm và chọn "Để Claude tự quyết" cho cả bốn. Đây là quyết định của Claude theo ủy quyền, KHÔNG phải người dùng đã đọc từng chi tiết; người dùng có thể đảo lại bất cứ lúc nào.
+- **Quyết định:**
+  1. **Ngữ nghĩa 4 mức quyền** (`ASSUMPTIONS.md`, mục policy): giữ nguyên bản. Lý do: mọi mức fail-closed, không có chế độ tự duyệt tất cả, deny/shell host/`protectedPaths` cố định ở mọi mức. **Phạm vi grant 7C-2 KHÔNG nằm trong quyết định này**, vẫn chờ kế hoạch và duyệt riêng.
+  2. **Hạ concurrency** (nửa, tối thiểu 1, hoãn = 0): giữ nguyên thuật toán. Khoảng trống đã biết (task `queued` chờ vô hạn khi hoãn kéo dài, chưa có chỉ báo lý do trong UI) ghi là nợ giao diện cho Phase 5; ngưỡng đã chỉnh được trong Settings. Không đổi mã bây giờ.
+  3. **Allowlist tuổi crate Cargo:** đã đo tuổi thật trên crates.io (2026-11-11 UTC): `brotli@9.1.1` 15 ngày, `brotli-decompressor@6.2.0` 16 ngày, `erased-serde@0.4.11` 16 ngày, cả ba đã đủ 14 ngày nên không cần gia hạn; mục hết hạn bị bộ kiểm lọc bỏ qua, để nguyên file. Các mục còn lại hết hạn 2026-11-13/14 (tuổi sẽ đủ cùng ngày); chưa đo, nếu CI đỏ thì đo lại từng crate, không gia hạn hàng loạt.
+  4. **Low IL đăng nhập/gọi model thật:** ghi là ngoại lệ của Phase 4 (chặn ghi, không chặn đọc/mạng; BLOCKED vì cần người dùng tự đăng nhập), không làm. **Nhánh `develop`:** không tạo; dùng nhánh tích hợp do phiên chỉ định như CLAUDE.md đã ghi.
+- **Đánh đổi:** chấp nhận ngữ nghĩa policy và hạ concurrency chưa qua đọc kỹ của người dùng; Low IL thành ngoại lệ khi đóng Phase 4.
+- **Xem lại nếu:** người dùng đọc lại và muốn đổi; CI báo allowlist/tuổi gói đỏ; muốn đưa Low IL vào gate.
+
+## ADR-012: Chế độ vòng lặp tự động trong CLAUDE.md nguyên tắc 10 (2026-11-09)
+
+- **Đánh số:** ban đầu ghi là ADR-010 (nhánh loop); đổi thành ADR-012 khi ghép vì ADR-010/011 đã dùng cho quyết định 2026-11-10 của nhánh p4.
 - **Trạng thái:** Người dùng đã duyệt (2026-11-09, trong hội thoại); đã ghi vào `CLAUDE.md` nguyên tắc 10.
 - **Bối cảnh:** công cụ `loop-runner` (repo riêng, xem `docs/superpowers/specs/2026-11-09-autonomous-loop-runner-design.md`) chạy vòng lặp task → gate → review để giảm việc duyệt tay từng task.
 - **Quyết định:** khi người dùng chủ động bật vòng lặp, điều phối viên được tự đóng phase và sang phase kế tiếp, nhưng chỉ khi mọi tiêu chí nghiệm thu trong `docs/ROADMAP.md` đã PASS bằng kết quả lệnh thật (không có mục NOT_RUN/BLOCKED) và `docs/PHASEn_REPORT.md` đã ghi. Mỗi task tối đa 3 lần tự sửa (`AGENTS.md`, `.codex/agents/implementer.toml`, `maxAttemptsPerTask` trong `loop.config.json`).

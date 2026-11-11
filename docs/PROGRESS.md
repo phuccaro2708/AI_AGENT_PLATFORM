@@ -770,9 +770,30 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Gate cục bộ sau `1d7f352`: lint, format, typecheck, test (107 file pass, 1046 test pass, 67 skip), build exit 0. Sau `92b8760` và `101ab41` chỉ chạy eslint, prettier, typecheck và vitest của file đã đổi.
 - CI đã đọc: `1d7f352` ubuntu xanh, windows đỏ đúng test `windows-process-source`; `92b8760` Security đỏ do secret scan; `101ab41` Docs sync đỏ vì PROGRESS dừng ở 2026-11-08 (mục này sửa lỗi đó). Kết quả CI sau `101ab41` của các job TypeScript, Tauri, spike CHƯA đọc.
 
+## 2026-11-10: đọc CI PR #3, quyết định tồn đọng, chính sách merge
+
+- Phiên con (chỉ đọc, GraphQL `checkSuites`/`checkRuns`) đọc CI của `c17ea94`: run 42644169820 xanh 5/5 (TypeScript ubuntu 1m56s, windows 3m37s, Tauri 5m05s, Security 21m54s, spike 3m58s); Docs sync xanh (6s). Run trùng 42644154419: Security CANCELLED sau 30m16s, các job khác xanh; `101ab41` có hai run bị huỷ Security và Docs sync đỏ (đã sửa ở `c17ea94`). Nguyên nhân huỷ chưa điều tra; 2 check suite QUEUED chưa rõ nguồn.
+- Người dùng trả lời 4 lô `AskUserQuestion`; toàn bộ ghi ở ADR-010 (đóng Phase 3 có ngoại lệ, `keepAlive` ngắn khi bật VRAM, Q2 duyệt, CLI thật có giới hạn, dependency Tailwind/shadcn + Playwright có điều kiện, ADR-006 A1/A7/A8, đổi hướng claude P4-1 c/d, probe `agy` lần 3, dọn worktree rỗng).
+- `c2891b1`: thêm "Git Branch & Merge Policy" vào CLAUDE.md (và sửa 3 chỗ mâu thuẫn) và một dòng vào AGENTS.md. `prettier --check` CLAUDE.md/AGENTS.md qua; `node scripts/docs-sync-check.mjs` OK. Edit tool từng ghi CLAUDE.md thành CRLF; đã chuẩn hoá về LF (repo `eol=lf`).
+- Docs cập nhật trong lần lưu này: HANDOFF, ROADMAP (gate Phase 3 tick), TODO, PHASE3_REPORT, DECISIONS (ADR-010).
+- Chưa làm (chỉ quyết định, chưa thực thi): điều tra Security huỷ, `keepAlive` ngắn, probe claude hướng mới, A1/A7/A8, C1/C5, kiểm NSIS/WiX, dọn worktree, dependency, đối chiếu `phase-2-kickoff`. Chưa chạy lại lint/typecheck/test/build (chỉ đổi docs). `c2891b1` và commit lưu này chưa push, chưa có CI.
+
+## 2026-11-10 (tiếp): kiểm điều kiện Phase 4 và quyết bốn điểm tồn đọng
+
+- Kiểm điều kiện Phase 4 từ docs: ba ô acceptance gate vẫn `[ ]`; TODO còn 1 `[ ]` (`PHASE4_REPORT.md`), 9 `[~]`, 3 `[x]`. Phase 4 chưa đóng.
+- Đo tuổi crate trên crates.io (curl, chỉ đọc, 2026-11-11 UTC): `brotli@9.1.1` 15 ngày, `brotli-decompressor@6.2.0` 16 ngày, `erased-serde@0.4.11` 16 ngày. `node scripts/deps-age-audit.mjs` hết thời gian chờ 100 giây, chưa có kết quả đầy đủ (chưa chạy xong).
+- Người dùng ủy quyền cho Claude quyết bốn điểm (4 mức quyền, hạ concurrency, allowlist Cargo, Low IL + develop); ghi ở ADR-011. Phạm vi grant 7C-2 vẫn chờ người dùng.
+- Chưa làm: điều tra Security bị huỷ, các việc thực thi của ADR-010. Chưa chạy lint/typecheck/test/build (chỉ đổi docs).
+
 ## 2026-11-10: ghép nhánh `worktree-p4-close-prep` vào nhánh này (cục bộ)
 
 - Đối chiếu trước khi ghép: nhánh p4 hơn 5 commit riêng (`986c301`, `1d7f352`, `92b8760`, `101ab41`, `c17ea94`), tụt 21 commit; `git merge-tree` báo xung đột nội dung chỉ ở `docs/ASSUMPTIONS.md`, `docs/HANDOFF.md`, `docs/PROGRESS.md`; không có xung đột ở mã.
 - Giải xung đột: ASSUMPTIONS và PROGRESS giữ cả hai phía (nối thêm); HANDOFF giữ đoạn đầu của nhánh này (cùng nội dung Phase 4, ngày 2026-11-10) và bỏ bản cũ hơn của nhánh p4. `git merge --no-ff`, không push.
 - Gate trên cây làm việc sau khi ghép: `pnpm lint` exit 0; `pnpm typecheck` exit 0; `pnpm test --no-file-parallelism` 107 file pass, 1041 test pass, 72 skip; `pnpm build` exit 0. `pnpm format` chỉ báo 29 file trong `.superpowers/` (thư mục scratch git ignore), không file nào được theo dõi; `prettier --check` ba file docs đã sửa sạch.
 - Chưa chạy: `cargo clippy` và `cargo test` (merge không đụng `src-tauri`); chưa đọc CI; nhánh p4 giữ nguyên vì worktree `p4-close-prep` vẫn đang checkout nó.
+
+## 2026-11-10: ghép thêm 3 commit của `worktree-p4-close-prep` (chính sách merge, ADR-011)
+
+- Nhánh p4 tiến thêm `c2891b1`, `7665b1b`, `a09f3f8` (chỉ docs) sau lần ghép trước; ghép lại bằng `git merge --no-ff`, xung đột ở `CLAUDE.md`, `DECISIONS.md`, `HANDOFF.md`, `PROGRESS.md`.
+- Trùng số ADR: nhánh p4 dùng ADR-010 (quyết định 2026-11-10) và ADR-011; ADR "chế độ vòng lặp tự động" của nhánh này đổi thành ADR-012 (ghi chú trong chính ADR). Các ghi chú cũ ở PROGRESS và repo `loop-runner` còn gọi nó là ADR-010 (lịch sử, không sửa).
+- `CLAUDE.md`: lấy bản chính sách merge của p4, giữ ngoại lệ "trừ chế độ vòng lặp tự động ở nguyên tắc 10" trong mục KHÔNG tự làm. Chỉ đổi docs nên chưa chạy lại gate mã.

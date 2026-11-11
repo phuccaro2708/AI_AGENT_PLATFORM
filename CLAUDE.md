@@ -34,16 +34,64 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 
 - **Tự commit**: khi một đơn vị công việc xong và gate liên quan đã chạy (ít nhất `eslint`, `prettier --check`, `pnpm typecheck` và test của phần đã đổi), commit nhỏ với message conventional. Chỉ `git add` đúng file thuộc thay đổi, không `git add -A`; không commit secrets, đường dẫn máy cá nhân, file tạm. Không `--no-verify`, không amend commit đã push.
 - **Tự đối chiếu trước khi merge**: với mỗi nhánh ứng viên, chạy `git rev-list --count <chính>..<nhánh>` (ahead/behind), `git cherry <chính> <nhánh>` (commit chưa có theo nội dung) và `git diff --stat $(git merge-base …)`. Nhánh 0 commit riêng thì coi là đã ghép. Nhánh cũ tụt xa (hàng trăm commit) hoặc viết lại phần mà nhánh chính đã tiến hoá thì KHÔNG merge, báo người dùng và để họ quyết.
-- **Tự merge (cục bộ)**: chỉ merge nhánh đã đối chiếu và có commit riêng hợp lệ, bằng `git merge --no-ff`. Xung đột chỉ ở file nối-thêm như `docs/PROGRESS.md`/`docs/ASSUMPTIONS.md` thì giữ cả hai phía; xung đột ở mã thì dừng và báo. Sau mỗi lần merge có đổi mã phải chạy lại gate (lint, format, typecheck, test, build; thêm `cargo clippy --all-targets -- -D warnings` và `cargo test --locked` nếu đụng `src-tauri`). Gate đỏ thì không coi là xong, báo đúng kết quả.
-- **Dọn nhánh**: chỉ xoá nhánh đã nằm trọn trong nhánh chính (`git branch --merged`) và worktree sạch (`git status --porcelain` rỗng). Nhánh chưa ghép, nhánh có commit riêng, nhánh mặc định của GitHub thì không xoá. Xoá nhánh trên origin chỉ khi commit của nó đã có trên origin của nhánh chính.
-- **KHÔNG tự làm**: `git push` (nhất là `--force`), tạo PR, đổi thứ tự phase, đóng phase (trừ chế độ vòng lặp tự động ở nguyên tắc 10), xoá nhánh chưa ghép, `git reset --hard`/`checkout --` trên việc chưa commit. Những việc này vẫn cần người dùng yêu cầu.
+- **Tự merge, dọn nhánh**: theo mục "Git Branch & Merge Policy" bên dưới (điều kiện, nhánh được bảo vệ, xử lý lỗi, sau merge). Bước đối chiếu ở trên luôn chạy trước mỗi lần merge.
+- **KHÔNG tự làm**: `git push`, tạo PR, đổi thứ tự phase, đóng phase (trừ chế độ vòng lặp tự động ở nguyên tắc 10), `git reset --hard`/`checkout --` trên việc chưa commit, và mọi điều bị cấm trong "Git Branch & Merge Policy" (force push, xoá nhánh chưa ghép, bỏ qua test để merge). Những việc này vẫn cần người dùng yêu cầu hoặc bị cấm hẳn.
 - Mỗi lần tự động xong ghi lại trong `docs/PROGRESS.md` (lệnh đã chạy, kết quả thật); không ghi kết quả CI chưa đọc.
 - Báo cáo trung thực: test fail thì nói fail, bước bỏ qua thì nói bỏ qua.
 - Yêu cầu có nhiều cách hiểu khác nhau: nêu giả định và các lựa chọn, không chọn ngầm. Nếu chỉ có một cách hợp lý thì cứ làm.
 - Mỗi dòng thay đổi phải truy được về yêu cầu. Dead code có sẵn thì báo, không xóa; chỉ dọn phần do chính thay đổi của mình làm thừa.
 - Việc nhiều bước: nêu tiêu chí kiểm chứng cho từng bước (test nào, lệnh nào) trước khi làm.
-- Được phép chạy nhiều tác vụ song song bằng `/subtask` (phiên con) khi cần thiết. Chỉ giao những phần độc lập, không chung file; mỗi phiên con làm trong worktree riêng, ghi rõ tiêu chí xong trong brief. Phiên con không push, không tạo PR, không ghép nhánh; phiên chính kiểm lại diff và kết quả rồi mới ghép khi người dùng yêu cầu.
-- **Lệnh `/plan` (plan mode) bắt buộc dùng `AskUserQuestion`** trước khi chốt kế hoạch, để chắc chắn người dùng muốn gì: hỏi phạm vi, lựa chọn thiết kế và ràng buộc còn mơ hồ. Không tự chọn ngầm rồi trình kế hoạch. Chỉ bỏ qua khi yêu cầu chỉ có một cách hiểu hợp lý; khi đó nêu rõ trong kế hoạch là không có gì cần hỏi.
+- Được phép chạy nhiều tác vụ song song bằng `/subtask` (phiên con) khi cần thiết. Chỉ giao những phần độc lập, không chung file; mỗi phiên con làm trong worktree riêng, ghi rõ tiêu chí xong trong brief. Phiên con không push, không tạo PR, không ghép nhánh; phiên chính kiểm lại diff và kết quả rồi mới ghép khi đạt đủ điều kiện trong "Git Branch & Merge Policy" (ghép vào `main` vẫn cần người dùng phê duyệt).
+- **Lệnh `/plan` (plan mode) bắt buộc dùng `AskUserQuestion`** trước khi chốt kế hoạch, để chắc chắn người dùng muốn gì: hỏi phạm vi, lựa chọn thiết kế và ràng buộc còn mơ hồ. Không tự chọn ngầm rồi trình kế hoạch. Hook `PreToolUse` trên `ExitPlanMode` (`.claude/hooks/require-ask-user-question.cjs`) chặn chốt kế hoạch nếu chưa gọi `AskUserQuestion`; không gọi `ExitPlanMode` trước rồi "hỏi sau". Chỉ bỏ qua khi yêu cầu chỉ có một cách hiểu hợp lý; khi đó kế hoạch phải ghi đúng cụm "không có gì cần hỏi" (hook cho qua).
+
+## Git Branch & Merge Policy
+
+Áp dụng cho mọi agent (Claude, Codex, phiên con). Quy tắc này thay cho mọi câu hẹp hơn ở mục "Tự động hoá" phía trên; khi mâu thuẫn, quy tắc ở đây thắng.
+
+**Ánh xạ tên nhánh (repo này):** `main` = nhánh chính `claude/loving-lovelace-32lh71`. `develop` = nhánh tích hợp do phiên làm việc chỉ định (hiện chưa có nhánh tên `develop`; hiện là `worktree-p4-close-prep`). Tạo nhánh `develop` riêng chỉ khi người dùng yêu cầu.
+
+### Quản lý nhánh
+
+- Agent ĐƯỢC tự tạo nhánh tính năng.
+- Mỗi agent PHẢI làm việc trên nhánh hoặc git worktree riêng của nó.
+- Không sửa nhánh đang hoạt động của agent khác.
+- Không ghi đè thay đổi chưa commit của người dùng.
+
+### Tự merge có điều kiện
+
+Agent ĐƯỢC tự merge nhánh tính năng vào `develop` CHỈ khi đạt đủ cả bảy điều kiện:
+
+1. Phần triển khai đã hoàn thành.
+2. Build, lint, typecheck và test liên quan đều qua (gate: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build`; thêm `cargo clippy --all-targets -- -D warnings` và `cargo test --locked` nếu đụng `src-tauri`).
+3. Review độc lập (agent/phiên khác với người viết, ví dụ `/code-review`) không báo vấn đề chặn.
+4. Không còn xung đột merge chưa giải quyết. Xung đột chỉ ở file nối-thêm như `docs/PROGRESS.md`/`docs/ASSUMPTIONS.md` thì giữ cả hai phía; xung đột ở mã thì dừng và báo.
+5. Không có thay đổi trái phép lên file được bảo vệ (`CLAUDE.md`, `AGENTS.md`, `.github/workflows/**`, `scripts/secret-scan.py` và allowlist, `src-tauri/capabilities/**`, hook trong `.claude/hooks/**`; sửa các file này cần người dùng yêu cầu).
+6. Nhánh đích không đổi kể từ lúc kiểm (nếu đổi thì kiểm lại).
+7. Thao tác merge không phá huỷ (`git merge --no-ff`; không rebase/reset lịch sử chung).
+
+Luôn chạy bước "tự đối chiếu" ở mục trên trước khi merge; nhánh tụt xa hoặc viết lại phần đã tiến hoá thì không merge, báo người dùng.
+
+### Nhánh được bảo vệ
+
+- `main`: KHÔNG BAO GIỜ merge khi chưa có người dùng phê duyệt rõ ràng.
+- `develop`: được tự merge sau khi kiểm đủ bảy điều kiện.
+- KHÔNG force push; KHÔNG bỏ qua check bắt buộc (`--no-verify`, tắt test, nới gate).
+- KHÔNG viết lại lịch sử git dùng chung.
+- `git push` và tạo PR vẫn chỉ làm khi người dùng yêu cầu.
+
+### Xử lý lỗi
+
+- Kiểm chứng thất bại: trả lại cho bên triển khai sửa.
+- Tối đa 3 lần sửa cho mỗi task.
+- Lặp lại thất bại thì dừng và báo điểm chặn, đúng kết quả thật.
+- KHÔNG bỏ qua test để merge cho được.
+
+### Sau merge
+
+- Xác minh nhánh đích và merge commit (`git log --first-parent`, `git branch --contains`).
+- Ghi kết quả test và SHA merge vào `docs/PROGRESS.md`.
+- Chỉ xoá nhánh tính năng do chính agent tạo và đã merge trọn (`git branch --merged`), worktree sạch (`git status --porcelain` rỗng). Xoá nhánh trên origin chỉ khi commit đã có trên origin của nhánh đích.
+- KHÔNG tự xoá nhánh do người dùng tạo, nhánh chưa merge, hay nhánh mặc định của GitHub.
 
 ## Gọi Codex để tìm kiếm thông tin
 

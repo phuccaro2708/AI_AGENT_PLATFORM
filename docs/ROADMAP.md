@@ -132,11 +132,13 @@ Ghi chú: spike `node-pty` chưa làm; installer chưa build. Chi tiết: `docs/
 
 **Acceptance gate**
 
-- [ ] Mọi adapter trong phạm vi gate (Claude, Codex, Ollama; `agy` ngoài gate, ADR-009) qua cùng bộ contract test.
-- [ ] Thêm adapter mới không sửa Orchestrator core.
-- [ ] Hết VRAM/RAM → hệ thống degrade có kiểm soát, không treo máy.
+- [x] (đạt 2026-11-10, có ngoại lệ ADR-010) Mọi adapter trong phạm vi gate (Claude, Codex, Ollama; `agy` ngoài gate, ADR-009) qua cùng bộ contract test.
+- [x] (đạt, có giới hạn) Thêm adapter mới không sửa Orchestrator core.
+- [x] (đạt trên test + sidecar thật; UI Tauri NOT_RUN) Hết VRAM/RAM → hệ thống degrade có kiểm soát, không treo máy.
 
-> Tình trạng 2026-11-08 (KHÔNG tick gate): RAM/CPU degrade đã nối qua admission, đo pid con Windows và ngưỡng/concurrency trong Settings; VRAM, Ollama (kể cả discover models qua `/api/tags`) và một model một lúc đã có mã + test (S1–S6, `e2fe785`); VRAM mặc định TẮT (người dùng giữ nguyên, 2026-11-08); tool calling thật và admission trên sidecar thật đã đo 2026-11-08; còn kiểm giao diện trong app Tauri thật. Xem `docs/PHASE3_REPORT.md`.
+> **Phase 3: ĐÓNG 2026-11-10 có ngoại lệ (ADR-010).** Ngoại lệ: hai thẻ Settings và admission chưa kiểm trong app Tauri thật; `keepAlive` ngắn khi bật VRAM đã quyết, chưa làm.
+>
+> Tình trạng 2026-11-08 (trước khi đóng): RAM/CPU degrade đã nối qua admission, đo pid con Windows và ngưỡng/concurrency trong Settings; VRAM, Ollama (kể cả discover models qua `/api/tags`) và một model một lúc đã có mã + test (S1–S6, `e2fe785`); VRAM mặc định TẮT (người dùng giữ nguyên, 2026-11-08); tool calling thật và admission trên sidecar thật đã đo 2026-11-08; còn kiểm giao diện trong app Tauri thật. Xem `docs/PHASE3_REPORT.md`.
 
 ## Phase 4 — Security & Reliability (2–3 tuần)
 

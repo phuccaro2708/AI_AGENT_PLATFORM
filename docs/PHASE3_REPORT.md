@@ -1,6 +1,6 @@
 # PHASE 3 REPORT
 
-Nhánh: `worktree-p4-close-prep`. **Phase 3 CHƯA đóng** (việc tick gate và đóng là của người dùng). Từ 2026-11-08 `agy` ngoài phạm vi gate (ADR-009, code giữ nguyên); phần `agy` PARTIAL là nợ ngoài gate. Bảng dưới là trạng thái hiện tại, thống nhất; các mục bên dưới bảng là **lịch sử theo thời điểm** (luồng A viết 2026-11-0x, khi Ollama/scheduler/UI còn chưa làm) và không còn là trạng thái hiện tại.
+Nhánh: `worktree-p4-close-prep`. **Phase 3 ĐÓNG 2026-11-10 có ngoại lệ** (người dùng quyết, ADR-010): hai thẻ Settings và admission chưa kiểm trong app Tauri thật; `keepAlive` ngắn khi bật VRAM đã quyết, chưa làm. Từ 2026-11-08 `agy` ngoài phạm vi gate (ADR-009, code giữ nguyên); phần `agy` PARTIAL là nợ ngoài gate. Bảng dưới là trạng thái hiện tại, thống nhất; các mục bên dưới bảng là **lịch sử theo thời điểm** (luồng A viết 2026-11-0x, khi Ollama/scheduler/UI còn chưa làm) và không còn là trạng thái hiện tại.
 
 ## Acceptance gate Phase 3 (trạng thái hiện tại)
 
@@ -25,7 +25,7 @@ Nhánh: `worktree-p4-close-prep`. **Phase 3 CHƯA đóng** (việc tick gate và
 - Hai thẻ Settings và hành vi admission trong **app Tauri thật** (cần mở app và thao tác tay).
 - `agy` (ngoài gate, ADR-009).
 - Tool calling với model có phản hồi ngoài `read_file` (`list_dir`, từ chối ngoài thư mục) và các model khác ngoài hai model đã thử.
-- CI chưa đọc cho các commit mới (chưa push).
+- CI: head `c17ea94` đã đọc 2026-11-10, xanh 5/5 (xem HANDOFF); Security bị huỷ ở run trùng, chưa điều tra.
 
 ---
 

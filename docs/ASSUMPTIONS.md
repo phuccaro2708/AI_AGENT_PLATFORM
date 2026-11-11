@@ -800,3 +800,8 @@ Danh sách giả định của `D:\Program\loop-runner` mà chưa có phép đo.
 - **Đã đo:** `read_file` qua tool loop với model thật: `qwen3.5:4b` 4/4, `qwen3:4b` 3/4 (1 lần hết 512 token trong lập luận, không gọi tool). Hai model liên tiếp: `/api/ps` chỉ còn model sau. Admission trên sidecar thật: VRAM 64,1 % ≥ pause 38 % giữ task chờ, gỡ model thì task chạy sau ~6,6 s; RAM tương tự (~5 s).
 - **Bất ngờ:** model còn trong VRAM sau lượt chạy (keep_alive) giữ trạng thái `paused` khi dải VRAM bật; RAM máy này nằm sẵn 80–88 %.
 - **Chưa đo:** `list_dir` và từ chối đường dẫn ngoài thư mục với model thật; app Tauri thật; mẫu nhỏ (4 lượt mỗi model).
+
+### `GitWorktrees.diff`: kiểm lại sau khi git đọc, race còn hở (2026-11-11)
+
+- **Đã làm:** thêm kiểm `realpath` lần hai sau `git diff --no-index`; nếu đường dẫn đã bị đổi thành link trỏ ra ngoài và vẫn là link, output bị bỏ. Test viết trước, đỏ (rò `SWAPPED-SECRET`) rồi xanh.
+- **Chưa đóng (Codex review độc lập, đối chiếu mã, đồng ý):** hoán đổi sang link ra ngoài rồi khôi phục về nguyên trạng giữa hai lần kiểm vẫn qua cả hai. Chữa đúng cần đọc bằng handle đã mở, gắn danh tính đã kiểm với byte được diff (cần nhận nội dung qua stdin hoặc tự dựng diff file mới); việc này thêm đường mới trong `runProcess`, chưa làm. Không tuyên bố khe TOCTOU đã vá.

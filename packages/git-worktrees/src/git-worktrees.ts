@@ -280,6 +280,14 @@ export class GitWorktrees {
         path,
       );
       if (r.exitCode !== 0 && r.exitCode !== 1) throw new GitError(["diff"], r.exitCode, r.stderr);
+      // Re-check after git read it: this drops the output when the path was swapped for a link and STAYS a link.
+      // It does NOT close the race: a swap to an outside link and back to the original between the two checks
+      // passes both (Codex review, 2026-11-11). Closing it needs a handle-based read whose verified identity is
+      // bound to the bytes diffed; that is open work, recorded in docs/ASSUMPTIONS.md.
+      if (!this.insideWorktree(path, f.path)) {
+        parts.push(`# skipped: ${f.path} resolves outside the worktree\n`);
+        continue;
+      }
       parts.push(r.stdout);
     }
     const patch = parts.join("");

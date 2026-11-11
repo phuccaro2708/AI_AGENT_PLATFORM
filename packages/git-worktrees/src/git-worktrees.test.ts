@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -130,6 +130,29 @@ describe("diff", () => {
     expect(d.patch).not.toContain("OUTSIDE-SECRET-CONTENT");
     expect(d.patch).toContain("jn/secret.txt resolves outside the worktree");
     if (fileLink) expect(d.patch).toContain("leak.txt");
+  });
+
+  it("a file swapped for a link between the check and git's read is dropped, its content never returned", async () => {
+    const info = await wt.create({ workflowId: "wf_1", taskId: "task_a" });
+    const outside = join(root, "outside2");
+    mkdirSync(outside);
+    writeFileSync(join(outside, "s.txt"), "SWAPPED-SECRET\n");
+    mkdirSync(join(info.path, "d"));
+    writeFileSync(join(info.path, "d", "s.txt"), "harmless\n");
+    const real = (wt as unknown as { run: (a: string[], c: string) => Promise<unknown> }).run.bind(
+      wt,
+    );
+    // the swap lands after the pre-check passed and before git reads the file
+    vi.spyOn(wt as unknown as { run: typeof real }, "run").mockImplementation(async (args, cwd) => {
+      if (args.includes("--no-index")) {
+        rmSync(join(info.path, "d"), { recursive: true, force: true });
+        symlinkSync(outside, join(info.path, "d"), "junction");
+      }
+      return real(args, cwd);
+    });
+    const d = await wt.diff(info.path);
+    expect(d.patch).not.toContain("SWAPPED-SECRET");
+    expect(d.patch).toContain("d/s.txt resolves outside the worktree");
   });
 
   it("cuts output beyond maxBytes and says so", async () => {

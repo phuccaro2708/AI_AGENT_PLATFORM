@@ -26,7 +26,6 @@ export async function bundleSidecar(outfile) {
       "@agent-studio/adapter-claude": join(root, "packages/adapter-claude/src/index.ts"),
       "@agent-studio/adapter-codex": join(root, "packages/adapter-codex/src/index.ts"),
       "@agent-studio/diagnostics": join(root, "packages/diagnostics/src/index.ts"),
-      "@agent-studio/policy-engine": join(root, "packages/policy-engine/src/index.ts"),
     },
     banner: {
       js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);",

@@ -6,12 +6,7 @@ import {
   type TaskState,
   type SidecarResponse,
 } from "@agent-studio/contracts";
-import {
-  AdapterRegistry,
-  StubAdapter,
-  type AgentAdapter,
-  type AgentTask,
-} from "@agent-studio/agent-core";
+import { AdapterRegistry, StubAdapter, type AgentAdapter } from "@agent-studio/agent-core";
 import {
   createSecretRedactor,
   noSecrets,
@@ -19,10 +14,8 @@ import {
   type SecretRedactor,
 } from "./secrets.js";
 import { checkAgentSettings, type AgentLaunchSettings } from "./agent-settings.js";
-import { evaluate } from "@agent-studio/policy-engine";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
-import { CodexAdapter, CodexAppServerAdapter } from "@agent-studio/adapter-codex";
-import type { CodexAppServerOptions } from "@agent-studio/adapter-codex";
+import { CodexAdapter } from "@agent-studio/adapter-codex";
 import {
   probeClaude,
   probeCodex,
@@ -43,9 +36,6 @@ import { describeRouteFailure, selectAgent, snapshotAdapters } from "./capabilit
 import { Orchestrator, type RunResult } from "./orchestrator.js";
 import { Scheduler } from "./scheduler.js";
 import { checkProjectRoot, duplicateOf } from "./project-policy.js";
-import { claudeGateTaskArgs, type ClaudeGateLauncher } from "./claude-permission-gate.js";
-import { appServerPolicy } from "./codex-app-server-gate.js";
-import { PolicyGate } from "./policy-gate.js";
 import {
   auditNote,
   buildEvidence,
@@ -78,42 +68,10 @@ export interface SidecarOptions {
   approvalSweepMs?: number;
   /** Tasks the scheduler runs at once at most. Default 2. */
   schedulerConcurrency?: number;
-  /** Test seam: replaces the Policy Engine's `evaluate` in the pre-run gate (the real one never throws). */
-  policyEvaluate?: typeof evaluate;
-  /**
-   * Test seam: also check the program `extraAdapters` report in `describeLaunch`. Off by default because those
-   * adapters come from the embedding code, not from user settings; their folder is always checked.
-   */
-  policyCheckExtraLaunch?: boolean;
-  /** How often a gate waiting for an approval looks at the task. Default 200 ms. */
-  policyPollMs?: number;
-  /**
-   * Codex permission gate (P4-1 c): approval requests go through the Policy Engine. ON by default (Q3, 2026-11-07);
-   * `false` switches it off (real process: `AGENT_STUDIO_CODEX_GATE=0`). While ON, the `codex` agent itself runs the
-   * app-server adapter (ADR-008; stored `codex exec` args are not used) and `codex-app-server` stays registered too;
-   * `false` restores `codex exec` and drops `codex-app-server`. The fields are launch overrides for the embedding
-   * code (tests point them at a fake server); when `command` is set the program itself is not re-checked, as for
-   * `extraAdapters`. Without `command` the `codex` program is checked by the policy gate; if it is missing the
-   * task is refused.
-   */
-  codexAppServer?: Pick<CodexAppServerOptions, "command" | "baseArgs" | "env" | "envAllow"> | false;
-  /**
-   * P4-1 d: launch `claude` with `--permission-prompt-tool` so tool calls it did not settle itself are judged by
-   * the Policy Engine, with `askEveryTool` (all six tools go to the gate) and `--setting-sources local`.
-   * ON by default (Q3, 2026-11-07); `false` switches it off (real process: `AGENT_STUDIO_CLAUDE_GATE=0`).
-   * Fail closed: `--safe-mode` is turned off (it would stop the gate from loading, d3), and a task is refused when
-   * the launcher is missing or the stored arguments bring `--safe-mode` back. `configDir` (default: `gate` next to
-   * the database) receives one MCP config file per task; `launcher` is the program claude starts as that MCP server
-   * (default: this sidecar's own bundle, see `sidecar-main.ts`). `askEveryTool: false` is a test seam.
-   * Not a sandbox: claude does not send every call to the gate (docs/SECURITY.md).
-   */
-  claudePermissionGate?:
-    { configDir?: string; launcher?: ClaudeGateLauncher; askEveryTool?: boolean } | false;
   /**
    * P4-4 (b): start the `claude` and `codex` CLIs inside `agent-job-wrap` (Windows Job Object, kill on close).
    * Unset here = off. `sidecar-main` sets it by default when the installed binary is found (`job-wrap-config.ts`;
-   * `AGENT_STUDIO_JOB_WRAP=0` turns it off; missing binary = warning and no wrap). Not applied to
-   * `codex-app-server`.
+   * `AGENT_STUDIO_JOB_WRAP=0` turns it off; missing binary = warning and no wrap).
    */
   jobWrap?: JobWrapOptions;
   /**
@@ -122,21 +80,12 @@ export interface SidecarOptions {
    * or via `AGENT_STUDIO_CLI_TREE_MEM_MB=<positive MB>` in `sidecar-main`, to opt in.
    */
   cliTreeMemoryLimitMb?: number;
-  /** Wall-clock limit of one `claude` run while its permission gate is on (ms, default 2 h; 0 = none). Backstop for a hung gate process. */
-  claudeTaskTimeoutMs?: number;
   /** Parent folder of diagnostics bundles. Default: `diagnostics` next to the database. */
   diagnosticsDir?: string;
   /** Folder and file stem of the sidecar's log file (the native side redirects stderr there). Default: next to the database, `sidecar`. */
   logDir?: string;
   logBaseName?: string;
 }
-
-/** The program each built-in agent is launched as unless the user stored another (probed) command. */
-const DEFAULT_COMMANDS: Readonly<Record<string, string>> = {
-  claude: "claude",
-  codex: "codex",
-  "codex-app-server": "codex",
-};
 
 const ok = (id: number, result: unknown) => ({
   response: { id, result } as SidecarResponse,
@@ -165,8 +114,6 @@ const REQUIRED_CAPABILITIES = {
 /** Same requirement the UI applies to a single-agent task (`AGENT_TASK_REQUIRES`): a live log. */
 const AUTO_AGENT_REQUIRES: readonly AgentCapability[] = ["streaming"];
 
-const DEFAULT_CLAUDE_TASK_TIMEOUT_MS = 2 * 60 * 60 * 1000;
-
 export class SidecarService {
   readonly db: StudioDb;
   private readonly repo: Repo;
@@ -184,9 +131,6 @@ export class SidecarService {
   private readonly probes: Record<"claude" | "codex", (o?: ProbeOptions) => Promise<ProbeResult>>;
   /** Callers of `runThroughScheduler` waiting for their task to settle. */
   private readonly settleWaiters = new Map<string, (r: RunResult | undefined) => void>();
-  /** Pre-run policy check and post-run scope check around every agent (P4-1 a + b). */
-  private readonly gate: PolicyGate;
-  private gateWorkspaces: ProjectWorkspaces | undefined;
 
   private get rootPolicy() {
     return {
@@ -213,12 +157,6 @@ export class SidecarService {
     provider: "claude" | "codex",
     s?: { command: string; args: string[]; env: Record<string, string> },
   ): AgentAdapter {
-    // Q3 follow-up (2026-11-07, user decision): while the Codex gate is ON, the `codex` agent IS the app-server
-    // adapter, so every command/file request goes through the Policy Engine. The stored `args` (`codex exec`
-    // arguments) are not used. Switch back to `codex exec` with `codexAppServer:false` / AGENT_STUDIO_CODEX_GATE=0.
-    if (provider === "codex" && this.opts.codexAppServer !== false) {
-      return this.buildAppServerAdapter(s, "codex");
-    }
     const secret = this.secrets[provider];
     // Variables the user (stored settings) or the native side (secrets) named on purpose may reach the child;
     // the rest of this process's environment is cut down by the adapter's own manifest (P4-3).
@@ -236,30 +174,7 @@ export class SidecarService {
         ? {}
         : { treeMemoryLimitMb: this.opts.cliTreeMemoryLimitMb }),
     };
-    const gateOpt = this.opts.claudePermissionGate;
-    if (provider === "claude" && gateOpt !== false) {
-      const build = claudeGateTaskArgs({
-        configDir: gateOpt?.configDir ?? join(dirname(this.opts.dbPath), "gate"),
-        launcher: gateOpt?.launcher ?? { command: process.execPath, args: [process.argv[1] ?? ""] },
-        askEveryTool: gateOpt?.askEveryTool ?? true,
-        isolateSettings: true,
-        requireLauncher: true,
-      });
-      const taskArgs = (task: AgentTask) => {
-        // `--safe-mode` keeps the MCP gate from loading (d3): refuse instead of running without the gate.
-        if ((s?.args ?? []).some((a) => a === "--safe-mode")) {
-          throw new Error(
-            "--safe-mode in the stored claude arguments is incompatible with the gate",
-          );
-        }
-        return build(task);
-      };
-      const t = this.opts.claudeTaskTimeoutMs ?? DEFAULT_CLAUDE_TASK_TIMEOUT_MS;
-      return this.gate.wrap(
-        new ClaudeAdapter({ ...o, safeMode: false, taskArgs, ...(t > 0 ? { timeoutMs: t } : {}) }),
-      );
-    }
-    return this.gate.wrap(provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o));
+    return provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o);
   }
 
   /**
@@ -337,48 +252,6 @@ export class SidecarService {
     return { ok: probe.status === "ok" && looksLikeTheCli, probe, checked, looksLikeTheCli };
   }
 
-  /**
-   * `codex-app-server`: the same program, environment and secrets as the stored `codex` settings (so a custom path,
-   * proxy variable or Credential Manager key reaches it too); explicit `SidecarOptions.codexAppServer` fields win.
-   * The stored `args` are NOT passed: they are `codex exec` arguments and were never probed for `app-server`.
-   */
-  private buildAppServerAdapter(
-    s?: { command: string; args: string[]; env: Record<string, string> },
-    id: "codex" | "codex-app-server" = "codex-app-server",
-  ): AgentAdapter {
-    const explicit = this.opts.codexAppServer || {};
-    const secret = this.secrets.codex;
-    const fromSettings =
-      s || Object.keys(secret).length > 0
-        ? {
-            ...(s ? { command: s.command } : {}),
-            env: this.childEnv("codex", s?.env ?? {}),
-            envAllow: [...Object.keys(s?.env ?? {}), ...Object.keys(secret)],
-          }
-        : {};
-    const appServer = { ...fromSettings, ...explicit };
-    const run = this.opts.policyEvaluate ?? evaluate;
-    return this.gate.wrap(
-      new CodexAppServerAdapter({
-        ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
-        ...(this.opts.cliTreeMemoryLimitMb === undefined
-          ? {}
-          : { treeMemoryLimitMb: this.opts.cliTreeMemoryLimitMb }),
-        ...appServer,
-        id,
-        evaluate: async (request, ctx) =>
-          run(appServerPolicy(ctx), request, { taskId: ctx.taskId }),
-      }),
-      { checkLaunch: appServer.command === undefined },
-    );
-  }
-
-  /** A change of the `codex` settings also reaches `codex-app-server` (when it is registered). */
-  private refreshAppServer(provider: "claude" | "codex"): void {
-    if (provider !== "codex" || this.opts.codexAppServer === false) return;
-    this.registry.replace(this.buildAppServerAdapter(this.repo.getAgentSettings("codex")));
-  }
-
   /** What an agent of this provider is started with: our environment, its settings, its secrets. */
   private childEnv(provider: "claude" | "codex", env: Record<string, string>) {
     return { ...process.env, ...env, ...this.secrets[provider] };
@@ -414,36 +287,10 @@ export class SidecarService {
       );
     }
     this.recoveredTasks = recovered.length;
-    this.gate = new PolicyGate({
-      repo: this.repo,
-      log,
-      approvals: () => this.approvals,
-      workspaces: () => {
-        if (!this.gateWorkspaces) throw new Error("workspaces are not ready");
-        return this.gateWorkspaces;
-      },
-      allowedCommands: (agentId) => {
-        const stored =
-          agentId === "claude" || agentId === "codex"
-            ? this.repo.getAgentSettings(agentId)?.command
-            : undefined;
-        const base = DEFAULT_COMMANDS[agentId];
-        return [...(base ? [base] : []), ...(stored ? [stored] : [])];
-      },
-      redact: (t) => this.redactor.text(t),
-      ...(opts.policyEvaluate ? { evaluate: opts.policyEvaluate } : {}),
-      ...(opts.policyPollMs !== undefined ? { pollMs: opts.policyPollMs } : {}),
-    });
     this.registry.register(new StubAdapter());
     this.registry.register(this.buildCliAdapter("claude", this.repo.getAgentSettings("claude")));
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
-    if (opts.codexAppServer !== false) {
-      this.registry.register(this.buildAppServerAdapter(this.repo.getAgentSettings("codex")));
-    }
-    for (const a of opts.extraAdapters ?? [])
-      this.registry.register(
-        this.gate.wrap(a, { checkLaunch: opts.policyCheckExtraLaunch === true }),
-      );
+    for (const a of opts.extraAdapters ?? []) this.registry.register(a);
     this.orchestrator = new Orchestrator(this.registry, this.repo, log, {
       redactor: this.redactor,
       onMessage: (message) =>
@@ -461,7 +308,6 @@ export class SidecarService {
       this.repo,
       opts.worktreesDir ?? join(dirname(opts.dbPath), "worktrees"),
     );
-    this.gateWorkspaces = workspaces;
     this.engine = new PeerReviewEngine({
       repo: this.repo,
       orchestrator: this.orchestrator,
@@ -852,7 +698,6 @@ export class SidecarService {
           if (settings === null) {
             this.repo.clearAgentSettings(provider);
             this.registry.replace(this.buildCliAdapter(provider));
-            this.refreshAppServer(provider);
             return ok(req.id, { ok: true, settings: null });
           }
           const r = await this.tryAgentSettings(provider, settings);
@@ -883,7 +728,6 @@ export class SidecarService {
             probedAt: r.probe.probedAt,
           });
           this.registry.replace(this.buildCliAdapter(provider, r.checked.settings));
-          this.refreshAppServer(provider);
           return ok(req.id, {
             ok: true,
             resolvedPath: r.checked.resolvedPath,

@@ -279,11 +279,7 @@ describe("D1 IPC", () => {
     const caps = await call(svc, "agents.capabilities", { provider: "claude" });
     expect(caps.result?.probe).toMatchObject({ status: "ok", capabilities: { print: true } });
     const list = await call(svc, "agents.list");
-    expect(list.result?.adapters.map((a: { id: string }) => a.id)).toEqual([
-      "claude",
-      "codex",
-      "codex-app-server", // registered by default since Q3 (2026-11-07)
-    ]);
+    expect(list.result?.adapters.map((a: { id: string }) => a.id)).toEqual(["claude", "codex"]);
     expect(list.result?.cli).toHaveLength(2);
     expect(
       (await call(svc, "agents.capabilities", { provider: "claude" })).result?.probe.version,

@@ -118,12 +118,6 @@ importers:
         specifier: workspace:*
         version: link:../process-manager
 
-  packages/policy-engine:
-    dependencies:
-      '@agent-studio/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-
   packages/process-manager: {}
 
   packages/shared-utils:
@@ -180,9 +174,6 @@ importers:
       '@agent-studio/git-worktrees':
         specifier: workspace:*
         version: link:../../packages/git-worktrees
-      '@agent-studio/policy-engine':
-        specifier: workspace:*
-        version: link:../../packages/policy-engine
       '@agent-studio/process-manager':
         specifier: workspace:*
         version: link:../../packages/process-manager

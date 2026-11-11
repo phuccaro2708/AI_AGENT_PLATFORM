@@ -16,7 +16,6 @@ export default defineConfig({
       "@agent-studio/adapter-claude": src("packages/adapter-claude"),
       "@agent-studio/adapter-codex": src("packages/adapter-codex"),
       "@agent-studio/diagnostics": src("packages/diagnostics"),
-      "@agent-studio/policy-engine": src("packages/policy-engine"),
       "@agent-studio/orchestrator": src("services/orchestrator"),
     },
   },

@@ -1,9 +1,7 @@
 import { createInterface } from "node:readline";
 import { createLogger } from "@agent-studio/shared-utils";
-import { runPermissionGate } from "./claude-permission-gate.js";
 import { createEventWriter } from "./event-writer.js";
 import { resolveJobWrap, resolveTreeMemoryLimitMb } from "./job-wrap-config.js";
-import { resolvePermissionGates } from "./permission-gates-config.js";
 import { createSecretRedactor, redactingDestination, takeSecretsFromEnv } from "./secrets.js";
 import { acquireSidecarLock, SidecarLockError } from "./sidecar-lock.js";
 import { SidecarService } from "./sidecar.js";
@@ -15,18 +13,6 @@ const EXIT_LOCKED = 75;
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? process.argv[i + 1] : undefined;
-}
-
-// Started by `claude --permission-prompt-tool` as its MCP server (P4-1 d, ON by default since Q3): no database, no
-// lock, no logs on stdout. Reached when the sidecar launched claude with the gate (switch: AGENT_STUDIO_CLAUDE_GATE=0).
-if (process.argv.includes("--permission-gate")) {
-  try {
-    await runPermissionGate(process.argv, process.stdin, process.stdout);
-    process.exit(0);
-  } catch (err) {
-    process.stderr.write(`permission gate cannot start: ${String(err)}\n`);
-    process.exit(2);
-  }
 }
 
 const dbPath = arg("db");
@@ -72,8 +58,6 @@ const service = new SidecarService(
     ...(nativeBinding ? { nativeBinding } : {}),
     ...(migrationsFolder ? { migrationsFolder } : {}),
     ...(jobWrap ? { jobWrap } : {}),
-    // Q3: both permission gates are ON unless AGENT_STUDIO_CLAUDE_GATE / AGENT_STUDIO_CODEX_GATE says off.
-    ...resolvePermissionGates(process.env),
     ...(cliTreeMemoryLimitMb === undefined ? {} : { cliTreeMemoryLimitMb }),
   },
   log,

@@ -290,7 +290,7 @@ describe("T7: a read-only reviewer that writes into the worktree (real git, side
   ];
 
   for (const [name, attack] of attacks) {
-    it(`discards the verdict and stops for reconciliation when the reviewer ${name}`, async () => {
+    it(`discards the verdict and fails the workflow when the reviewer ${name}`, async () => {
       const root = repoWith({ "README.md": "hi\n" });
       const impl = new Fake("impl", (t) => {
         writeFileSync(join(t.cwd, "feature.txt"), "done\n");
@@ -312,27 +312,25 @@ describe("T7: a read-only reviewer that writes into the worktree (real git, side
         reviewerAgent: "rev",
         goal: "add feature",
       });
-      // The platform's PolicyGate sees the write first (post-run snapshot against the Read Only level), so the
-      // reviewer's task ends `needs_reconciliation` and the engine never gets to count its verdict.
+      // The Peer Review engine compares the worktree before and after the review: the write is noticed, the
+      // verdict is discarded and the workflow fails instead of completing.
       const until = Date.now() + 20_000;
       let tasks: { agentId: string; state: string }[] = [];
-      let wfState = "";
       while (Date.now() < until) {
         const r = await call<{ workflowState: string; tasks: typeof tasks }>("tasks.list", {
           workflowId,
         });
         tasks = r.tasks;
-        wfState = r.workflowState;
         const reviewer = tasks.find((t) => t.agentId === "rev");
         if (reviewer && !["queued", "running"].includes(reviewer.state)) break;
         await new Promise((res) => setTimeout(res, 15));
       }
       await svc!.idle();
-      expect(tasks.find((t) => t.agentId === "rev")?.state).toBe("needs_reconciliation");
-      expect(
-        wfState,
-        "an approving reviewer that wrote to the worktree must not complete",
-      ).not.toBe("completed");
+      const wfState = (await call<{ workflowState: string }>("tasks.list", { workflowId }))
+        .workflowState;
+      expect(wfState, "an approving reviewer that wrote to the worktree must not complete").toBe(
+        "failed",
+      );
       const revId = (
         await call<{ tasks: { id: string; agentId: string }[] }>("tasks.list", {
           workflowId,
@@ -342,14 +340,6 @@ describe("T7: a read-only reviewer that writes into the worktree (real git, side
         "logs.query",
         { taskId: revId, afterSequence: -1, limit: 100 },
       );
-      expect(
-        msgs.messages.some(
-          (m) =>
-            m.type === "task.failed" &&
-            /Read Only level does not allow writing/.test(m.payload.message ?? ""),
-        ),
-        "the reason names the violated level",
-      ).toBe(true);
       // the reviewer's APPROVE was not turned into a review result
       expect(msgs.messages.some((m) => m.type === "review.result")).toBe(false);
       // the main checkout of the user's project was not touched by any of this

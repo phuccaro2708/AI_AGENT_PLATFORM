@@ -830,3 +830,8 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 
 - Tiêu chí: soak thật 5 workflow (trần cứng của bộ test), mọi task terminal, 0 CLI mồ côi, ghi số thật. Kết quả: 1 test pass (184,8 s); 5/5 `completed`, 0 mồ côi; bảng ở `docs/ASSUMPTIONS.md` (mục "Soak CLI thật 5 workflow, Phase 4 hạng mục 6").
 - C1: kiểm lại cổng quyền với claude 2.1.319 ở hạng mục 4 (8/8 lời gọi tới cổng). Vẫn NOT_RUN: cổng thật bị treo, các khoá khác của settings.local.json. C5 100 workflow thật: cố ý không chạy (chi phí); bản 100 workflow giả có sẵn.
+
+## 2026-11-10: Phase 4 hạng mục 7a (probe `agy` lần 3)
+
+- Tiêu chí: bộ `real-agy.test.ts` pass trên bản agy hiện có, không còn `agy.exe` mồ côi. Kết quả: agy 1.5.3, 6/6 pass (72,8 s), `agy.exe` còn lại 0. Chi tiết và phần chưa kiểm ở `docs/ASSUMPTIONS.md` (mục "Probe `agy` lần 3"). Không đổi mã.
+- Dọn thư mục worktree (7b): chưa làm, chờ người dùng xác nhận danh sách.

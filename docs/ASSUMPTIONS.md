@@ -730,6 +730,14 @@ CLI processes alive after svc.close(): 0; descendants seen: 508
 - Cả 5 workflow có task `completed`, 0 CLI mồ côi sau từng workflow và sau `svc.close()` (lấy mẫu ~0,7 s, 508 tiến trình con thấy). "pending" ở workflow thường là trạng thái workflow không có bước engine, không phải lỗi (giống lần d8).
 - Phạm vi: đây KHÔNG phải soak 100 workflow thật (người dùng cho phép có giới hạn, ADR-010 mục 5); 100 workflow giả vẫn do `tests/soak/sidecar-soak.test.ts`. Chưa đo RAM theo thời gian, chưa chạy kế hoạch `peer` (trần 10), chưa thử cổng thật bị treo. Số ms là một lần chạy, phụ thuộc mạng và model.
 
+## Probe `agy` lần 3, agy 1.5.3 (2026-11-10, Phase 4 hạng mục 7; ngoài gate, ADR-009)
+
+Lệnh: `AGENT_STUDIO_REAL_AGY=1 AGENT_STUDIO_REAL_AGY_OUT=<ngoài repo> pnpm exec vitest run packages/adapter-antigravity/src/real-agy.test.ts` (bộ 6 ca cũ của P3-6, thư mục tạm rỗng ngoài repo, prompt nhỏ không dùng tool, `shell:false`). Đổi so với lần trước: `agy --version` = 1.5.3 (trước 1.4.8). Kết quả: 6/6 pass, 72,8 s.
+
+- Giữ nguyên hành vi đã ghi ở P3-6 trên 1.5.3: prompt nhiều dòng (`"`, `&`, `|`, `%`, `$HOME`) đến nguyên vẹn qua adapter, ends `completed` (27,1 s, 1 turn); `--model` sai → `error` (3,3 s, 0 token); `--print-timeout 1s` → `error` (5,9 s); cwd không tồn tại → `error` "could not start agy"; cancel sau 4 s → `error` "cancelled" (4,7 s), `agy.exe` còn lại trước/sau = 0/0.
+- Quan sát thô (NDJSON): `init` có `cwd`, danh sách tool (gồm `ask_permission`, `ask_custom_permission`, `ask_question`, tool browser), `step_update` (`user_input`, `agent_response` kèm `text_delta`), `result` (`status` SUCCESS, `num_turns` 1, `usage`). Hình dạng khớp adapter hiện có; chưa thấy trường mới làm adapter hỏng.
+- Vẫn KHÔNG kiểm chứng: lượt có gọi tool (chưa thấy sự kiện tool/phê duyệt thật), cơ chế ép `task.permissions`, cây tiến trình con do tool sinh ra. Vì vậy `agy` vẫn ngoài gate và adapter vẫn từ chối `task.permissions`. Chưa có bằng chứng `ask_permission` có thể nối vào PolicyEngine.
+
 ## Loop Runner probes (2026-11-09)
 
 Nguồn: `scripts/probe.ts` trong repo công cụ loop-runner (commit `feat: add CLI probe script`), chạy một lần trên Windows 11, Node 24, `claude` 2.1.319, `codex-cli` 0.167.0. Mọi lời gọi dùng argument array, `shell: false`, trong một thư mục tạm mới (`fs.mkdtemp`), prompt tối thiểu không chứa dữ liệu dự án; không dùng cờ bỏ qua quyền/sandbox. Mỗi chế độ đúng một lần gọi. Output CLI coi là dữ liệu không đáng tin.

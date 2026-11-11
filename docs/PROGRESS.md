@@ -873,3 +873,9 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Test-first bằng đo thật: cấu hình glob cho installer thiếu `drizzle/`; sửa sang ánh xạ thư mục, build lại, cài thử, selftest bản đã cài PASS, gỡ sạch. Chi tiết và phần NOT_RUN ở ASSUMPTIONS ("Installer đóng gói sidecar…").
 - Codex review `tauri.conf.json`: không có kết luận. Cổng JS/TS không chạy lại (chỉ đổi JSON cấu hình, `prettier --check` PASS).
 - Còn lại giai đoạn A: kiểm Settings + admission trong app Tauri thật, test mount point thật, khe TOCTOU `diff` (cần handle + stdin). Chưa push.
+
+## 2026-11-11: Giai đoạn A, vòng 3 (khe TOCTOU `GitWorktrees.diff`)
+
+- Test viết trước (đỏ: hoán đổi rồi khôi phục lọt `SWAP-RESTORE-SECRET`), rồi `readVerified` đọc bằng handle + so `dev/ino`, diff file mới tự dựng. Cổng: `pnpm lint` PASS, `typecheck` PASS, `pnpm test --no-file-parallelism` PASS (1052 pass), `build` PASS. `pnpm format` toàn repo chưa chạy lại; `prettier --write` trên `packages/git-worktrees/src`.
+- Codex (gpt-6.1-sol, read-only): báo lật ba lần vẫn lọt (đúng lý thuyết, ghi ASSUMPTIONS) và cắt cụt (sai, đã đối chiếu mã/test). Khe TOCTOU THU HẸP, CHƯA ĐÓNG HẲN.
+- Hết 3 vòng của giai đoạn A. Chưa làm: kiểm Settings + admission trong app Tauri thật, test mount point thật. Giai đoạn A KHÔNG đóng; theo prompt: dừng và báo điểm chặn. Chưa merge, chưa push.

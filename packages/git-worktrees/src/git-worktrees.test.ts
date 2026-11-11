@@ -139,20 +139,54 @@ describe("diff", () => {
     writeFileSync(join(outside, "s.txt"), "SWAPPED-SECRET\n");
     mkdirSync(join(info.path, "d"));
     writeFileSync(join(info.path, "d", "s.txt"), "harmless\n");
-    const real = (wt as unknown as { run: (a: string[], c: string) => Promise<unknown> }).run.bind(
-      wt,
+    type Inside = (root: string, file: string) => boolean;
+    const real = (wt as unknown as { insideWorktree: Inside }).insideWorktree.bind(wt);
+    let calls = 0;
+    // the swap lands right after the first containment check passed
+    vi.spyOn(wt as unknown as { insideWorktree: Inside }, "insideWorktree").mockImplementation(
+      (r, f) => {
+        const ok = real(r, f);
+        if (++calls === 1) {
+          rmSync(join(info.path, "d"), { recursive: true, force: true });
+          symlinkSync(outside, join(info.path, "d"), "junction");
+        }
+        return ok;
+      },
     );
-    // the swap lands after the pre-check passed and before git reads the file
-    vi.spyOn(wt as unknown as { run: typeof real }, "run").mockImplementation(async (args, cwd) => {
-      if (args.includes("--no-index")) {
-        rmSync(join(info.path, "d"), { recursive: true, force: true });
-        symlinkSync(outside, join(info.path, "d"), "junction");
-      }
-      return real(args, cwd);
-    });
     const d = await wt.diff(info.path);
     expect(d.patch).not.toContain("SWAPPED-SECRET");
     expect(d.patch).toContain("d/s.txt resolves outside the worktree");
+  });
+
+  it("a swap to an outside link and back between the checks is still caught, content never returned", async () => {
+    const info = await wt.create({ workflowId: "wf_1", taskId: "task_a" });
+    const outside = join(root, "outside3");
+    mkdirSync(outside);
+    writeFileSync(join(outside, "s.txt"), "SWAP-RESTORE-SECRET\n");
+    mkdirSync(join(info.path, "d"));
+    writeFileSync(join(info.path, "d", "s.txt"), "harmless\n");
+    type Inside = (root: string, file: string) => boolean;
+    const real = (wt as unknown as { insideWorktree: Inside }).insideWorktree.bind(wt);
+    let calls = 0;
+    vi.spyOn(wt as unknown as { insideWorktree: Inside }, "insideWorktree").mockImplementation(
+      (r, f) => {
+        calls++;
+        if (calls === 2) {
+          // restore the original layout before the second check looks at it
+          rmSync(join(info.path, "d"), { recursive: true, force: true });
+          mkdirSync(join(info.path, "d"));
+          writeFileSync(join(info.path, "d", "s.txt"), "harmless\n");
+        }
+        const ok = real(r, f);
+        if (calls === 1) {
+          rmSync(join(info.path, "d"), { recursive: true, force: true });
+          symlinkSync(outside, join(info.path, "d"), "junction");
+        }
+        return ok;
+      },
+    );
+    const d = await wt.diff(info.path);
+    expect(d.patch).not.toContain("SWAP-RESTORE-SECRET");
   });
 
   it("cuts output beyond maxBytes and says so", async () => {

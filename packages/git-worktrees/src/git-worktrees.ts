@@ -1,6 +1,7 @@
-import { realpathSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, isAbsolute } from "node:path";
 import { runProcess } from "@agent-studio/process-manager";
+import { newFileDiff } from "./new-file-diff.js";
 
 export class GitError extends Error {
   constructor(
@@ -247,6 +248,38 @@ export class GitWorktrees {
   }
 
   /**
+   * Reads an untracked file through an already-open handle and returns its bytes only when that handle is the
+   * very file the path resolves to inside the worktree, before AND after the read (same dev/ino). A swap to an
+   * outside link, even one swapped back before the second check, leaves the handle on a different file and
+   * the content is refused. Fail closed: an unreadable file, a non-regular file or a zero inode is "outside".
+   */
+  private readVerified(root: string, file: string, cap: number): Buffer | "outside" {
+    if (!this.insideWorktree(root, file)) return "outside";
+    let fd: number | undefined;
+    try {
+      const abs = join(root, file);
+      fd = openSync(abs, "r");
+      const opened = fstatSync(fd, { bigint: true });
+      if (!opened.isFile() || opened.ino === 0n) return "outside";
+      const buf = Buffer.alloc(Math.min(Number(opened.size), cap));
+      let off = 0;
+      while (off < buf.length) {
+        const n = readSync(fd, buf, off, buf.length - off, off);
+        if (n === 0) break;
+        off += n;
+      }
+      if (!this.insideWorktree(root, file)) return "outside";
+      const now = statSync(realpathSync.native(abs), { bigint: true });
+      if (now.dev !== opened.dev || now.ino !== opened.ino) return "outside";
+      return buf.subarray(0, off);
+    } catch {
+      return "outside";
+    } finally {
+      if (fd !== undefined) closeSync(fd);
+    }
+  }
+
+  /**
    * Unified diff of everything changed in the worktree against its HEAD, untracked files included (shown
    * as new files). Read-only: nothing is staged. Output beyond `maxBytes` is cut and `truncated` is set.
    */
@@ -258,37 +291,14 @@ export class GitWorktrees {
     ];
     for (const f of (await this.status(path)).files) {
       if (f.code !== "??") continue;
-      // Git lists the files behind a directory junction as ordinary untracked files and `--no-index` would read
-      // them: a junction inside the worktree must not pull content from outside it into the diff.
-      if (!this.insideWorktree(path, f.path)) {
-        parts.push(`# skipped: ${f.path} resolves outside the worktree
-`);
-        continue;
-      }
-      // --no-index exits 1 when the files differ, which is the expected case here.
-      const r = await this.run(
-        [
-          "diff",
-          "--no-index",
-          "--no-color",
-          "--no-ext-diff",
-          "--no-textconv",
-          "--",
-          "/dev/null",
-          f.path,
-        ],
-        path,
+      // Git lists the files behind a directory junction as ordinary untracked files, so the content is read
+      // here through a verified handle (never by git): a junction must not pull outside content into the diff.
+      const bytes = this.readVerified(path, f.path, maxBytes + 1);
+      parts.push(
+        bytes === "outside"
+          ? `# skipped: ${f.path} resolves outside the worktree\n`
+          : newFileDiff(f.path, bytes),
       );
-      if (r.exitCode !== 0 && r.exitCode !== 1) throw new GitError(["diff"], r.exitCode, r.stderr);
-      // Re-check after git read it: this drops the output when the path was swapped for a link and STAYS a link.
-      // It does NOT close the race: a swap to an outside link and back to the original between the two checks
-      // passes both (Codex review, 2026-11-11). Closing it needs a handle-based read whose verified identity is
-      // bound to the bytes diffed; that is open work, recorded in docs/ASSUMPTIONS.md.
-      if (!this.insideWorktree(path, f.path)) {
-        parts.push(`# skipped: ${f.path} resolves outside the worktree\n`);
-        continue;
-      }
-      parts.push(r.stdout);
     }
     const patch = parts.join("");
     return patch.length > maxBytes

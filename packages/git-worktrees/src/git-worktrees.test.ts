@@ -128,7 +128,8 @@ describe("diff", () => {
     }
     const d = await wt.diff(info.path);
     expect(d.patch).not.toContain("OUTSIDE-SECRET-CONTENT");
-    expect(d.patch).toContain("jn/secret.txt resolves outside the worktree");
+    // a Windows junction is listed by git as jn/secret.txt; a POSIX symlink stands in for it as one entry "jn"
+    expect(d.patch).toMatch(/# skipped: jn(\/secret\.txt)? resolves outside the worktree/);
     if (fileLink) expect(d.patch).toContain("leak.txt");
   });
 

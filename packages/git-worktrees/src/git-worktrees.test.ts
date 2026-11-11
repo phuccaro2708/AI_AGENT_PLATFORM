@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -102,6 +110,26 @@ describe("diff", () => {
     expect(d.patch).toContain("+TWO");
     expect(d.patch).toMatch(/new file mode[\s\S]*\+fresh/);
     expect((await wt.status(info.path)).files.find((f) => f.path === "new.txt")?.code).toBe("??");
+  });
+
+  it("an untracked link pointing outside the worktree is shown as a link, its target's content never read", async () => {
+    const info = await wt.create({ workflowId: "wf_1", taskId: "task_a" });
+    const outside = join(root, "outside");
+    mkdirSync(outside);
+    writeFileSync(join(outside, "secret.txt"), "OUTSIDE-SECRET-CONTENT\n");
+    // a directory junction needs no privilege on Windows; a file symlink may, so it is tried and skipped if refused
+    symlinkSync(outside, join(info.path, "jn"), "junction");
+    let fileLink = false;
+    try {
+      symlinkSync(join(outside, "secret.txt"), join(info.path, "leak.txt"), "file");
+      fileLink = true;
+    } catch {
+      /* no privilege to create file symlinks here */
+    }
+    const d = await wt.diff(info.path);
+    expect(d.patch).not.toContain("OUTSIDE-SECRET-CONTENT");
+    expect(d.patch).toContain("jn/secret.txt resolves outside the worktree");
+    if (fileLink) expect(d.patch).toContain("leak.txt");
   });
 
   it("cuts output beyond maxBytes and says so", async () => {

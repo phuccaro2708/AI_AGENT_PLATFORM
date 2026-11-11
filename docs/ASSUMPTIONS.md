@@ -738,6 +738,12 @@ Lệnh: `AGENT_STUDIO_REAL_AGY=1 AGENT_STUDIO_REAL_AGY_OUT=<ngoài repo> pnpm ex
 - Quan sát thô (NDJSON): `init` có `cwd`, danh sách tool (gồm `ask_permission`, `ask_custom_permission`, `ask_question`, tool browser), `step_update` (`user_input`, `agent_response` kèm `text_delta`), `result` (`status` SUCCESS, `num_turns` 1, `usage`). Hình dạng khớp adapter hiện có; chưa thấy trường mới làm adapter hỏng.
 - Vẫn KHÔNG kiểm chứng: lượt có gọi tool (chưa thấy sự kiện tool/phê duyệt thật), cơ chế ép `task.permissions`, cây tiến trình con do tool sinh ra. Vì vậy `agy` vẫn ngoài gate và adapter vẫn từ chối `task.permissions`. Chưa có bằng chứng `ask_permission` có thể nối vào PolicyEngine.
 
+## `GitWorktrees.diff` đọc file ngoài worktree qua junction (2026-11-10, Phase 4, sau yêu cầu "làm thêm")
+
+- Phát hiện bằng test mới (đỏ trước khi sửa): worktree có một directory junction trỏ ra ngoài (không cần quyền admin để tạo) thì `git status --untracked-files=all` liệt kê file bên trong như file untracked thường, và `diff()` chạy `git diff --no-index /dev/null <file>` nên đọc NỘI DUNG file ngoài worktree vào patch (tái hiện bằng git thật trên máy này). Đường này là nguồn của `artifacts.diff` và Diff Viewer. Đây là hở thật, khác A6 (A6 chỉ phủ `worktree-hash.ts`).
+- Sửa: `diff()` kiểm `realpath.native` của từng file untracked phải nằm trong `realpath.native` của worktree; nếu không (hoặc không phân giải được) thì bỏ qua và thêm một dòng `# skipped: <path> resolves outside the worktree`. Test `git-worktrees.test.ts` ("an untracked link pointing outside…"): junction ra ngoài + symlink file (nếu tạo được); nội dung ngoài không có trong patch. 19 test của `packages/git-worktrees` pass, typecheck sạch.
+- Còn lại: kiểm trên realpath là kiểm-rồi-đọc (git đọc file sau đó), nên vẫn còn khe TOCTOU nhỏ ở đường diff (kẻ tráo junction đúng lúc); chưa có test cho khe này. Chưa kiểm trên Linux/macOS. Các đường khác dùng `status()` (checkMerge, commit) chưa rà lại.
+
 ## Loop Runner probes (2026-11-09)
 
 Nguồn: `scripts/probe.ts` trong repo công cụ loop-runner (commit `feat: add CLI probe script`), chạy một lần trên Windows 11, Node 24, `claude` 2.1.319, `codex-cli` 0.167.0. Mọi lời gọi dùng argument array, `shell: false`, trong một thư mục tạm mới (`fs.mkdtemp`), prompt tối thiểu không chứa dữ liệu dự án; không dùng cờ bỏ qua quyền/sandbox. Mỗi chế độ đúng một lần gọi. Output CLI coi là dữ liệu không đáng tin.

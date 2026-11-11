@@ -1,5 +1,5 @@
 import { realpathSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, isAbsolute } from "node:path";
 import { runProcess } from "@agent-studio/process-manager";
 
 export class GitError extends Error {
@@ -236,6 +236,16 @@ export class GitWorktrees {
     return { dirty: files.length > 0, files };
   }
 
+  /** True when `file` (relative to the worktree `root`) really lives inside `root` after resolving links. */
+  private insideWorktree(root: string, file: string): boolean {
+    try {
+      const rel = relative(realpathSync.native(root), realpathSync.native(join(root, file)));
+      return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+    } catch {
+      return false; // cannot be resolved: do not read it
+    }
+  }
+
   /**
    * Unified diff of everything changed in the worktree against its HEAD, untracked files included (shown
    * as new files). Read-only: nothing is staged. Output beyond `maxBytes` is cut and `truncated` is set.
@@ -248,6 +258,13 @@ export class GitWorktrees {
     ];
     for (const f of (await this.status(path)).files) {
       if (f.code !== "??") continue;
+      // Git lists the files behind a directory junction as ordinary untracked files and `--no-index` would read
+      // them: a junction inside the worktree must not pull content from outside it into the diff.
+      if (!this.insideWorktree(path, f.path)) {
+        parts.push(`# skipped: ${f.path} resolves outside the worktree
+`);
+        continue;
+      }
       // --no-index exits 1 when the files differ, which is the expected case here.
       const r = await this.run(
         [

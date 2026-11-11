@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveOllama } from "./ollama-config.js";
+import { resolveOllama, VRAM_KEEP_ALIVE, vramKeepAlive } from "./ollama-config.js";
 
 const warnings: string[] = [];
 const log = { warn: (_o: object, m: string) => void warnings.push(m) };
@@ -38,5 +38,15 @@ describe("resolveOllama", () => {
       }),
     ).toEqual({});
     expect(warnings).toHaveLength(2);
+  });
+});
+
+describe("vramKeepAlive", () => {
+  const band = { reduceAt: 80, pauseAt: 95 };
+  it("is a short keep_alive only while a VRAM band is saved", () => {
+    expect(VRAM_KEEP_ALIVE).toBe("30s");
+    expect(vramKeepAlive({ vram: band })).toBe(VRAM_KEEP_ALIVE);
+    expect(vramKeepAlive({})).toBeUndefined();
+    expect(vramKeepAlive({ vram: undefined })).toBeUndefined();
   });
 });

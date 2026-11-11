@@ -719,6 +719,41 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - **Standards 3 (smell Low):** `models.ts` và `ps.ts` lặp phần gọi HTTP; **không gộp** (chưa có thay đổi giao thức buộc sửa cả hai).
 - Gate đầy đủ trên cây làm việc: lint, format, typecheck, test (107 file pass, 1046 test pass, 63 skip), build exit 0. Chưa chạy lại `cargo` (không đụng Rust), chưa đọc CI.
 
+## 2026-11-09: Loop Runner (vòng lặp tự động dùng chung) — thiết kế, plan, Task 1–9
+
+- Người dùng yêu cầu vòng lặp Claude + Codex không cần prompt (theo sơ đồ: Orchestrator → chuyên gia → thực thi → cổng QA/Security/CI → sửa/Merge) áp dụng cho mọi dự án. Đã chốt qua hỏi đáp: tối đa 3 lần sửa mỗi task + ngân sách token/quota (không đo được thì tính số lượt/thời gian), vai cốt lõi theo sơ đồ, công cụ ở repo riêng `D:\Program\loop-runner` + `loop.config.json` mỗi dự án, tiêu chí phase gắn với lệnh chạy được, thi hành subagent-driven. Người dùng duyệt spec và plan, và cho phép tạo repo, `git init`, cài dependency ở đó; cài lệnh global CHƯA được duyệt.
+- Commit trong repo này: `267b80d` (sửa quy tắc 10 CLAUDE.md, thêm vai Codex vào AGENTS.md), `4e9f60b` (spec), `ad2eca2` (plan), `98daa77`, `88809d0` (probe CLI vào ASSUMPTIONS).
+- Repo `loop-runner` (nhánh `main`, chưa push): Task 1–9 xong, mỗi task qua review của agent độc lập và các vòng sửa (Task 8 diff guard: 3 vòng sửa vì nhiều đường vượt qua như detach HEAD, `.git` redirect, filter/fsmonitor, config tampering, driver cục bộ của git-lfs; Task 9: 1 vòng). Head `4011443`; implementer báo 203 test pass và `tsc --noEmit` sạch, tôi chưa tự chạy lại trong phiên này.
+- Quyết định tự đưa ra (ghi trong sổ SDD cục bộ `.superpowers/sdd/2026-11-09-loop-runner/progress.md`, không commit): zod 4.6.7 ghim chính xác; snapshot driver cục bộ thay vì allow-list `filter.lfs.*`; bắt buộc runner chụp trạng thái quanh lần gọi read-only vì sandbox read-only của codex không phải biên an toàn.
+- Chưa làm/NOT_RUN: Task 10–13, chạy thật với claude/codex, probe `--tools`/`acceptEdits`, các lệnh gate của Agent Workspace trên bản Loop Runner.
+- Chỉ đổi tài liệu trong repo này; gate Agent Workspace không chạy lại.
+
+## 2026-11-09: Loop Runner Task 10 (state machine `runLoop`) xong
+
+- Repo `loop-runner`: `5c56858` (feat: loop state machine and reports), `0939c63` (vòng sửa 1). Review độc lập tìm 3 phát hiện Important, hai cái tái hiện bằng probe: `git commit` của runner chạy hook mà agent sửa được (file cấm lọt vào commit), tick task ném lỗi khi file task ở checkout có sửa chưa commit (task xanh bị coi BLOCKED), `reportedCommands` không bao giờ được truyền. Đã sửa: commit của runner chạy với `core.hooksPath` trỏ thư mục rỗng ngoài worktree, guard chạy lại sau mỗi commit, từ chối chạy khi file task khác HEAD, so sánh `refs/remotes/*` quanh mỗi lần gọi agent, `runLoop` không bao giờ reject, từ chối hardlink. Re-review: đã xử lý hết, không có phát hiện mới.
+- Kết quả implementer báo: vitest 246/246, `tsc --noEmit` sạch; 9 test mới fail trên mã cũ. Tôi chưa tự chạy lại trong phiên này.
+- Còn mở (Minor, ghi sổ SDD): `core.hooksPath` = gốc worktree không được bảo vệ; push tới URL tường minh không bị phát hiện; `taskFileCommitted` chạy `git diff` trong checkout của người dùng (clean filter của họ sẽ chạy); `tests/tasks.test.ts` để lại thư mục `lr-tasks-*` trong thư mục tạm; chưa có resume khi chạy lại sau khi xong một phần (CLI phải cảnh báo).
+- Chưa làm: Task 11–13. Không gọi CLI thật. Chỉ đổi tài liệu trong repo này; gate Agent Workspace không chạy lại.
+
+## 2026-11-09: Loop Runner Task 11–13, review cả nhánh, nghiệm thu
+
+- Repo `loop-runner`: Task 11 `1df94e6`/`aaef6eb` (CLI), Task 12 `769c7a9` (schema config strict), Task 13 `a68793c` (mẫu nghiệm thu), `ff9eb61` (sửa lỗi nghiệm thu: shim `.cmd` trên Windows, guard `.git/info`, tên khóa lạ trong config), `cb5a61b` (sửa 7 phát hiện Important của review toàn nhánh). Repo này: `91e8142`, `ae8c48c` (config, 2→3 lần sửa, ASSUMPTIONS, ADR-010), `4cad95a` (báo cáo nghiệm thu).
+- Đã chạy (tôi, ở `cb5a61b`): `pnpm typecheck` sạch, `pnpm test` 310/310 (repo `loop-runner`). Ở repo này, agent báo gate lint/typecheck/test/build PASS; format chỉ lỗi trên file `.superpowers/*` chưa track (tôi chưa chạy lại). Nghiệm thu với claude/codex thật: kết quả trong `docs/reports/LOOP_RUNNER_ACCEPTANCE.md` (bước 1 PARTIAL, bước 2–4 PASS).
+- Review toàn nhánh: 0 Critical, 8 Important (I-1..I-7 đã sửa; I-8 chưa), 16 Minor chưa sửa hết (ghi sổ SDD).
+- Chưa làm/NOT_RUN: chạy lại nghiệm thu bước 1 sau các bản sửa; bước cài phụ thuộc trong run worktree; cài lệnh global; tiêu chí Phase 3–10 thành lệnh; clippy/`cargo test` (không có gate điều kiện). Không push, không tạo PR, không ghép.
+
+## 2026-11-09: Loop Runner I-8 — bước `setup` trước gate
+
+- Repo `loop-runner` (`fd3ff78`, test 338/341 khi chạy tuần tự; 3 test guard có sẵn quá 5 giây khi máy tải nặng, chạy riêng thì PASS): thêm khóa `setup` trong config (cùng dạng/kiểm tra với gate). Lệnh chạy một lần trong run worktree, trước mọi lượt gọi agent và gate. Setup lỗi thì dừng `blocked`, không gọi agent. Setup sửa file tracked, để lại file chưa track không bị ignore, đổi HEAD hoặc đổi git config thì dừng `needs_reconciliation`. File bị ignore do setup tạo ra là baseline của diff guard. `check` và `--dry-run` chỉ liệt kê, không chạy.
+- Repo này: `loop.config.json` thêm `setup` = `pnpm install --frozen-lockfile` (timeout 900000).
+- Đã chạy: `node <loop-runner>/dist/cli.js check --project .` (liệt kê `install: pnpm (2 args)`), `prettier --check loop.config.json`, `node scripts/docs-sync-check.mjs`. KHÔNG chạy `pnpm install` thật. Chạy lại nghiệm thu bước 1 vẫn NOT_RUN. Không push, không tạo PR.
+
+## 2026-11-10: Loop Runner nghiệm thu bước 1 chạy lại sau I-8
+
+- Commit repo này: `99fd6ae` (lần 2: setup PASS, test gate FAIL do flaky), `0a14f0a` (gate test thêm `--no-file-parallelism`), `0190c65` (lần 3). Điều tra flaky: 4 worker vitest quá tải Windows (sidecar-resume timeout 5 giây, test CPU-time của resource-monitor); chạy tuần tự xanh 1041 test (433 giây, một lần). CI `windows-latest` có thể flaky tương tự, chưa kiểm.
+- Lần 3 (clone tạm, claude/codex thật, `pnpm install` thật ~20 giây không junction), theo báo cáo agent: 5 gate PASS (đọc từ dòng PROGRESS của runner, không có log từng gate), Codex review PASS, commit trên nhánh chạy + dòng PROGRESS có, guard sau commit không báo nhầm. Exit 2 vì phase-3 không có lệnh tiêu chí. Tôi chưa tự chạy lại.
+- Chưa làm/NOT_RUN: runner chưa in thời gian từng gate và chi phí guard; đường exit 0 trên Agent Workspace cần tiêu chí có lệnh; cài lệnh global; sửa flaky ở mức test (timeout, `rmSync` retry). Không push, không PR, không ghép.
+
 ## 2026-11-08: kiểm các mục còn lại trước khi đóng Phase 3
 
 - Thêm hai bài test opt-in (bỏ qua nếu không đặt biến môi trường): `tests/contract/real-ollama-switch-tools.test.ts` (hai model liên tiếp, tool calling thật) và `tests/contract/real-resource-pressure.test.ts` (sidecar thật, RAM của OS, `nvidia-smi`, Ollama thật).
@@ -749,3 +784,110 @@ Commit (theo thứ tự, mỗi cái đã chạy eslint, prettier, tsc của gói
 - Đo tuổi crate trên crates.io (curl, chỉ đọc, 2026-11-11 UTC): `brotli@9.1.1` 15 ngày, `brotli-decompressor@6.2.0` 16 ngày, `erased-serde@0.4.11` 16 ngày. `node scripts/deps-age-audit.mjs` hết thời gian chờ 100 giây, chưa có kết quả đầy đủ (chưa chạy xong).
 - Người dùng ủy quyền cho Claude quyết bốn điểm (4 mức quyền, hạ concurrency, allowlist Cargo, Low IL + develop); ghi ở ADR-011. Phạm vi grant 7C-2 vẫn chờ người dùng.
 - Chưa làm: điều tra Security bị huỷ, các việc thực thi của ADR-010. Chưa chạy lint/typecheck/test/build (chỉ đổi docs).
+
+## 2026-11-10: ghép nhánh `worktree-p4-close-prep` vào nhánh này (cục bộ)
+
+- Đối chiếu trước khi ghép: nhánh p4 hơn 5 commit riêng (`986c301`, `1d7f352`, `92b8760`, `101ab41`, `c17ea94`), tụt 21 commit; `git merge-tree` báo xung đột nội dung chỉ ở `docs/ASSUMPTIONS.md`, `docs/HANDOFF.md`, `docs/PROGRESS.md`; không có xung đột ở mã.
+- Giải xung đột: ASSUMPTIONS và PROGRESS giữ cả hai phía (nối thêm); HANDOFF giữ đoạn đầu của nhánh này (cùng nội dung Phase 4, ngày 2026-11-10) và bỏ bản cũ hơn của nhánh p4. `git merge --no-ff`, không push.
+- Gate trên cây làm việc sau khi ghép: `pnpm lint` exit 0; `pnpm typecheck` exit 0; `pnpm test --no-file-parallelism` 107 file pass, 1041 test pass, 72 skip; `pnpm build` exit 0. `pnpm format` chỉ báo 29 file trong `.superpowers/` (thư mục scratch git ignore), không file nào được theo dõi; `prettier --check` ba file docs đã sửa sạch.
+- Chưa chạy: `cargo clippy` và `cargo test` (merge không đụng `src-tauri`); chưa đọc CI; nhánh p4 giữ nguyên vì worktree `p4-close-prep` vẫn đang checkout nó.
+
+## 2026-11-10: ghép thêm 3 commit của `worktree-p4-close-prep` (chính sách merge, ADR-011)
+
+- Nhánh p4 tiến thêm `c2891b1`, `7665b1b`, `a09f3f8` (chỉ docs) sau lần ghép trước; ghép lại bằng `git merge --no-ff`, xung đột ở `CLAUDE.md`, `DECISIONS.md`, `HANDOFF.md`, `PROGRESS.md`.
+- Trùng số ADR: nhánh p4 dùng ADR-010 (quyết định 2026-11-10) và ADR-011; ADR "chế độ vòng lặp tự động" của nhánh này đổi thành ADR-012 (ghi chú trong chính ADR). Các ghi chú cũ ở PROGRESS và repo `loop-runner` còn gọi nó là ADR-010 (lịch sử, không sửa).
+- `CLAUDE.md`: lấy bản chính sách merge của p4, giữ ngoại lệ "trừ chế độ vòng lặp tự động ở nguyên tắc 10" trong mục KHÔNG tự làm. Chỉ đổi docs nên chưa chạy lại gate mã.
+
+## 2026-11-10: Phase 4 hạng mục 1 (Security CI bị CANCELLED)
+
+- Tiêu chí: có bằng chứng đọc từ GitHub (GraphQL) về thời lượng và conclusion, và đọc cấu hình workflow. Phiên con chỉ đọc đã làm; tôi chưa tự đọc lại số liệu.
+- Kết quả: do `timeout-minutes: 30`, không do concurrency; bước chậm chưa đo. Chi tiết và đề xuất ở HANDOFF mục CI. Không sửa workflow (file được bảo vệ).
+
+## 2026-11-10: Phase 4 hạng mục 2 (NSIS/WiX)
+
+- Kiểm: `makensis`, `candle`, `light`, `wix` không có trên PATH; không có thư mục NSIS/WiX chuẩn. Người dùng đã duyệt (AskUserQuestion) cài NSIS 3.13.
+- Nguồn: winget `NSIS.NSIS` 3.13 (phát hành 2026-09-27, Nullsoft and Contributors, zlib/libpng), URL sourceforge.net/projects/nsis. `winget download` báo "Successfully verified installer hash"; tôi tự tính SHA256 file tải về = `db9a1038bbc0e53fef24f423fd609979bd578e942f1be1198db186d1c42652a3`, khớp manifest. Chữ ký Authenticode: NotSigned (trình cài NSIS không ký; chỉ dựa vào hash manifest winget).
+- Cài: `/S`, exit 0; `makensis /VERSION` = v3.13 ở `C:\Program Files (x86)\NSIS`. WiX không cài.
+
+## 2026-11-10: Phase 4 hạng mục 3 (keepAlive ngắn khi bật giới hạn VRAM)
+
+- Tiêu chí (viết test trước, thấy đỏ rồi mới sửa): (a) `tests/contract/adapter-ollama.test.ts`: `keepAlive` là hàm, đọc mỗi lượt chat; có giá trị thì gửi `keep_alive`, `undefined` thì không gửi; (b) `services/orchestrator/src/ollama-config.test.ts`: `vramKeepAlive` trả `"30s"` chỉ khi ngưỡng đã lưu có dải `vram`.
+- Mã: `adapter-ollama` nhận `keepAlive` kiểu hàm; `ollama-config.ts` thêm `VRAM_KEEP_ALIVE = "30s"` và `vramKeepAlive`; `sidecar.ts` truyền hàm đọc `resourceSettings.thresholds` mỗi lượt (đổi dải VRAM lúc chạy có hiệu lực ở lượt sau; tuỳ chọn `keepAlive` tường minh thắng).
+- Lựa chọn của tôi: 30 giây (không phải 0) để các task liên tiếp cùng model còn dùng lại; số này là giả định, chưa đo trên Ollama thật.
+- Kết quả: hai test mới đỏ trước khi sửa, xanh sau; vitest 7 file / 81 test (adapter-ollama, ollama-config, sidecar-admission, packages/adapter-ollama) pass; `pnpm typecheck` và eslint sạch, prettier áp dụng. Chưa có test sidecar xem thẳng body gửi Ollama (chỉ test hàm và adapter).
+
+## 2026-11-10: Phase 4 hạng mục 4 (probe lại cổng quyền claude, P4-1 d)
+
+- Tiêu chí: bài thật `claude-askall` pass và mọi lời gọi trong 6 tool xuất hiện trong log của cổng. Kết quả: 2 test pass; 8/8 lời gọi (Read, Bash x2, Write, Edit, Glob, Grep, Read) tới cổng; 2 Bash bị chính sách từ chối. claude 2.1.319 (đo trước: 2.1.318). Ghi ở ASSUMPTIONS "Claude: probe lại cổng quyền theo hướng mới"; không thêm capability, giới hạn (tool ngoài 6) giữ nguyên.
+
+## 2026-11-10: Phase 4 hạng mục 5 (ADR-006 A1/A7/A8)
+
+- Tiêu chí: A8 có test ghim hành vi hiện có: hai lần `workflows.start` giống hệt cho hai `taskId` khác nhau, `tasks.list` có đúng 2 task, cả hai `completed` (không dedupe, không retry ngầm). Test mới pass (`sidecar.test.ts -t A8`, 1 pass); eslint, prettier, typecheck sạch.
+- A1: chốt, không cần mã (sidecar do Tauri spawn đã là chủ DB duy nhất, khoá 2d đã có). A7: duyệt về nguyên tắc, chưa có mã vì chưa có tích hợp Harness để bật; làm cùng kênh/cầu nối. Chi tiết ở ADR-006, mục "Cập nhật 2026-11-10".
+- Chưa chạy lại cả bộ test (chỉ test mới); bộ đầy đủ chạy ở cổng cuối.
+
+## 2026-11-10: Phase 4 hạng mục 6 (C1/C5 với CLI thật, có giới hạn)
+
+- Tiêu chí: soak thật 5 workflow (trần cứng của bộ test), mọi task terminal, 0 CLI mồ côi, ghi số thật. Kết quả: 1 test pass (184,8 s); 5/5 `completed`, 0 mồ côi; bảng ở `docs/ASSUMPTIONS.md` (mục "Soak CLI thật 5 workflow, Phase 4 hạng mục 6").
+- C1: kiểm lại cổng quyền với claude 2.1.319 ở hạng mục 4 (8/8 lời gọi tới cổng). Vẫn NOT_RUN: cổng thật bị treo, các khoá khác của settings.local.json. C5 100 workflow thật: cố ý không chạy (chi phí); bản 100 workflow giả có sẵn.
+
+## 2026-11-10: Phase 4 hạng mục 7a (probe `agy` lần 3)
+
+- Tiêu chí: bộ `real-agy.test.ts` pass trên bản agy hiện có, không còn `agy.exe` mồ côi. Kết quả: agy 1.5.3, 6/6 pass (72,8 s), `agy.exe` còn lại 0. Chi tiết và phần chưa kiểm ở `docs/ASSUMPTIONS.md` (mục "Probe `agy` lần 3"). Không đổi mã.
+- Dọn thư mục worktree (7b): chưa làm, chờ người dùng xác nhận danh sách.
+
+## 2026-11-10: Phase 4 hạng mục 7b (dọn thư mục worktree rỗng)
+
+- Đã liệt kê và người dùng xác nhận (AskUserQuestion). Đã `rmdir` (chỉ xoá được thư mục rỗng) 8 thư mục rỗng không đăng ký worktree: flaky-root-cause, p4-deps, p4-ipc, p4-probe, p4-rust, policy-win-hardening, probe-permissions, wire-resource-monitor. Giữ: `int` (không rỗng, có node_modules) và `winapp-agentroom-check-f81031-loop-worktrees` (rỗng, có thể là gốc worktree của Loop Runner), cùng mọi worktree đã đăng ký.
+
+## 2026-11-10: Phase 4 hạng mục 8 (installer thật)
+
+- Lệnh: `pnpm tauri build --bundles nsis --ci` trong `apps/desktop` (NSIS 3.13 đã cài ở hạng mục 2 trên PATH). Thoát 0; `beforeBuildCommand` (`pnpm build`) chạy; Tauri tải thêm `nsis-3.13.zip` và `nsis_tauri_utils.dll` từ repo `tauri-apps` trên GitHub, log báo "validating hash". Đầu ra: `Agent Workspace_0.0.0_x64-setup.exe` (2,42 MiB) dưới `apps/desktop/src-tauri/target/release/bundle/nsis/` (git-ignored, không commit).
+- NOT_RUN: chạy cài đặt/gỡ cài đặt installer, mở app đã cài, ký số (installer chưa ký, sẽ bị SmartScreen cảnh báo), bundle WiX/MSI. Sidecar Node chưa được đóng gói vào installer (cấu hình bundle không có `externalBin`/resources), nên app cài ra chưa tự chạy được orchestrator: đây là nợ đóng gói, chưa xử lý.
+
+## 2026-11-10: Phase 4 hạng mục 9 (PHASE4_REPORT.md, cổng cuối)
+
+- Viết `docs/PHASE4_REPORT.md`. Cổng cuối: lint, typecheck, test (`--no-file-parallelism`: 107 file pass, 1044 test pass, 6 expected fail, 72 skip), build đều PASS; `pnpm format` exit 1 chỉ vì 29 file `.superpowers/` (git-ignored). `pnpm audit`: 2 moderate, 0 high/critical. cargo clippy/test không chạy (không sửa Rust).
+- Ba gate Phase 4 và các mục `[~]` trong TODO KHÔNG được tick: thiếu bằng chứng cho TOCTOU/hard link/mount point, soak 100 thật, `cargo audit` hôm nay. Chờ người dùng quyết đóng hay không.
+
+## 2026-11-10: Phase 4 làm thêm sau xác nhận (người dùng: "Chưa đóng, làm thêm")
+
+- `cargo audit` (apps/desktop/src-tauri) hôm nay: 0 vulnerability, 2 allowed warning (proc-macro-error, glib; đã chấp nhận, chỉ Linux/GTK).
+- Rà lỗ hở symlink: TOCTOU/hard link/mount point đã vá từ A6 (TODO ghi cũ). Tìm ra hở MỚI: `GitWorktrees.diff` đọc file ngoài worktree qua junction. Test viết trước, đỏ; sửa `packages/git-worktrees/src/git-worktrees.ts` (`insideWorktree`); `packages/git-worktrees` + `artifacts.test.ts`: 26 test pass; typecheck, eslint, prettier sạch. Chi tiết và phần còn hở ở ASSUMPTIONS.
+- Cổng chạy lại sau sửa: lint, typecheck, test (1045 pass), build đều PASS; PHASE4_REPORT.md đã cập nhật.
+
+## 2026-11-11: Phase 4 ĐÓNG có ngoại lệ
+
+- Người dùng chọn "Đóng có ngoại lệ" (AskUserQuestion). Ghi ADR-013; tick ba gate trong ROADMAP kèm ngoại lệ; cập nhật PHASE4_REPORT, TODO, HANDOFF. Không đổi mã. Không push, không PR, không ghép vào `main`.
+
+## 2026-11-11: Giai đoạn A, vòng 1 (gỡ ngoại lệ Phase 0–4)
+
+- `4e26958`: sửa dòng trạng thái Phase 3 trong ROADMAP thành ĐÓNG 2026-11-10 có ngoại lệ (khớp ADR-010, PHASE3_REPORT).
+- `GitWorktrees.diff`: test race viết trước (đỏ: rò nội dung ngoài worktree), thêm kiểm lại `realpath` sau khi git đọc (xanh). Cổng: `pnpm lint` PASS, `pnpm typecheck` PASS, `pnpm test --no-file-parallelism` PASS (1046 pass, 107 file), `pnpm build` PASS, `prettier --check` trên file đổi PASS. `pnpm format` toàn repo chưa chạy lại (lỗi cũ do `.superpowers/`).
+- Codex (gpt-6.1-sol, read-only, medium) trên diff: báo chặn: hoán đổi rồi khôi phục giữa hai lần kiểm vẫn lọt. Đối chiếu mã: đúng. Chưa sửa được trong vòng này (cần đọc bằng handle + stdin); comment mã đã sửa cho đúng, ghi ASSUMPTIONS. Khe TOCTOU VẪN CÒN; ngoại lệ ADR-013 giữ nguyên.
+- Còn lại giai đoạn A: kiểm Settings + admission trong app Tauri thật, test mount point thật, clippy/test Rust, đóng gói sidecar, thử cài/gỡ NSIS. Chưa push.
+
+## 2026-11-11: Giai đoạn A, vòng 2 (đóng gói sidecar, cài/gỡ NSIS, Rust)
+
+- `cargo clippy --all-targets -- -D warnings` PASS; `cargo test --locked` PASS (không đổi mã Rust).
+- Test-first bằng đo thật: cấu hình glob cho installer thiếu `drizzle/`; sửa sang ánh xạ thư mục, build lại, cài thử, selftest bản đã cài PASS, gỡ sạch. Chi tiết và phần NOT_RUN ở ASSUMPTIONS ("Installer đóng gói sidecar…").
+- Codex review `tauri.conf.json`: không có kết luận. Cổng JS/TS không chạy lại (chỉ đổi JSON cấu hình, `prettier --check` PASS).
+- Còn lại giai đoạn A: kiểm Settings + admission trong app Tauri thật, test mount point thật, khe TOCTOU `diff` (cần handle + stdin). Chưa push.
+
+## 2026-11-11: Giai đoạn A, vòng 3 (khe TOCTOU `GitWorktrees.diff`)
+
+- Test viết trước (đỏ: hoán đổi rồi khôi phục lọt `SWAP-RESTORE-SECRET`), rồi `readVerified` đọc bằng handle + so `dev/ino`, diff file mới tự dựng. Cổng: `pnpm lint` PASS, `typecheck` PASS, `pnpm test --no-file-parallelism` PASS (1052 pass), `build` PASS. `pnpm format` toàn repo chưa chạy lại; `prettier --write` trên `packages/git-worktrees/src`.
+- Codex (gpt-6.1-sol, read-only): báo lật ba lần vẫn lọt (đúng lý thuyết, ghi ASSUMPTIONS) và cắt cụt (sai, đã đối chiếu mã/test). Khe TOCTOU THU HẸP, CHƯA ĐÓNG HẲN.
+- Hết 3 vòng của giai đoạn A. Chưa làm: kiểm Settings + admission trong app Tauri thật, test mount point thật. Giai đoạn A KHÔNG đóng; theo prompt: dừng và báo điểm chặn. Chưa merge, chưa push.
+
+## 2026-11-11: Giai đoạn A, kiểm hai thẻ Settings trong app Tauri thật
+
+- **Cách làm:** chạy `target/release/agent-studio.exe` (bản release đã build) với DB riêng trong thư mục tạm và `AGENT_STUDIO_SIDECAR_DIR` trỏ `sidecar-dist`; điều khiển webview thật qua cổng gỡ lỗi WebView2 (`--remote-debugging-port`, chỉ localhost, chỉ đọc DOM và bấm nút). computer-use không dùng được vì app không nằm trong danh sách ứng dụng cài đặt. Không nhập credential, không gọi CLI thật.
+- **Kết quả (PASS, lệnh thật):** thẻ "Ollama models" hiển thị ("Ollama is not answering…", đúng vì Ollama không chạy) và thẻ "Load limits" hiển thị trạng thái thật (CPU/RAM/GPU 8,0 GB từ nvidia-smi). Đổi "Tasks at once" 2→1 rồi Save: trạng thái đổi sang "may start at once now 1 of 1", giá trị còn sau khi tắt và mở lại app. Hạ ngưỡng RAM pause xuống 50 % (RAM đang ~75 %): trạng thái chuyển "Paused … Reason: memory 74.6% >= pause 50%", "0 of 1". "Restore defaults" đưa về 2,85,95,80,90,5 và trạng thái "Normal … 2 of 2".
+- **Chưa kiểm:** admission với task thật đang chạy trong UI (chỉ kiểm bằng test sidecar), VRAM khi Ollama chạy thật, ảnh chụp màn hình (không có). Sai sót của chính tôi trong lúc kiểm: lần Save đầu bấm nhầm nút của thẻ khác nên không có hiệu lực; đã làm lại đúng nút.
+
+## 2026-11-11: Giai đoạn A đóng có ngoại lệ (ADR-014), giai đoạn B: kế hoạch 7C-2
+
+- **Quyết định người dùng:** "Nhận ngoại lệ, sang B" → ADR-014 (mount point thật chưa test; TOCTOU lật ba lần chưa đóng).
+- **Gate (chạy 2026-11-11, trên `658c060` + docs):** `pnpm lint` PASS, `pnpm typecheck` PASS, `pnpm test --no-file-parallelism` PASS (107 file pass, 6 skip; 1052 test pass, 6 expected fail, 67 skip), `pnpm build` PASS. `pnpm format` không chạy trọn (lỗi đã biết do `.superpowers/`); các file docs đã sửa qua `prettier --check` riêng. clippy/cargo test: lần chạy vòng 2 của giai đoạn A, `src-tauri` không đổi sau đó.
+- **7C-2:** chưa có kế hoạch được duyệt (docs mâu thuẫn: NEXT_PLAN "đã duyệt 2026-11-05", HANDOFF "chờ duyệt"). Đã soạn `docs/superpowers/plans/2026-11-11-7c2-standing-grants.md` (nháp), không viết mã. Chờ người dùng quyết phạm vi grant, thời hạn, phạm vi mang theo.

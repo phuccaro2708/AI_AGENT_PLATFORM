@@ -8,6 +8,18 @@ export const OLLAMA_URL_ENV = "AGENT_STUDIO_OLLAMA_URL";
 /** `read-only` lets the model call `list_dir` / `read_file` inside the task folder. Anything else = off. */
 export const OLLAMA_TOOLS_ENV = "AGENT_STUDIO_OLLAMA_TOOLS";
 
+/**
+ * `keep_alive` used while a VRAM band is saved in the load limits (ADR-010): Ollama's default of 5 minutes keeps a
+ * finished model in VRAM, and the monitor would hold the whole system `paused` until it leaves. Short, not 0, so
+ * back-to-back tasks on the same model still reuse it.
+ */
+export const VRAM_KEEP_ALIVE = "30s";
+
+/** `VRAM_KEEP_ALIVE` when the saved thresholds include a VRAM band, else `undefined` (Ollama's own default). */
+export function vramKeepAlive(thresholds: { vram?: unknown }): string | undefined {
+  return thresholds.vram ? VRAM_KEEP_ALIVE : undefined;
+}
+
 /** Model names look like `name`, `name:tag`, `owner/name:tag`. Anything else is refused, not passed on. */
 const MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._\-/:]{0,199}$/;
 

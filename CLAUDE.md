@@ -21,6 +21,7 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 8. Không sửa file ngoài repo; không cài global dependency âm thầm.
 9. Không gọi message bus nội bộ là "A2A-compatible" nếu chưa qua compatibility test.
 10. Mỗi phase chỉ đóng khi đạt acceptance criteria trong `docs/ROADMAP.md`; ghi báo cáo `docs/PHASEn_REPORT.md` với lệnh đã chạy và kết quả thật. Thứ tự phase hiện hành: `docs/DECISIONS.md#adr-005-thứ-tự-phase-chốt-lại-2026-11-04` (Phase 4 Policy Engine đứng trước khi đóng Phase 7).
+    - **Chế độ vòng lặp tự động** (người dùng duyệt 2026-11-09; chỉ áp dụng khi người dùng chủ động bật, không áp dụng cho phiên thường): điều phối viên (Claude) được tự đóng phase và sang phase kế tiếp, nhưng chỉ khi mọi tiêu chí nghiệm thu của phase trong `docs/ROADMAP.md` đã PASS bằng kết quả lệnh thật (không có mục NOT_RUN/BLOCKED) và `docs/PHASEn_REPORT.md` đã ghi. Vẫn đúng thứ tự ADR-005: không đổi thứ tự, không bỏ qua tiêu chí, không tự sang phase sau khi phase hiện tại còn task BLOCKED. Vai Codex (`.codex/agents/`) không bao giờ tự đóng phase. Vẫn KHÔNG `git push`, không tạo PR, không thêm dependency.
 
 ## Quy trình làm việc
 
@@ -34,7 +35,7 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 - **Tự commit**: khi một đơn vị công việc xong và gate liên quan đã chạy (ít nhất `eslint`, `prettier --check`, `pnpm typecheck` và test của phần đã đổi), commit nhỏ với message conventional. Chỉ `git add` đúng file thuộc thay đổi, không `git add -A`; không commit secrets, đường dẫn máy cá nhân, file tạm. Không `--no-verify`, không amend commit đã push.
 - **Tự đối chiếu trước khi merge**: với mỗi nhánh ứng viên, chạy `git rev-list --count <chính>..<nhánh>` (ahead/behind), `git cherry <chính> <nhánh>` (commit chưa có theo nội dung) và `git diff --stat $(git merge-base …)`. Nhánh 0 commit riêng thì coi là đã ghép. Nhánh cũ tụt xa (hàng trăm commit) hoặc viết lại phần mà nhánh chính đã tiến hoá thì KHÔNG merge, báo người dùng và để họ quyết.
 - **Tự merge, dọn nhánh**: theo mục "Git Branch & Merge Policy" bên dưới (điều kiện, nhánh được bảo vệ, xử lý lỗi, sau merge). Bước đối chiếu ở trên luôn chạy trước mỗi lần merge.
-- **KHÔNG tự làm**: `git push`, tạo PR, đổi thứ tự phase, đóng phase, `git reset --hard`/`checkout --` trên việc chưa commit, và mọi điều bị cấm trong "Git Branch & Merge Policy" (force push, xoá nhánh chưa ghép, bỏ qua test để merge). Những việc này vẫn cần người dùng yêu cầu hoặc bị cấm hẳn.
+- **KHÔNG tự làm**: `git push`, tạo PR, đổi thứ tự phase, đóng phase (trừ chế độ vòng lặp tự động ở nguyên tắc 10), `git reset --hard`/`checkout --` trên việc chưa commit, và mọi điều bị cấm trong "Git Branch & Merge Policy" (force push, xoá nhánh chưa ghép, bỏ qua test để merge). Những việc này vẫn cần người dùng yêu cầu hoặc bị cấm hẳn.
 - Mỗi lần tự động xong ghi lại trong `docs/PROGRESS.md` (lệnh đã chạy, kết quả thật); không ghi kết quả CI chưa đọc.
 - Báo cáo trung thực: test fail thì nói fail, bước bỏ qua thì nói bỏ qua.
 - Yêu cầu có nhiều cách hiểu khác nhau: nêu giả định và các lựa chọn, không chọn ngầm. Nếu chỉ có một cách hợp lý thì cứ làm.

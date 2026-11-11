@@ -77,6 +77,17 @@ describe("OllamaAdapter", () => {
     });
   });
 
+  it("keepAlive may be a function read at each chat: a value is sent, undefined sends nothing", async () => {
+    const s = await fake();
+    let current: string | undefined = "30s";
+    const a = make(s, { keepAlive: () => current });
+    await run(a, task("one", undefined, "k1"));
+    current = undefined;
+    await run(a, task("two", undefined, "k2"));
+    expect(s.chats[0]).toMatchObject({ keep_alive: "30s" });
+    expect(s.chats[1]).not.toHaveProperty("keep_alive");
+  });
+
   it("an empty reply is an error, not a success", async () => {
     expect(lastMessage(await run(make(await fake("empty")), task()))).toMatch(/empty reply/);
   });

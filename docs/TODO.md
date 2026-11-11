@@ -164,10 +164,10 @@ Nợ chuyển tiếp từ Phase 2: (engine resume + UI giải quyết reconcilia
 - [x] Siết Tauri capabilities — `default` chỉ còn event listen/unlisten (2026-11-05, kiểm bằng WebView2 CDP); không có WS. Từ chối `emit`/`window|close`/`fs` và method ngoài danh sách đã kiểm lại trong app Tauri thật 2026-11-05 (CDP)
 - [~] Recovery 5 bước + UI resume/retry/abandon — 5 bước + UI xong, test sidecar kill/restart với agent giả (2026-11-05); 5 bước là giả định của lane IPC chờ người dùng duyệt; đã kiểm trong app Tauri thật 2026-11-05 (inspect/abandon/từ chối retry không xác nhận, khởi động lại, RecoveryPanel; chưa bấm resume/retry vì sẽ chạy CLI thật); engine resume Peer Review (P4-8 b) đã có từ 7A, test thêm cho reviewer bị ngắt (2026-11-06); `maxRounds` tuỳ chỉnh nay được lưu trong DB (2026-11-07) và có test resume vòng ≥ 2 với agent giả; đã có lượt CLI thật ở vòng ≥ 2 (A5, 2026-11-07, PARTIAL: cơ chế resume đúng, 1/2 cặp kết thúc `failed` chưa rõ nguyên nhân)
 - [~] Log rotation, retention, diagnostics export (redacted) — gói `diagnostics` + logger xoay vòng có test đã ghép (`98539d3`); đã nối method IPC `diagnostics.export` + nút Settings (2026-11-05); đã kiểm trong app Tauri thật 2026-11-05 (nút + bundle verified, không rò đường dẫn); redaction secret thật trong bundle mới có test đơn vị
-- [~] Security tests: prompt injection, output độc hại, path escape — xong với agent giả đã ghép (`98539d3`); nghi vấn symlink của artifact là THẬT và đã sửa (fail-closed, `worktree-hash.ts`, ASSUMPTIONS d8); còn hở: TOCTOU, hard link, mount point
+- [~] Security tests: prompt injection, output độc hại, path escape — xong với agent giả đã ghép (`98539d3`); nghi vấn symlink của artifact là THẬT và đã sửa (fail-closed, `worktree-hash.ts`, ASSUMPTIONS d8); TOCTOU/hard link/mount point đã vá ở `worktree-hash.ts` (A6, 2026-11-07; mount point thật chưa có test); `GitWorktrees.diff` đọc file ngoài worktree qua junction đã vá 2026-11-10 (ASSUMPTIONS); còn khe TOCTOU nhỏ ở đường diff
 - [~] Soak test 100 workflow — xong với agent giả (`tests/soak`); với CLI thật mới chạy 5 workflow (ASSUMPTIONS d8, xanh, bất biến an toàn giữ nguyên) và đã chạy lại có số liệu từng workflow (trạng thái, ms, task, 0 CLI mồ côi thấy được; 1 lần chạy); 100 workflow thật cố ý chưa chạy (tốn chi phí)
 - [~] `pnpm audit` + rà dependency; SECURITY.md cập nhật — audit + ghim Actions theo SHA + `docs/DEPS_AUDIT.md` + `docs/SECURITY.md` xong (2026-11-05), 4 cảnh báo ghi chấp nhận; threat model xong và đã được người dùng duyệt (2026-11-06); tuổi gói transitive: npm sạch, 13 crate Cargo trẻ trong allowlist có hạn (CI thật NOT_RUN)
-- [ ] PHASE4_REPORT.md
+- [x] PHASE4_REPORT.md (viết 2026-11-10; Phase 4 ĐÓNG 2026-11-11 có ngoại lệ, ADR-013, ba gate đã tick kèm ngoại lệ)
 
 ## Phase 5 — Desktop Beta
 
@@ -267,3 +267,12 @@ Nợ chuyển tiếp từ Phase 2: (engine resume + UI giải quyết reconcilia
 
 - [ ] A2A gateway + compatibility tests đúng phiên bản spec
 - [ ] Nếu spike khả thi: cô lập AppContainer / Windows Sandbox
+
+## Loop Runner (repo riêng `D:\Program\loop-runner`, 2026-11-09)
+
+- [x] Task 1–10: scaffold, probe CLI, config, exec/redact, gates, tasks/phase, budget, worktree + diff guard, adapter claude/codex, `runLoop` (đã review; implementer báo 203 test pass, chưa tự chạy lại)
+- [x] Task 11–13: CLI `check`/`run`, `loop.config.json` + AGENTS.md/`implementer.toml` 3 lần sửa + ASSUMPTIONS, nghiệm thu chạy thật (báo cáo `docs/reports/LOOP_RUNNER_ACCEPTANCE.md`, bước 1 PARTIAL)
+- [x] Review cả nhánh một lượt + một đợt sửa I-1..I-7 (loop-runner `cb5a61b`), ADR-012 cho quy tắc 10
+- [x] I-8: bước `setup` + chạy lại nghiệm thu bước 1 (lần 3: gate, review, guard PASS; exit 2 vì phase-3 chưa có lệnh tiêu chí)
+- [ ] Hỏi người dùng trước khi cài lệnh global `loop-runner`
+- [ ] Viết tiêu chí Phase 3–10 thành lệnh chạy được

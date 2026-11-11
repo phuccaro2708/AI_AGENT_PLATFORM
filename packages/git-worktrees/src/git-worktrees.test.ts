@@ -1,6 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -102,6 +110,83 @@ describe("diff", () => {
     expect(d.patch).toContain("+TWO");
     expect(d.patch).toMatch(/new file mode[\s\S]*\+fresh/);
     expect((await wt.status(info.path)).files.find((f) => f.path === "new.txt")?.code).toBe("??");
+  });
+
+  it("an untracked link pointing outside the worktree is shown as a link, its target's content never read", async () => {
+    const info = await wt.create({ workflowId: "wf_1", taskId: "task_a" });
+    const outside = join(root, "outside");
+    mkdirSync(outside);
+    writeFileSync(join(outside, "secret.txt"), "OUTSIDE-SECRET-CONTENT\n");
+    // a directory junction needs no privilege on Windows; a file symlink may, so it is tried and skipped if refused
+    symlinkSync(outside, join(info.path, "jn"), "junction");
+    let fileLink = false;
+    try {
+      symlinkSync(join(outside, "secret.txt"), join(info.path, "leak.txt"), "file");
+      fileLink = true;
+    } catch {
+      /* no privilege to create file symlinks here */
+    }
+    const d = await wt.diff(info.path);
+    expect(d.patch).not.toContain("OUTSIDE-SECRET-CONTENT");
+    expect(d.patch).toContain("jn/secret.txt resolves outside the worktree");
+    if (fileLink) expect(d.patch).toContain("leak.txt");
+  });
+
+  it("a file swapped for a link between the check and git's read is dropped, its content never returned", async () => {
+    const info = await wt.create({ workflowId: "wf_1", taskId: "task_a" });
+    const outside = join(root, "outside2");
+    mkdirSync(outside);
+    writeFileSync(join(outside, "s.txt"), "SWAPPED-SECRET\n");
+    mkdirSync(join(info.path, "d"));
+    writeFileSync(join(info.path, "d", "s.txt"), "harmless\n");
+    type Inside = (root: string, file: string) => boolean;
+    const real = (wt as unknown as { insideWorktree: Inside }).insideWorktree.bind(wt);
+    let calls = 0;
+    // the swap lands right after the first containment check passed
+    vi.spyOn(wt as unknown as { insideWorktree: Inside }, "insideWorktree").mockImplementation(
+      (r, f) => {
+        const ok = real(r, f);
+        if (++calls === 1) {
+          rmSync(join(info.path, "d"), { recursive: true, force: true });
+          symlinkSync(outside, join(info.path, "d"), "junction");
+        }
+        return ok;
+      },
+    );
+    const d = await wt.diff(info.path);
+    expect(d.patch).not.toContain("SWAPPED-SECRET");
+    expect(d.patch).toContain("d/s.txt resolves outside the worktree");
+  });
+
+  it("a swap to an outside link and back between the checks is still caught, content never returned", async () => {
+    const info = await wt.create({ workflowId: "wf_1", taskId: "task_a" });
+    const outside = join(root, "outside3");
+    mkdirSync(outside);
+    writeFileSync(join(outside, "s.txt"), "SWAP-RESTORE-SECRET\n");
+    mkdirSync(join(info.path, "d"));
+    writeFileSync(join(info.path, "d", "s.txt"), "harmless\n");
+    type Inside = (root: string, file: string) => boolean;
+    const real = (wt as unknown as { insideWorktree: Inside }).insideWorktree.bind(wt);
+    let calls = 0;
+    vi.spyOn(wt as unknown as { insideWorktree: Inside }, "insideWorktree").mockImplementation(
+      (r, f) => {
+        calls++;
+        if (calls === 2) {
+          // restore the original layout before the second check looks at it
+          rmSync(join(info.path, "d"), { recursive: true, force: true });
+          mkdirSync(join(info.path, "d"));
+          writeFileSync(join(info.path, "d", "s.txt"), "harmless\n");
+        }
+        const ok = real(r, f);
+        if (calls === 1) {
+          rmSync(join(info.path, "d"), { recursive: true, force: true });
+          symlinkSync(outside, join(info.path, "d"), "junction");
+        }
+        return ok;
+      },
+    );
+    const d = await wt.diff(info.path);
+    expect(d.patch).not.toContain("SWAP-RESTORE-SECRET");
   });
 
   it("cuts output beyond maxBytes and says so", async () => {

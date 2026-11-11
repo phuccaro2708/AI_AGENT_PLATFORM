@@ -22,8 +22,11 @@ export interface OllamaAdapterOptions {
   think?: boolean;
   /** Passed as `options.num_predict` when set. */
   numPredict?: number;
-  /** Passed as `keep_alive` when set (e.g. `0` unloads the model right after the reply). */
-  keepAlive?: string | number;
+  /**
+   * Passed as `keep_alive` when set (e.g. `0` unloads the model right after the reply). A function is read at each
+   * chat call, so a setting changed while the app runs (the VRAM limit) applies to the next call; `undefined` sends nothing.
+   */
+  keepAlive?: string | number | (() => string | number | undefined);
   /**
    * `"read-only"` offers the model `list_dir` and `read_file` (confined to the task folder, see `tools.ts`) and runs
    * the loop. Off by default: the probed model answered in prose instead of calling a tool (docs/ASSUMPTIONS.md).
@@ -202,13 +205,15 @@ export class OllamaAdapter implements AgentAdapter {
       let completionTokens = 0;
       let round: Round;
       for (let n = 1; ; n++) {
+        const keepAlive =
+          typeof this.opts.keepAlive === "function" ? this.opts.keepAlive() : this.opts.keepAlive;
         const body = {
           model,
           stream: true,
           think: this.opts.think ?? false,
           messages,
           ...(toolsOn ? { tools: READ_ONLY_TOOLS } : {}),
-          ...(this.opts.keepAlive !== undefined ? { keep_alive: this.opts.keepAlive } : {}),
+          ...(keepAlive !== undefined ? { keep_alive: keepAlive } : {}),
           ...(this.opts.numPredict !== undefined
             ? { options: { num_predict: this.opts.numPredict } }
             : {}),

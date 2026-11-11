@@ -705,8 +705,117 @@ Mã: ADR-008. `codex` = `CodexAppServerAdapter` khi cổng bật; RSS watchdog `
 - **Hành vi mới:** khi một lượt chạy model B ngay sau model A (cùng server, cùng tiến trình sidecar), adapter gỡ A (`keep_alive:0`, best effort, lỗi bị bỏ qua) trước khi gửi chat của B; cùng model thì không gỡ. `detect()` kiểm tên đã cấu hình có trong `/api/tags` (tên không tag = `:latest`); tên sai hoặc server không trả lời = không sẵn sàng.
 - **Chưa đo:** chạy liên tiếp hai model qua adapter thật rồi đọc `/api/ps` (mới có test server giả và phép đo gỡ model ở trên); chương trình khác dùng chung Ollama không bị thấy bởi `ModelSlot`.
 
+## Claude: probe lại cổng quyền theo hướng mới, claude 2.1.319 (2026-11-10, Phase 4 hạng mục 4)
+
+Hướng mới của P4-1 d (ADR-010 mục 8) = `askEveryTool` (`permissions.ask` cho 6 tool qua một `--settings`) với cổng MCP thật, đã có mã ở d4/d6 và bật mặc định trong sidecar. Việc làm ở đây chỉ là chạy lại bài thật trên bản claude mới hơn (lần đo trước 2.1.318); không có capability mới.
+
+- **Lệnh:** `AGENT_STUDIO_REAL_CLI_GATES=claude-askall AGENT_STUDIO_REAL_CLI_GATES_OUT=<thư mục tạm> pnpm exec vitest run services/orchestrator/src/real-cli-gates.test.ts --no-file-parallelism` (2 test pass, 50 bỏ qua; khoảng 23 giây; repo rỗng trong `%TEMP%`, model haiku, prompt nhỏ không chứa mã dự án; cổng thật = sidecar đóng gói sau bộ ghi log).
+- **Đã đo (mỗi prompt đúng một lần chạy; model tự chọn lời gọi):** prompt A (Write, Read, `echo`, `git status`): cổng nhận Read (allow), Bash `echo probe-ok` (deny, "No allow rule matches"), Bash `git status` (deny), Write (allow); `w.txt` có trong repo tạm, hai lời gọi Bash bị từ chối. Prompt B (Read, Edit, Glob, Grep): cổng nhận cả bốn, đều allow. `gateStarts` = 1 mỗi lượt, `updatedInputEqualsInput` = true. Tức là cả 6 tool đều tới cổng, không có tool nào claude tự quyết ngoài cổng.
+- **Chưa đo / giới hạn:** chỉ 6 tool; WebFetch, WebSearch, NotebookEdit, Task/Agent, tool MCP, PowerShell không thử với luật `ask` (phải giới hạn bằng `--tools`, xem d4); một lần chạy mỗi ô, không phải mẫu thống kê; chưa thử luật `ask` ký tự đại diện; không đo chi phí (ngân sách trần theo test); cổng là chính sách chứ không phải sandbox OS.
+
+## Soak CLI thật 5 workflow, Phase 4 hạng mục 6 (2026-11-10)
+
+Lệnh: `AGENT_STUDIO_REAL_CLI_SOAK=5 AGENT_STUDIO_REAL_CLI_SOAK_OUT=<ngoài repo> pnpm exec vitest run tests/soak/sidecar-soak-real-cli.test.ts` (kế hoạch hỗn hợp, trần cứng 5; prompt nhỏ, repo tạm rỗng; claude 2.1.319, codex-cli 0.166.0). Kết quả: 1 file, 1 test pass, 184,8 s.
+
+| #   | workflow                      | kind   | agent               | final state | ms    | tasks | task states          | orphan CLI procs |
+| --- | ----------------------------- | ------ | ------------------- | ----------- | ----- | ----- | -------------------- | ---------------- |
+| 1   | wf_01M74CCGC2CCMGPSJD1BX83FFH | plain  | rclaude             | pending     | 12847 | 1     | completed            | 0                |
+| 2   | wf_01M74CCYQ19HKW6JWG0Y89BCST | plain  | rcodex              | pending     | 29661 | 1     | completed            | 0                |
+| 3   | wf_01M74CDXQETNPG46MEDTKECDSV | plain  | rclaude             | pending     | 7616  | 1     | completed            | 0                |
+| 4   | wf_01M74CE6YKYFKEEWRR44NBPZW9 | plain  | rcodex              | pending     | 17729 | 1     | completed            | 0                |
+| 5   | wf_01M74CETB5MEDNWDNKSPWDEFB4 | review | rclaude-impl+rcodex | completed   | 36677 | 2     | completed, completed | 0                |
+
+CLI processes alive after svc.close(): 0; descendants seen: 508
+
+- Cả 5 workflow có task `completed`, 0 CLI mồ côi sau từng workflow và sau `svc.close()` (lấy mẫu ~0,7 s, 508 tiến trình con thấy). "pending" ở workflow thường là trạng thái workflow không có bước engine, không phải lỗi (giống lần d8).
+- Phạm vi: đây KHÔNG phải soak 100 workflow thật (người dùng cho phép có giới hạn, ADR-010 mục 5); 100 workflow giả vẫn do `tests/soak/sidecar-soak.test.ts`. Chưa đo RAM theo thời gian, chưa chạy kế hoạch `peer` (trần 10), chưa thử cổng thật bị treo. Số ms là một lần chạy, phụ thuộc mạng và model.
+
+## Probe `agy` lần 3, agy 1.5.3 (2026-11-10, Phase 4 hạng mục 7; ngoài gate, ADR-009)
+
+Lệnh: `AGENT_STUDIO_REAL_AGY=1 AGENT_STUDIO_REAL_AGY_OUT=<ngoài repo> pnpm exec vitest run packages/adapter-antigravity/src/real-agy.test.ts` (bộ 6 ca cũ của P3-6, thư mục tạm rỗng ngoài repo, prompt nhỏ không dùng tool, `shell:false`). Đổi so với lần trước: `agy --version` = 1.5.3 (trước 1.4.8). Kết quả: 6/6 pass, 72,8 s.
+
+- Giữ nguyên hành vi đã ghi ở P3-6 trên 1.5.3: prompt nhiều dòng (`"`, `&`, `|`, `%`, `$HOME`) đến nguyên vẹn qua adapter, ends `completed` (27,1 s, 1 turn); `--model` sai → `error` (3,3 s, 0 token); `--print-timeout 1s` → `error` (5,9 s); cwd không tồn tại → `error` "could not start agy"; cancel sau 4 s → `error` "cancelled" (4,7 s), `agy.exe` còn lại trước/sau = 0/0.
+- Quan sát thô (NDJSON): `init` có `cwd`, danh sách tool (gồm `ask_permission`, `ask_custom_permission`, `ask_question`, tool browser), `step_update` (`user_input`, `agent_response` kèm `text_delta`), `result` (`status` SUCCESS, `num_turns` 1, `usage`). Hình dạng khớp adapter hiện có; chưa thấy trường mới làm adapter hỏng.
+- Vẫn KHÔNG kiểm chứng: lượt có gọi tool (chưa thấy sự kiện tool/phê duyệt thật), cơ chế ép `task.permissions`, cây tiến trình con do tool sinh ra. Vì vậy `agy` vẫn ngoài gate và adapter vẫn từ chối `task.permissions`. Chưa có bằng chứng `ask_permission` có thể nối vào PolicyEngine.
+
+## `GitWorktrees.diff` đọc file ngoài worktree qua junction (2026-11-10, Phase 4, sau yêu cầu "làm thêm")
+
+- Phát hiện bằng test mới (đỏ trước khi sửa): worktree có một directory junction trỏ ra ngoài (không cần quyền admin để tạo) thì `git status --untracked-files=all` liệt kê file bên trong như file untracked thường, và `diff()` chạy `git diff --no-index /dev/null <file>` nên đọc NỘI DUNG file ngoài worktree vào patch (tái hiện bằng git thật trên máy này). Đường này là nguồn của `artifacts.diff` và Diff Viewer. Đây là hở thật, khác A6 (A6 chỉ phủ `worktree-hash.ts`).
+- Sửa: `diff()` kiểm `realpath.native` của từng file untracked phải nằm trong `realpath.native` của worktree; nếu không (hoặc không phân giải được) thì bỏ qua và thêm một dòng `# skipped: <path> resolves outside the worktree`. Test `git-worktrees.test.ts` ("an untracked link pointing outside…"): junction ra ngoài + symlink file (nếu tạo được); nội dung ngoài không có trong patch. 19 test của `packages/git-worktrees` pass, typecheck sạch.
+- Còn lại: kiểm trên realpath là kiểm-rồi-đọc (git đọc file sau đó), nên vẫn còn khe TOCTOU nhỏ ở đường diff (kẻ tráo junction đúng lúc); chưa có test cho khe này. Chưa kiểm trên Linux/macOS. Các đường khác dùng `status()` (checkMerge, commit) chưa rà lại.
+
+## Loop Runner probes (2026-11-09)
+
+Nguồn: `scripts/probe.ts` trong repo công cụ loop-runner (commit `feat: add CLI probe script`), chạy một lần trên Windows 11, Node 24, `claude` 2.1.319, `codex-cli` 0.167.0. Mọi lời gọi dùng argument array, `shell: false`, trong một thư mục tạm mới (`fs.mkdtemp`), prompt tối thiểu không chứa dữ liệu dự án; không dùng cờ bỏ qua quyền/sandbox. Mỗi chế độ đúng một lần gọi. Output CLI coi là dữ liệu không đáng tin.
+
+**Nguồn bằng chứng (sửa vòng 1):** VERIFIED chỉ áp dụng cho điều script in ra hoặc kiểm tra: mã thoát, file tạo ra, các khóa khớp `/token|cost|usd/i` do `usageKeys` trích, và phần 400 ký tự đầu của stdout script in (có `duration_api_ms`, `stop_reason`, `session_id`, `total_cost_usd`; đó là nơi các khóa này được thấy, không phải do `usageKeys` trích). Danh sách cờ trong `--help` và dòng header của codex (`sandbox:`, `approval:`) đọc từ `--help` chạy tay riêng và phần stderr bị cắt của script, KHÔNG do script kiểm tra; cờ nào không chạy thì không VERIFIED.
+
+### Cách chạy CLI trên Windows mà không qua shell (VERIFIED)
+
+- **`claude`**: là file thực thi gốc `~\.local\bin\claude.exe`; `spawn(<đường dẫn claude.exe>, ["--version"], {shell:false})` → exit 0, `2.1.319 (Claude Code)`.
+- **`codex`**: `spawn("codex", ["--version"], {shell:false})` → `ENOENT` (npm cài `codex.cmd` shim, Node không chạy được nếu không có shell). Cách đã kiểm chứng: `spawn(process.execPath, [<APPDATA>\npm\node_modules\@openai\codex\bin\codex.js, "--version"], {shell:false})` → exit 0, `codex-cli 0.167.0`. Đây là đúng điều `codex.cmd` làm (`node …\bin\codex.js %*`).
+- **Hệ quả cho Task 8:** phải phân giải đường dẫn thật (không tin tên trần `codex`); với `.cmd` phải đọc entry `codex.js` sau shim hoặc cho người dùng cấu hình đường dẫn. Đường dẫn này phụ thuộc cách cài (npm toàn cục); chưa đo bản cài khác (winget, bản native).
+
+### Giả định 1: chạy không tương tác, có mã thoát và output dùng được (VERIFIED, 1 mẫu mỗi chế độ)
+
+- `claude.exe -p "Reply with the single word OK" --output-format json --no-session-persistence --max-budget-usd 0.50` → exit 0; stdout là MỘT đối tượng JSON, có `stop_reason:"end_turn"`, `session_id`, `total_cost_usd`, `usage` (thấy trong đoạn stdout 400 ký tự script in, không do `usageKeys` trích).
+- `node codex.js exec --sandbox read-only --skip-git-repo-check --ephemeral --json "Reply with the single word OK"` → exit 0; stdout là JSONL (`{"type":"thread.started",...}`, `item.completed`...). stderr in `Reading additional input from stdin...` (đã đóng stdin bằng `stdio: "ignore"`, không treo).
+- **Nhiễu:** JSONL của codex chứa các sự kiện `item.completed` loại `error` do hook plugin của người dùng ("skipping prompt hook ... not supported yet"); bộ phân tích phải bỏ qua loại sự kiện không biết, không coi `type:"error"` là thất bại của lượt.
+- **Chưa đo:** exit code khi lỗi (hết quota, sai cờ, hết giờ), `claude` không có `--no-session-persistence`, output rất dài, ổn định qua nhiều lần chạy (mới 1 mẫu).
+
+### Giả định 2: đo/giới hạn ngân sách (VERIFIED đo được token và chi phí; giới hạn cứng chỉ có ở claude)
+
+- **claude** (`--output-format json`), các khóa thật đã thấy: `total_cost_usd` (0.0967 ở lượt "OK"), `usage.input_tokens`, `usage.output_tokens`, `usage.cache_creation_input_tokens`, `usage.cache_read_input_tokens`, `usage.output_tokens_details.thinking_tokens` (các khóa này do `usageKeys` trích), `duration_api_ms` (chỉ thấy trong đoạn stdout 400 ký tự, không do `usageKeys` trích). Cờ `--max-budget-usd <amount>` có trong `--help` (chỉ với `--print`) và được TRUYỀN trong hai lượt đã chạy (0.50, không bị chạm nên chưa đo hành vi khi vượt).
+- **codex** (`exec --json`), sự kiện có khóa: `usage.input_tokens`, `usage.cached_input_tokens`, `usage.cache_write_input_tokens`, `usage.output_tokens`, `usage.reasoning_output_tokens` (26236 vào / 21 ra ở lượt "OK"). KHÔNG thấy trường chi phí USD. Không thấy cờ giới hạn ngân sách trong `codex exec --help`; chưa tìm kiếm sâu hơn.
+- **Quyết định ngân sách (đề xuất cho Task 8-10):** đọc token/chi phí sau mỗi lượt để cộng dồn và dừng từ phía công cụ; với claude thêm `--max-budget-usd` làm lưới an toàn; với codex chỉ có token đo SAU lượt nên giới hạn theo số lượt gọi và thời gian (spec mục 7) vẫn bắt buộc. Lưu ý một lượt "OK" tối thiểu đã tốn ~50k token đầu vào (chủ yếu cache) vì ngữ cảnh hệ thống tự nạp: ngân sách nhỏ hơn ~0.1 USD/lượt claude là không thực tế.
+- **Chưa đo:** hành vi khi chạm `--max-budget-usd`, mức quota thuê bao (không CLI nào báo trong output đã thấy), đơn vị tiền codex.
+
+### Giả định 3: `codex exec` ghi được trong thư mục làm việc (`workspace-write`) (VERIFIED)
+
+- `node codex.js exec --sandbox workspace-write --skip-git-repo-check --ephemeral "Create a file named probe.txt in the current directory containing OK"` → exit 0; `probe.txt` tồn tại trong thư mục tạm với nội dung `OK` (header codex trong stderr bị cắt của script: `sandbox: workspace-write`, `approval: on-request`; script không kiểm tra header, không bị treo vì stdin đóng).
+- Cờ đã chạy: `--sandbox read-only|workspace-write`, `--skip-git-repo-check`, `--ephemeral`, `--json`. `--help` (đọc tay, không do script kiểm tra) còn có `--sandbox danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`, `--cd`, `--output-schema`, `-o/--output-last-message`: KHÔNG chạy.
+- **Chưa đo:** ca `read-only` thật sự từ chối ghi (lượt read-only chỉ hỏi "OK"); sandbox có chặn ghi NGOÀI thư mục làm việc không; ghi vào `.git` trong worktree git thật (thư mục tạm không phải repo, nên chưa biết có cần cờ thêm cho `git commit`).
+- **Claude có chế độ ghi tương đương (VERIFIED):** `claude.exe -p "Create a file named claude.txt in the current directory containing OK" --output-format json --no-session-persistence --permission-mode acceptEdits --max-budget-usd 0.50` → exit 0, `claude.txt` = `OK`. `--help` (đọc tay, không do script kiểm tra) liệt kê `--permission-mode` với `acceptEdits|auto|bypassPermissions|manual|dontAsk|plan`, `--permission-prompts host|none`, `--allowedTools`, `--disallowedTools`, `--tools`: chỉ chạy `acceptEdits`, các cờ còn lại chưa chạy (chưa đo việc chạy lệnh Bash/`git` ở `acceptEdits`).
+
+### Giả định 4: Claude và Codex làm việc tuần tự trên cùng thư mục không giẫm nhau (VERIFIED MỘT PHẦN: chỉ cho thư mục tạm không phải git; UNVERIFIED cho worktree git thật)
+
+- Trong cùng một thư mục tạm: claude (đọc) → claude (ghi `claude.txt`) → codex (read-only) → codex (ghi `probe.txt`), nối tiếp, cả bốn exit 0, không có lỗi khoá/xung đột, cả hai file ghi đúng. Điều kiện kết luận trong script nay gồm cả lượt ghi của claude (trước đó thiếu). Chỉ áp dụng cho thư mục tạm KHÔNG phải git.
+- **UNVERIFIED:** worktree git thật (index lock, `.git`), thư mục có file cấu hình riêng của từng CLI (`.claude/`, `AGENTS.md`), hai CLI chạy SONG SONG (không được thiết kế; công cụ vẫn phải tuần tự), thay đổi chưa commit của lượt trước bị lượt sau đọc lại đúng.
+
+## Loop Runner: chưa kiểm chứng (UNVERIFIED) (2026-11-09)
+
+Danh sách giả định của `D:\Program\loop-runner` mà chưa có phép đo. Không mục nào dưới đây được coi là ranh giới bảo mật.
+
+- **`claude --tools Read,Grep,Glob` không cô lập MCP, hook hay cấu hình người dùng.** Cờ chỉ giới hạn tool tích hợp; MCP server, hook và `settings` của người dùng vẫn có thể nạp. Chưa đo.
+- **Hành vi Bash dưới `acceptEdits` và ghi ngoài cwd chưa đo, và diff guard không thấy.** Guard chỉ so cây làm việc của worktree chạy; ghi ra ngoài thư mục đó không nằm trong diff.
+- **`codex -s read-only` từng cho ghi trong cwd** (xem Giả định 3 ở mục "Loop Runner probes" phía trên: ca read-only chưa được đo từ chối ghi). Vì vậy chế độ này không phải ranh giới; vai reviewer dựa vào kiểm diff, không dựa vào sandbox.
+- **Hình dạng JSON output của claude và codex chưa probe đầy đủ.** Chỉ có các khoá đã thấy trong Giả định 1 và 2 (một mẫu mỗi chế độ); lỗi, hết quota, output dài chưa quan sát.
+- **`git push` tới URL tường minh không bị phát hiện.** Guard chỉ chụp `refs/remotes`; push thẳng tới một URL không đổi ref remote nào.
+- **`core.hooksPath=.` không được bảo vệ.** Cấu hình git cục bộ có thể trỏ hook về thư mục làm việc.
+- **Git driver ở phạm vi global (filter/diff/merge driver) ngoài phạm vi.** Công cụ không kiểm cấu hình git toàn cục của người dùng.
+- **Cách tính token khác nhau theo CLI.** claude báo `usage` và `total_cost_usd`, codex báo `usage` theo sự kiện; cộng dồn chéo hai CLI là ước lượng, không so sánh trực tiếp được.
+
 ### Ollama: tool calling thật và áp lực tài nguyên thật (2026-11-08)
 
 - **Đã đo:** `read_file` qua tool loop với model thật: `qwen3.5:4b` 4/4, `qwen3:4b` 3/4 (1 lần hết 512 token trong lập luận, không gọi tool). Hai model liên tiếp: `/api/ps` chỉ còn model sau. Admission trên sidecar thật: VRAM 64,1 % ≥ pause 38 % giữ task chờ, gỡ model thì task chạy sau ~6,6 s; RAM tương tự (~5 s).
 - **Bất ngờ:** model còn trong VRAM sau lượt chạy (keep_alive) giữ trạng thái `paused` khi dải VRAM bật; RAM máy này nằm sẵn 80–88 %.
 - **Chưa đo:** `list_dir` và từ chối đường dẫn ngoài thư mục với model thật; app Tauri thật; mẫu nhỏ (4 lượt mỗi model).
+
+### `GitWorktrees.diff`: kiểm lại sau khi git đọc, race còn hở (2026-11-11)
+
+- **Đã làm:** thêm kiểm `realpath` lần hai sau `git diff --no-index`; nếu đường dẫn đã bị đổi thành link trỏ ra ngoài và vẫn là link, output bị bỏ. Test viết trước, đỏ (rò `SWAPPED-SECRET`) rồi xanh.
+- **Chưa đóng (Codex review độc lập, đối chiếu mã, đồng ý):** hoán đổi sang link ra ngoài rồi khôi phục về nguyên trạng giữa hai lần kiểm vẫn qua cả hai. Chữa đúng cần đọc bằng handle đã mở, gắn danh tính đã kiểm với byte được diff (cần nhận nội dung qua stdin hoặc tự dựng diff file mới); việc này thêm đường mới trong `runProcess`, chưa làm. Không tuyên bố khe TOCTOU đã vá.
+
+### Installer đóng gói sidecar, thử cài/gỡ NSIS (2026-11-11, Phase 4 giai đoạn A)
+
+- **Đổi:** `apps/desktop/src-tauri/tauri.conf.json` thêm `bundle.resources: {"../../../services/orchestrator/sidecar-dist": "sidecar"}` (ánh xạ cả thư mục). Dạng glob `sidecar-dist/*` đã thử trước và SAI: chỉ chép file, thiếu thư mục `drizzle/` (phát hiện khi cài thử).
+- **Điều kiện:** phải chạy `node scripts/build-sidecar.mjs` trước `pnpm tauri build` (chưa tự động hoá). `sidecar-dist` gồm `node.exe` (bản Node đang chạy lệnh build, 88 MB, chưa ký), `sidecar.mjs`, `better_sqlite3.node`, `drizzle/`.
+- **Đo thật:** installer `Agent Workspace_0.0.0_x64-setup.exe` 25,60 MiB (trước đó 2,42 MiB không có sidecar). Cài im lặng (`/S /D=<thư mục tạm>`, chế độ currentUser): có `agent-studio.exe`, `agent-job-wrap.exe`, `uninstall.exe`, `sidecar/{node.exe,sidecar.mjs,better_sqlite3.node,drizzle/*}`. Selftest bản đã cài, KHÔNG đặt `AGENT_STUDIO_SIDECAR_DIR`: exit 0, `ok=true`, sidecar WAL, task stub `completed`, không còn node/agent-studio dưới thư mục cài sau khi thoát. Gỡ im lặng (`uninstall.exe /S _?=<dir>`): exit 0, không còn mục `Agent Workspace` trong HKCU Uninstall, thư mục sạch (chỉ còn `uninstall.exe` do cờ `_?=`, đã xoá tay).
+- **Chưa làm / NOT_RUN:** installer chưa ký; `node.exe` chưa ký; chưa cài trên máy thứ hai; chưa thử cài đè bản cũ/nâng cấp; chưa thử đường dẫn có dấu cách/Unicode; không xoá dữ liệu người dùng khi gỡ (chưa kiểm hành vi). Codex review cấu hình: không có kết luận (phiên chỉ đọc file repo, không báo vấn đề).
+- `cargo clippy --all-targets -- -D warnings` PASS (exit 0); `cargo test --locked` PASS (24+2+9 test pass, 1 ignored), chạy 2026-11-11 trước khi đổi cấu hình.
+
+### `GitWorktrees.diff`: đọc bằng handle có kiểm danh tính (2026-11-11, Phase 4 giai đoạn A vòng 3)
+
+- **Đã làm (test viết trước, đỏ rồi xanh):** file untracked không còn do git đọc. `readVerified` mở handle, kiểm `insideWorktree` trước, đọc, rồi kiểm lại `insideWorktree` và so `dev/ino` của handle với file đường dẫn đang trỏ tới (`realpath` + `stat`); lệch thì từ chối. Diff file mới tự dựng (`new-file-diff.ts`, dạng `new file mode 100644`, không có dòng `index`; chế độ file luôn 100644). Test mới: hoán đổi sang link ngoài (bắt được) và hoán đổi rồi khôi phục giữa hai lần kiểm (bắt được, vòng trước lọt).
+- **Còn lại (Codex review độc lập, đồng ý về lý thuyết):** kẻ tấn công lật thành link ngoài trước `open`, trả về trong lúc kiểm lần hai, rồi lật ngoài lần nữa trước `realpath/stat` thì danh tính khớp và nội dung ngoài lọt. Đóng hẳn cần xác minh qua chính handle (`GetFinalPathNameByHandle`), Node thuần không có; cần addon native hoặc lệnh Rust, chưa làm. Khe thu hẹp từ "một lần hoán đổi-khôi phục" xuống "ba lần lật trong một đoạn đồng bộ ngắn". Worktree không phải sandbox (CLAUDE.md nguyên tắc 5).
+- **Codex nêu thêm:** file lớn hơn `maxBytes` bị coi là hiển thị đầy đủ. Đối chiếu mã: sai, tổng patch luôn vượt `maxBytes` nên `truncated=true` (test `cuts output beyond maxBytes`).

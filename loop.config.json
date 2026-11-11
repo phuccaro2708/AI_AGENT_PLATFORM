@@ -92,18 +92,7 @@
           "text": "Mọi yêu cầu phê duyệt hiển thị đủ lệnh/đường dẫn; từ chối không làm treo task."
         },
         {
-          "text": "Không có mật khẩu/token nào trong DB, log hoặc diagnostics (test redaction).",
-          "command": "pnpm",
-          "args": [
-            "exec",
-            "vitest",
-            "run",
-            "--no-file-parallelism",
-            "services/orchestrator/src/sidecar-redaction.test.ts",
-            "services/orchestrator/src/sidecar-secret-leak.test.ts",
-            "services/orchestrator/src/sidecar-diagnostics.test.ts",
-            "packages/diagnostics/src/diagnostics.test.ts"
-          ]
+          "text": "Không có mật khẩu/token nào trong DB, log hoặc diagnostics (test redaction)."
         }
       ]
     },

@@ -4,7 +4,7 @@ Cập nhật: 2026-11-10. Loop Runner chạy một tiêu chí có `command`/`arg
 
 Nguyên tắc gắn lệnh: chỉ gắn khi một lệnh có sẵn kiểm chứng ĐÚNG tiêu chí chỉ bằng exit code. Test liên quan lỏng lẻo, test chỉ chạy với agent/CLI giả mà tiêu chí đòi bản thật, hoặc tiêu chí thủ công/E2E/CI thì để trống. Không viết test mới, không nới test.
 
-## Đã gắn lệnh (2 trên 19)
+## Đã gắn lệnh (1 trên 19)
 
 **Phase 3 — Mọi adapter trong gate (Claude, Codex, Ollama) qua cùng bộ contract test**
 
@@ -13,16 +13,9 @@ Nguyên tắc gắn lệnh: chỉ gắn khi một lệnh có sẵn kiểm chứn
 - KHÔNG chứng minh: chỉ CLI/server giả; Ollama thật mới 1 model, 1 lượt (`real-ollama.test.ts` opt-in, không nằm trong lệnh). `agy` ngoài gate (ADR-009). Không phát hiện nếu ai xoá lời gọi contract khỏi một file.
 - Bằng chứng chạy 2026-11-10 (serial): 3 lần exit 0, 18-21 s, 3 file, 74 test pass.
 
-**Phase 7 — Không có mật khẩu/token trong DB, log hoặc diagnostics (test redaction)**
+**Phase 7 — Không có mật khẩu/token trong DB, log hoặc diagnostics (test redaction): đã BỎ ràng buộc (2026-11-10, người dùng quyết).** Lý do: các test redaction chỉ che giá trị chính xác đã đăng ký (xem `docs/SECURITY.md`), PASS của chúng không chứng minh tiêu chí; ROADMAP chưa tick mục này. Các test vẫn chạy trong gate `pnpm test`.
 
-- Lệnh: `pnpm exec vitest run --no-file-parallelism services/orchestrator/src/sidecar-redaction.test.ts services/orchestrator/src/sidecar-secret-leak.test.ts services/orchestrator/src/sidecar-diagnostics.test.ts packages/diagnostics/src/diagnostics.test.ts`
-- Chứng minh: secret đã đăng ký bị che trong DB, log, phản hồi IPC, sự kiện đẩy ra, `artifacts.diff` và gói diagnostics; gói mở được và khớp manifest.
-- KHÔNG chứng minh: che theo giá trị chính xác (không bắt secret chưa đăng ký, giá trị dưới 6 ký tự; xem `docs/SECURITY.md`); chưa kiểm secret thật trong bundle thật. ROADMAP vẫn chưa tick mục này.
-- Bằng chứng chạy 2026-11-10 (serial): 3 lần exit 0, 36-39 s, 4 file, 19 test pass.
-
-Phase 7 không thể đóng chỉ nhờ lệnh này: hai tiêu chí còn lại không có lệnh.
-
-## Để trống (17) và lý do
+## Để trống (18) và lý do
 
 | Phase | Tiêu chí                                                 | Lý do không gắn                                                                                                                                           | Việc còn thiếu                                             |
 | ----- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
@@ -33,6 +26,7 @@ Phase 7 không thể đóng chỉ nhờ lệnh này: hai tiêu chí còn lại k
 | 4     | Không còn lỗ hổng Critical/High chưa xử lý               | Không có lệnh offline quyết định được; `pnpm audit` cần mạng và không phủ hết.                                                                            | Review bảo mật độc lập + audit CI.                         |
 | 7     | Người dùng mới từ cài đặt đến chạy task thật             | Kịch bản E2E chưa có (Playwright chưa có, installer BLOCKED).                                                                                             | Kịch bản E2E (thiếu test).                                 |
 | 7     | Phê duyệt hiển thị đủ lệnh/đường dẫn; từ chối không treo | `approvals.test.ts` chỉ kiểm nửa "từ chối" ở tầng dịch vụ; phần "hiển thị" nằm trong UI Tauri, chưa có test.                                              | Test UI (thiếu test).                                      |
+| 7     | Không có mật khẩu/token trong DB, log hoặc diagnostics   | Test redaction chỉ che giá trị đã đăng ký chính xác; PASS không chứng minh tiêu chí (người dùng quyết bỏ ràng buộc 2026-11-10).                           | Test bắt secret chưa đăng ký / bundle thật (thiếu test).   |
 | 5     | Approval, cancel, retry, diff, logs nhất quán            | Tiêu chí UI xuyên suốt, không test nào bao phủ.                                                                                                           | E2E UI (thiếu test).                                       |
 | 5     | Fresh install / upgrade / uninstall smoke test           | Cần installer thật; máy không có NSIS/WiX (BLOCKED).                                                                                                      | Smoke test trên máy sạch.                                  |
 | 6     | Toàn bộ bảng Production acceptance                       | Bảng nhiều nhóm gồm packaging, UI; cần chứng cứ thủ công/CI.                                                                                              | Chạy bảng nghiệm thu.                                      |
@@ -51,7 +45,7 @@ Phase 7 không thể đóng chỉ nhờ lệnh này: hai tiêu chí còn lại k
 | ----- | ---- | ------- | -------- |
 | 3     | 3    | 1       | 2        |
 | 4     | 3    | 0       | 3        |
-| 7     | 3    | 1       | 2        |
+| 7     | 3    | 0       | 3        |
 | 5     | 2    | 0       | 2        |
 | 6     | 1    | 0       | 1        |
 | 8     | 3    | 0       | 3        |

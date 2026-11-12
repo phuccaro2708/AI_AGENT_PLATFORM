@@ -13,7 +13,7 @@ Phạm vi (chốt 2026-11-11, ADR-010): **công cụ cá nhân**, một người
 ## Việc tiếp theo
 
 1. **Dùng thật mỗi ngày.** Chạy `tauri dev`, giao 5–10 task thật cho cả hai CLI, ghi lại chỗ vướng vào `docs/TODO.md`. Mọi việc sau đây xếp lại theo những gì bước này tìm ra.
-2. **Kiểm quyền ghi của task đơn với CLI thật.** Task đơn chạy `workspace-write` thẳng trong thư mục dự án (ADR-010); mới chỉ kiểm bằng adapter giả.
+2. **Quyết định quyền ghi của task đơn `codex`.** Đã đo bằng CLI thật (2026-11-12): `claude` ở lại trong thư mục dự án, `codex` thì không. Chọn cách xử lý trong `docs/TODO.md`.
 3. **Gỡ tiếp phần đã thành thừa** (danh sách trong `docs/TODO.md`): approvals, tuỳ chọn không còn ai dùng, chú thích cũ.
 4. **Giao diện.** Chỉ sửa những gì bước 1 cho thấy gây khó dùng.
 

@@ -711,5 +711,6 @@ Chạy adapter thật (`packages/adapter-*/dist`) trên một thư mục tạm c
 
 - `claude` (`--tools Read,Grep,Glob,Edit,Write --permission-mode acceptEdits`): tạo `inside.txt`; **từ chối** ghi `outside/escape.txt` (CLI báo đường dẫn nằm ngoài thư mục làm việc, chưa được cấp quyền). Không có file nào trong `outside/`.
 - `codex` (`exec -s workspace-write`): tạo **cả hai** file. Trên máy này `-s workspace-write` không giữ codex trong cwd, khớp với quan sát cũ rằng `-s read-only` vẫn ghi được trong cwd.
+- Đo lại cùng ngày với `outside/` đặt **ngoài cả cwd lẫn `%TEMP%`** (một thư mục bị `.gitignore` bỏ qua trong repo, xoá sau khi đo), để tránh bẫy ở mục d (`workspace-write` coi `%TEMP%` là ghi được): `codex` vẫn tạo `escape.txt`. Kết quả này khác hàng "ghi file NGOÀI cwd và ngoài `%TEMP%`" ở mục d; hàng đó đo qua `codex app-server` (đã gỡ), còn app hiện gọi `codex exec`. Chưa biết vì sao hai đường khác nhau.
 - Hệ quả: task đơn giao cho `codex` có thể ghi bất cứ đâu người dùng ghi được. Peer Review vẫn phát hiện reviewer ghi file trong worktree (so trước/sau), nhưng không thấy file ghi ra ngoài worktree. Đây là rủi ro ADR-002/ADR-010 đã chấp nhận; nay có số đo.
 - Chưa kiểm: nguyên nhân (sandbox Windows của codex chưa bật hay không hỗ trợ), cấu hình codex nào bật được nó, macOS/Linux.

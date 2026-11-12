@@ -5,9 +5,8 @@ Việc còn mở, xếp theo thứ tự nên làm. Xong việc nào thì xoá d�
 ## Cần làm trước
 
 - [ ] Trong app thật, giao một task đơn cho `codex` (đã chạy: task đơn `claude` và lượt `claude` viết + `codex` review, 2026-11-12).
-- [ ] Kiểm với CLI thật: task đơn giờ chạy `workspace-write` ngay trong thư mục dự án (không có worktree). Xác nhận `claude` và `codex` sửa được file và không ghi ra ngoài thư mục đó.
+- [ ] Quyết định với task đơn giao cho `codex`: đo 2026-11-12 cho thấy `codex exec -s workspace-write` ghi được ra ngoài thư mục dự án (kể cả ngoài `%TEMP%`); `claude` thì không. Chọn: chấp nhận như ADR-010, chỉ cho codex chạy trong worktree, hoặc tìm cấu hình sandbox của codex chặn được (`docs/ASSUMPTIONS.md`, mục "Phạm vi ghi của task đơn").
 - [ ] Chạy `scripts/batch-review.mjs` với một task nhỏ bằng CLI thật (vòng worktree → commit → review chưa chạy lần nào).
-- [ ] Điều tra test Rust `job_wrap::timeout_kills_the_tree_and_exits_124` (đỏ 2026-11-11) và hai test Job Object phía Node từng đỏ rồi tự xanh.
 
 ## Phần đã thành thừa, có thể gỡ tiếp
 
@@ -23,6 +22,6 @@ Việc còn mở, xếp theo thứ tự nên làm. Xong việc nào thì xoá d�
 
 ## Nợ kỹ thuật đã biết
 
-- [ ] `project-policy`: đường dẫn UNC kiểu administrative share lọt qua luật chặn thư mục hệ thống (2 test `it.fails` trong `sidecar-security.test.ts`).
-- [ ] Hai cảnh báo `pnpm audit` mức moderate (dev-only) và hai cảnh báo `cargo audit` (chỉ vào qua GTK trên Linux).
+- [ ] Hai cảnh báo `pnpm audit` mức moderate (dev-only: esbuild qua drizzle-kit, minimatch qua eslint) và hai cảnh báo `cargo audit` (proc-macro-error không còn bảo trì, glib chỉ vào qua GTK trên Linux). Kiểm lại 2026-11-12: không có mức high/critical.
+- [ ] `cargo fmt --check` báo khác biệt có sẵn trong `apps/desktop/src-tauri/src/lib.rs` (không nằm trong gate hay CI).
 - [ ] Nút Browse…, Settings, theme, bố cục hẹp chưa kiểm trong app Tauri thật.

@@ -16,7 +16,9 @@ Cập nhật 2026-11-12. File này chỉ ghi trạng thái hiện tại; lịch 
 - `pnpm test`: 649 đạt, 5 lỗi đã biết trước (`it.fails`), 1 bỏ qua, 0 đỏ.
 - `cargo clippy`, `cargo test`: không chạy lại đợt này (không đụng `src-tauri`). Lần chạy 2026-11-11: clippy đạt; `cargo test --locked` có 1 ca đỏ, `job_wrap::timeout_kills_the_tree_and_exits_124`. Nhóm test Job Object đã chập chờn từ trước đợt này; chưa điều tra.
 - Ô soạn gộp đã kiểm trên bản xem trước Vite (preview sidecar giả): chọn reviewer thì nút thành "Run with review", ẩn Preset, khoá Auto; không lỗi console. Chưa bấm chạy thật.
-- Chưa kiểm: chạy app thật (`tauri dev`) sau khi gỡ; chạy `claude`/`codex` thật không qua cổng quyền.
+- App thật (`tauri dev`, 2026-11-12) trên một repo demo: task đơn `claude` (Review None) sửa đúng file trong thư mục dự án, trạng thái completed. Lượt có reviewer (`claude` viết, `codex` review) chạy trong worktree riêng, codex trả approve ở vòng 1, workflow completed, diff hiện trong app; checkout chính không đổi, thay đổi nằm chưa commit trong worktree.
+- Chạy dev cần `AGENT_STUDIO_SIDECAR_DIR` trỏ tới `services/orchestrator/sidecar-dist` (build bằng `node scripts/build-sidecar.mjs`). Mở thẳng `agent-studio.exe` không có biến này thì app báo "The background service could not start".
+- Chưa kiểm: task đơn giao cho `codex`; agent có ghi ra ngoài thư mục dự án hay không.
 
 ## Việc kế tiếp
 

@@ -1,12 +1,9 @@
 # AGENTS.md — Agent Workspace
 
-Codex and other agents working in this repository follow [`CLAUDE.md`](CLAUDE.md) (mandatory principles, workflow, gates). Do not duplicate it here.
+Codex và các agent khác làm việc trong repo này theo [`CLAUDE.md`](CLAUDE.md). Không lặp lại nội dung ở đây.
 
-Key points for delegated tasks:
-
-- Work only inside the files the task allows; report anything outside as a blocker.
-- Spawn processes with an argument array and `shell: false`. Never build shell strings from prompts.
-- A git worktree is not a security sandbox. Unverifiable side effects → `needs_reconciliation`, no blind retry.
-- No secrets, personal paths or tokens in code, logs or reports. No `git push`, no PRs, no new dependencies.
-- Gate before "done": `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build`. Report PASS/FAIL/BLOCKED/NOT_RUN from real output.
-- Role definitions live in `.codex/agents/` (`explorer`, `implementer`, `test-engineer`, `security-reviewer`).
+- Đang ở đâu: `docs/HANDOFF.md`. Làm gì tiếp: `docs/ROADMAP.md`, `docs/TODO.md`. Đối chiếu với nhánh và HEAD trước khi tin tài liệu.
+- Review và audit mặc định chỉ đọc. Khi người dùng yêu cầu tạo/sửa file thì làm trong đúng phạm vi đó; quyền ghi file không bao gồm xoá, cài đặt, commit, push.
+- Spawn process bằng argument array, `shell: false`. Git worktree không phải sandbox.
+- Không secrets, đường dẫn cá nhân hay token trong mã, log, báo cáo. Không `git push`, không PR, không dependency mới.
+- Gate trước khi báo xong: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build`. Báo PASS/FAIL/NOT_RUN theo kết quả thật.

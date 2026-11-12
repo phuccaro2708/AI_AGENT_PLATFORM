@@ -69,6 +69,14 @@ export function checkProjectRoot(raw: string, ctx: RootPolicyContext): RootCheck
   }
   const path = canonicalRoot(input);
   if (path === undefined) return { ok: false, reason: `The folder cannot be read: ${input}` };
+  // A UNC spelling (`\\host\share`, `\\localhost\C$\...`, `\\?\UNC\...`) of a local folder does not start with its
+  // drive letter, so the system-folder and home-folder comparisons below would not match it. Refuse UNC roots.
+  if (WIN && (/^[\\/]{2}/.test(input) || /^[\\/]{2}/.test(path))) {
+    return {
+      ok: false,
+      reason: "Network (UNC) paths cannot be a project folder; use a local drive path",
+    };
+  }
 
   if (key(parse(path).root) === key(path)) {
     return {

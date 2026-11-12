@@ -23,6 +23,17 @@ export class WorktreeDirtyError extends Error {
   }
 }
 
+/** The repo's own config defines a filter driver (smudge/clean/process) that git would run on its files. */
+export class UntrustedGitConfigError extends Error {
+  constructor(readonly drivers: readonly string[]) {
+    super(
+      `Repository config defines filter driver(s) that run commands: ${drivers.join(", ")}. ` +
+        "List a driver in allowFilters only if you trust it.",
+    );
+    this.name = "UntrustedGitConfigError";
+  }
+}
+
 export class PathTooLongError extends Error {
   constructor(
     readonly path: string,
@@ -42,6 +53,11 @@ export interface GitWorktreesOptions {
   gitCommand?: string;
   /** Refuse to create a worktree whose path is longer than this. Default 200 (Windows MAX_PATH is 260). */
   maxPathLength?: number;
+  /**
+   * Filter drivers (e.g. `lfs`) the repo config may define. Any other `filter.<name>.smudge|clean|process`
+   * from repo-controlled config makes create/status/diff throw `UntrustedGitConfigError`.
+   */
+  allowFilters?: readonly string[];
 }
 
 export interface WorktreeInfo {
@@ -108,6 +124,19 @@ function shorten(id: string): string {
   return (tail || safe || "x").slice(-12);
 }
 
+/**
+ * Prepended to every git call (T19, probed in docs/ASSUMPTIONS.md): a repo's own `.git/config` can point
+ * `core.hooksPath` at scripts and `core.fsmonitor` at a command, and git runs both during worktree add,
+ * status, diff and branch/ref updates. `-c` outranks repo config. Filter drivers and `diff.*.textconv` cannot
+ * be neutralised by name, so they are handled by `--no-textconv` and the `allowFilters` guard.
+ */
+const HARDENING_ARGS: readonly string[] = [
+  "-c",
+  `core.hooksPath=${process.platform === "win32" ? "NUL" : "/dev/null"}`,
+  "-c",
+  "core.fsmonitor=false",
+];
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -120,12 +149,33 @@ export class GitWorktrees {
   private readonly baseDir: string;
   private readonly gitCommand: string;
   private readonly maxPathLength: number;
+  private readonly allowFilters: ReadonlySet<string>;
 
   constructor(opts: GitWorktreesOptions) {
     this.repoRoot = opts.repoRoot;
     this.baseDir = opts.baseDir;
     this.gitCommand = opts.gitCommand ?? "git";
     this.maxPathLength = opts.maxPathLength ?? 200;
+    this.allowFilters = new Set(opts.allowFilters ?? []);
+  }
+
+  /** Throws when repo-controlled config defines a command-running filter driver that is not allowed. */
+  private async assertNoUntrustedFilters(cwd: string): Promise<void> {
+    const pattern = "^filter\\..*\\.(smudge|clean|process)$";
+    const r = await this.run(
+      ["config", "--show-scope", "--name-only", "--get-regexp", pattern],
+      cwd,
+    );
+    if (r.exitCode === 1) return; // no match
+    if (r.exitCode !== 0) throw new GitError(["config"], r.exitCode, r.stderr);
+    const bad = new Set<string>();
+    for (const line of r.stdout.split(/\r?\n/)) {
+      const [scope, key] = line.split("\t");
+      if (!key || scope === "system" || scope === "global") continue; // user-owned, not repo-controlled
+      const name = key.slice("filter.".length, key.lastIndexOf("."));
+      if (!this.allowFilters.has(name)) bad.add(name);
+    }
+    if (bad.size > 0) throw new UntrustedGitConfigError([...bad].sort());
   }
 
   branchName(workflowId: string, taskId: string): string {
@@ -146,6 +196,7 @@ export class GitWorktrees {
     if (path.length > this.maxPathLength) throw new PathTooLongError(path, this.maxPathLength);
     const branch = this.branchName(opts.workflowId, opts.taskId);
     const baseRef = opts.baseRef ?? "HEAD";
+    await this.assertNoUntrustedFilters(this.repoRoot);
     const baseSha = (await this.git(["rev-parse", "--verify", `${baseRef}^{commit}`])).trim();
     await this.git(["worktree", "add", "-b", branch, path, baseSha]);
     return { path, branch, baseRef, baseSha };
@@ -171,6 +222,7 @@ export class GitWorktrees {
   }
 
   async status(path: string): Promise<WorktreeStatus> {
+    await this.assertNoUntrustedFilters(path);
     const out = await this.git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], path);
     const parts = out.split("\0");
     const files: WorktreeStatus["files"] = [];
@@ -190,12 +242,24 @@ export class GitWorktrees {
    */
   async diff(path: string, opts: { maxBytes?: number } = {}): Promise<WorktreeDiff> {
     const maxBytes = opts.maxBytes ?? 200_000;
-    const parts = [await this.git(["diff", "HEAD", "--no-color", "--no-ext-diff"], path)];
+    await this.assertNoUntrustedFilters(path);
+    const parts = [
+      await this.git(["diff", "HEAD", "--no-color", "--no-ext-diff", "--no-textconv"], path),
+    ];
     for (const f of (await this.status(path)).files) {
       if (f.code !== "??") continue;
       // --no-index exits 1 when the files differ, which is the expected case here.
       const r = await this.run(
-        ["diff", "--no-index", "--no-color", "--", "/dev/null", f.path],
+        [
+          "diff",
+          "--no-index",
+          "--no-color",
+          "--no-ext-diff",
+          "--no-textconv",
+          "--",
+          "/dev/null",
+          f.path,
+        ],
         path,
       );
       if (r.exitCode !== 0 && r.exitCode !== 1) throw new GitError(["diff"], r.exitCode, r.stderr);
@@ -266,7 +330,7 @@ export class GitWorktrees {
   private async run(args: readonly string[], cwd: string) {
     const r = await runProcess({
       command: this.gitCommand,
-      args,
+      args: [...HARDENING_ARGS, ...args],
       cwd,
       env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
       timeoutMs: 60_000,

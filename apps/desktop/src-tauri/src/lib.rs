@@ -5,7 +5,7 @@ mod sidecar;
 use serde::Serialize;
 use serde_json::{json, Value};
 use sidecar::Sidecar;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{Emitter, Manager, RunEvent};
@@ -38,6 +38,28 @@ fn sidecar_dir() -> Result<PathBuf, String> {
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     Ok(exe.parent().ok_or("exe has no parent")?.join("sidecar"))
+}
+
+/// Absolute path of the `agent-job-wrap` binary the installer places next to the app exe
+/// (`AGENT_STUDIO_JOB_WRAP_BIN` overrides it for development). `None` when it is not there, so a
+/// missing file never blocks the sidecar from starting. Pure location lookup: whether the sidecar
+/// uses it is a separate opt-in (ADR-002: the wrapper is not a sandbox).
+fn job_wrap_path() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok();
+    resolve_job_wrap(
+        std::env::var("AGENT_STUDIO_JOB_WRAP_BIN").ok().as_deref(),
+        exe.as_deref(),
+    )
+}
+
+fn resolve_job_wrap(override_path: Option<&str>, exe: Option<&Path>) -> Option<PathBuf> {
+    let candidate = match override_path.filter(|p| !p.is_empty()) {
+        Some(p) => PathBuf::from(p),
+        None => exe?
+            .parent()?
+            .join(if cfg!(windows) { "agent-job-wrap.exe" } else { "agent-job-wrap" }),
+    };
+    (candidate.is_absolute() && candidate.is_file()).then_some(candidate)
 }
 
 fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -89,6 +111,75 @@ fn is_allowed(method: &str) -> bool {
     ALLOWED_METHODS.contains(&method)
 }
 
+/// Decisions a hijacked webview must not be able to make on its own. Each one is
+/// confirmed in a native dialog the shell opens, showing text the *sidecar* writes from its own
+/// database; only on "Allow" does the shell forward the call. All of these are also in
+/// `ALLOWED_METHODS`: being callable by the UI and being confirmed outside it are separate checks.
+/// `agents.setSettings` is here because it chooses the executable the sidecar later launches;
+/// `agents.probe` is here because it already RUNS a webview-chosen executable (`--version`/`--help`),
+/// with the provider's secrets in its environment, before anything is saved.
+const CONFIRMED_METHODS: &[&str] = &[
+    "approvals.resolve",
+    "recovery.resolve",
+    "tasks.resolveReconciliation",
+    "agents.setSettings",
+    "agents.probe",
+];
+
+/// Internal read-only request the shell sends the sidecar to get the dialog text. Not in
+/// `ALLOWED_METHODS`, so the webview cannot call it (and cannot choose what the dialog says).
+const DESCRIBE_METHOD: &str = "confirm.describe";
+
+fn needs_confirmation(method: &str) -> bool {
+    CONFIRMED_METHODS.contains(&method)
+}
+
+/// Longest dialog text the shell will show. The sidecar keeps its text well under this.
+const MAX_DIALOG_CHARS: usize = 2000;
+
+/// The shell never shortens what the person confirms: text over the bound is refused (fail closed).
+fn within_limit(text: &str) -> bool {
+    text.chars().count() <= MAX_DIALOG_CHARS
+}
+
+/// The confirmation flow, with the three side effects injected so it can be tested without a
+/// sidecar or a window: ask the sidecar to describe the call, ask the person, and only on a yes
+/// forward the *same* call. Fails closed: a missing or empty description, a sidecar error or a
+/// "no" means nothing is forwarded.
+fn confirmed_call(
+    describe: impl FnOnce() -> Result<Value, String>,
+    confirm: impl FnOnce(&str, &str) -> bool,
+    forward: impl FnOnce() -> Result<Value, String>,
+) -> Result<Value, String> {
+    let d = describe()?;
+    let title = d["title"].as_str().filter(|t| !t.trim().is_empty());
+    let message = d["message"].as_str().filter(|m| !m.trim().is_empty());
+    let (Some(title), Some(message)) = (title, message) else {
+        return Err("the sidecar gave no text to confirm; nothing was done".into());
+    };
+    if !within_limit(title) || !within_limit(message) {
+        return Err("the text to confirm is too long to show safely; nothing was done".into());
+    }
+    if !confirm(title, message) {
+        return Err("declined in the confirmation dialog; nothing was done".into());
+    }
+    forward()
+}
+
+/// Opens the native Allow/Deny dialog (blocks until answered). Runs off the UI thread.
+fn native_confirm(app: &tauri::AppHandle, title: &str, message: &str) -> bool {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+    app.dialog()
+        .message(message)
+        .title(title)
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            "Allow".to_string(),
+            "Deny".to_string(),
+        ))
+        .blocking_show()
+}
+
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const STUB_TIMEOUT: Duration = Duration::from_secs(60);
 /// Tauri event carrying every server-pushed sidecar event (`task.message`, `task.state`).
@@ -109,6 +200,7 @@ fn ensure_sidecar(app: &tauri::AppHandle, state: &SidecarState) -> Result<Arc<Si
         &db,
         &log,
         secrets::env_for_sidecar(),
+        job_wrap_path().as_deref(),
         move |ev| {
             let _ = handle.emit(SIDECAR_EVENT, ev);
         },
@@ -143,7 +235,22 @@ async fn sidecar_call(
     if !is_allowed(&method) {
         return Err(format!("method not allowed: {method}"));
     }
-    call(&app, &state, &method, params, REQUEST_TIMEOUT).await
+    if !needs_confirmation(&method) {
+        return call(&app, &state, &method, params, REQUEST_TIMEOUT).await;
+    }
+    let sidecar = ensure_sidecar(&app, &state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        confirmed_call(
+            || {
+                let args = json!({ "method": &method, "params": &params });
+                sidecar.request(DESCRIBE_METHOD, Some(args), REQUEST_TIMEOUT)
+            },
+            |title, message| native_confirm(&app, title, message),
+            || sidecar.request(&method, params.clone(), REQUEST_TIMEOUT),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -339,6 +446,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn job_wrap_resolves_next_to_exe_and_only_when_present() {
+        let dir = std::env::temp_dir().join(format!("as-jw-resolve-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("agent-studio.exe");
+        assert_eq!(resolve_job_wrap(None, Some(&exe)), None, "missing file");
+        let name = if cfg!(windows) { "agent-job-wrap.exe" } else { "agent-job-wrap" };
+        std::fs::write(dir.join(name), b"x").unwrap();
+        let found = resolve_job_wrap(None, Some(&exe)).expect("sibling");
+        assert!(found.is_absolute() && found.ends_with(name));
+        // An override wins; a relative or missing override is refused (no silent fallback).
+        assert_eq!(resolve_job_wrap(Some("rel/agent-job-wrap"), Some(&exe)), None);
+        assert_eq!(resolve_job_wrap(Some(dir.join("nope").to_str().unwrap()), Some(&exe)), None);
+        let own = dir.join(name);
+        assert_eq!(resolve_job_wrap(own.to_str(), None), Some(own));
+        assert_eq!(resolve_job_wrap(None, None), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn only_ui_methods_are_allowed() {
         assert!(is_allowed("workflows.start") && is_allowed("logs.query"));
         for m in [
@@ -372,9 +498,121 @@ mod tests {
             "Health",
             "agents",
             "system.activeTasks",
+            "confirm.describe",
         ] {
             assert!(!is_allowed(m), "{m:?}");
         }
+    }
+
+    #[test]
+    fn sensitive_methods_are_confirmed_and_the_describe_call_is_not_reachable() {
+        for m in [
+            "approvals.resolve",
+            "recovery.resolve",
+            "tasks.resolveReconciliation",
+            "agents.setSettings",
+            "agents.probe",
+        ] {
+            assert!(needs_confirmation(m) && is_allowed(m), "{m:?}");
+        }
+        for m in ["approvals.list", "tasks.cancel", "recovery.inspect", "health", ""] {
+            assert!(!needs_confirmation(m), "{m:?}");
+        }
+        // The webview must not be able to call the describe request (it would choose the text).
+        assert!(!is_allowed(DESCRIBE_METHOD));
+        // Every confirmed method is callable by the UI at all (otherwise the list is dead weight).
+        assert!(CONFIRMED_METHODS.iter().all(|m| is_allowed(m)));
+    }
+
+    fn described() -> Result<Value, String> {
+        Ok(json!({ "title": "Approve?", "message": "Task t1 wants to run a command" }))
+    }
+
+    #[test]
+    fn a_yes_forwards_the_call_after_showing_the_sidecar_text() {
+        let mut shown = None;
+        let r = confirmed_call(
+            described,
+            |t, m| {
+                shown = Some((t.to_string(), m.to_string()));
+                true
+            },
+            || Ok(json!({ "resolved": true })),
+        );
+        assert_eq!(r, Ok(json!({ "resolved": true })));
+        assert_eq!(
+            shown,
+            Some(("Approve?".into(), "Task t1 wants to run a command".into()))
+        );
+    }
+
+    #[test]
+    fn a_no_forwards_nothing() {
+        let mut forwarded = false;
+        let r = confirmed_call(
+            described,
+            |_, _| false,
+            || {
+                forwarded = true;
+                Ok(json!({}))
+            },
+        );
+        assert!(r.unwrap_err().contains("declined"));
+        assert!(!forwarded);
+    }
+
+    #[test]
+    fn no_description_means_no_dialog_and_no_forward() {
+        for bad in [
+            Err("Unknown approval: a1".to_string()),
+            Ok(json!({})),
+            Ok(json!({ "title": "t" })),
+            Ok(json!({ "title": "t", "message": "   " })),
+            Ok(json!({ "title": 1, "message": "m" })),
+        ] {
+            let mut asked = false;
+            let mut forwarded = false;
+            let r = confirmed_call(
+                || bad,
+                |_, _| {
+                    asked = true;
+                    true
+                },
+                || {
+                    forwarded = true;
+                    Ok(json!({}))
+                },
+            );
+            assert!(r.is_err());
+            assert!(!asked && !forwarded);
+        }
+    }
+
+    #[test]
+    fn a_forward_error_is_returned_as_is() {
+        let r = confirmed_call(described, |_, _| true, || Err("Approval has expired".into()));
+        assert_eq!(r, Err("Approval has expired".to_string()));
+    }
+
+    #[test]
+    fn over_long_text_is_refused_not_clipped() {
+        let long = "x".repeat(MAX_DIALOG_CHARS + 1);
+        let mut asked = false;
+        let mut forwarded = false;
+        let r = confirmed_call(
+            || Ok(json!({ "title": "t", "message": long })),
+            |_, _| {
+                asked = true;
+                true
+            },
+            || {
+                forwarded = true;
+                Ok(json!({}))
+            },
+        );
+        assert!(r.unwrap_err().contains("too long"));
+        assert!(!asked && !forwarded);
+        assert!(within_limit(&"x".repeat(MAX_DIALOG_CHARS)));
     }
 
     #[test]

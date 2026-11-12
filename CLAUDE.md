@@ -1,48 +1,60 @@
 # CLAUDE.md — Agent Workspace
 
-Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy đủ: `docs/ARCHITECTURE.md`. Kế hoạch: `docs/ROADMAP.md`, việc cần làm: `docs/TODO.md`.
+Công cụ desktop cá nhân (Windows, chạy cục bộ) để giao việc cho Claude Code và Codex. Một người dùng, một máy. Phạm vi và lý do: `docs/DECISIONS.md` ADR-010.
 
-## Stack (đã chốt)
+## Bản đồ
 
-- Desktop: Tauri 2 + Rust + React + TypeScript + Vite; Tailwind/shadcn + Zustand + TanStack Query (kế hoạch Phase 7D, chưa có)
-- Orchestrator: Node.js LTS + TypeScript, Zod, SQLite (WAL) + Drizzle ORM, Pino, Vitest; Playwright (kế hoạch, chưa có)
-- Monorepo: pnpm workspace (`apps/`, `services/`, `packages/`, `tests/`, `docs/`)
-- KHÔNG dùng PostgreSQL, Redis, Kafka, Docker, Kubernetes làm thành phần bắt buộc.
+Định vị trước: `git status --short --branch`, `git rev-parse HEAD`. Tài liệu chỉ là chỉ mục; mã nguồn và kết quả chạy tại HEAD mới là bằng chứng.
 
-## Nguyên tắc bắt buộc
+```text
+AI_AGENT_PLATFORM/
+├─ CLAUDE.md, AGENTS.md         Quy tắc làm việc.
+├─ docs/
+│  ├─ HANDOFF, ROADMAP, TODO    Đang ở đâu, làm gì tiếp, việc còn mở.
+│  ├─ DECISIONS                 Quyết định còn hiệu lực (ADR-001, 002, 010).
+│  ├─ ARCHITECTURE, PROTOCOL, DATABASE   Thiết kế.
+│  └─ SECURITY, ASSUMPTIONS, REFERENCES  Giới hạn bảo mật, kết quả probe CLI, nguồn tham khảo.
+├─ apps/desktop/src             React UI và cầu nối tới sidecar.
+├─ apps/desktop/src-tauri       Vỏ Rust: IPC allowlist, secrets, Job Object.
+├─ services/orchestrator/src    Sidecar: scheduler, Peer Review, recovery, approvals.
+├─ packages/
+│  ├─ contracts, agent-core     Schema Zod và giao ước adapter.
+│  ├─ adapter-claude, adapter-codex, cli-probe   Hai CLI và phát hiện CLI.
+│  ├─ process-manager, git-worktrees             Tiến trình và worktree (không phải sandbox).
+│  └─ storage, diagnostics, shared-utils         SQLite, gói chẩn đoán, tiện ích.
+├─ tests/                       Contract test, fixtures, soak.
+└─ scripts/                     Build sidecar, secret scan.
+```
 
-1. Native CLI first: dùng CLI/SDK/app-server chính thức của Claude Code, Codex (và các CLI khác như Antigravity `agy` sau khi probe thật); không viết lại khả năng của chúng.
-2. Không bịa capability của CLI. Mọi giả định chưa kiểm chứng phải ghi vào `docs/ASSUMPTIONS.md` và có compatibility probe.
-3. Spawn process bằng argument array, `shell: false`. Không nối prompt vào chuỗi shell.
-4. Frontend không gọi CLI trực tiếp; mọi thứ đi qua backend có policy/approval.
-5. Git worktree KHÔNG phải sandbox bảo mật; không tuyên bố ngược lại.
-6. Task có side effect không xác minh được → `needs_reconciliation`, không tự retry.
-7. Không commit secrets, đường dẫn máy cá nhân, log chứa token. Secrets → OS credential store.
-8. Không sửa file ngoài repo; không cài global dependency âm thầm.
-9. Không gọi message bus nội bộ là "A2A-compatible" nếu chưa qua compatibility test.
-10. Mỗi phase chỉ đóng khi đạt acceptance criteria trong `docs/ROADMAP.md`; ghi báo cáo `docs/PHASEn_REPORT.md` với lệnh đã chạy và kết quả thật. Thứ tự phase hiện hành: `docs/DECISIONS.md#adr-005-thứ-tự-phase-chốt-lại-2026-11-04` (Phase 4 Policy Engine đứng trước khi đóng Phase 7).
+Thêm/bớt một method IPC phải sửa 4 chỗ: schema trong `packages/contracts/src/index.ts`, `case` trong `services/orchestrator/src/sidecar.ts`, `ALLOWED_METHODS` (và test của nó) trong `apps/desktop/src-tauri/src/lib.rs`, stub trong `apps/desktop/src/preview-sidecar.ts`.
 
-## Quy trình làm việc
+## Stack
 
-- Nhánh phát triển do phiên làm việc chỉ định; commit nhỏ, message rõ ràng. Không tạo PR nếu chưa được yêu cầu.
-- Trước khi coi là xong: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build`.
+- Desktop: Tauri 2 + Rust + React + TypeScript + Vite.
+- Sidecar: Node.js LTS + TypeScript, Zod, SQLite (WAL) + Drizzle, Pino, Vitest.
+- Monorepo pnpm. Không dùng PostgreSQL, Redis, Kafka, Docker, Kubernetes.
 
-### Tự động hoá commit / merge / đối chiếu nhánh
+## Nguyên tắc
 
-Được làm không cần hỏi lại, theo đúng các giới hạn dưới đây:
+1. Xoá trước, đơn giản hoá sau, tối ưu sau nữa, tự động hoá cuối cùng. Không thêm lớp, gói, tài liệu hay quy trình mới khi chưa có nhu cầu thật từ việc dùng app.
+2. Dùng CLI chính thức của Claude Code và Codex; không viết lại khả năng của chúng (kể cả hệ thống quyền).
+3. Không bịa capability của CLI. Điều chưa kiểm ghi vào `docs/ASSUMPTIONS.md`.
+4. Spawn process bằng argument array, `shell: false`. Không nối prompt vào chuỗi shell.
+5. Frontend không gọi CLI trực tiếp; mọi thứ đi qua sidecar.
+6. Git worktree không phải sandbox bảo mật; không tuyên bố ngược lại.
+7. Task có side effect không xác minh được → `needs_reconciliation`, không tự retry.
+8. Không commit secrets, đường dẫn máy cá nhân, log chứa token. Không sửa file ngoài repo; không cài global dependency âm thầm.
 
-- **Tự commit**: khi một đơn vị công việc xong và gate liên quan đã chạy (ít nhất `eslint`, `prettier --check`, `pnpm typecheck` và test của phần đã đổi), commit nhỏ với message conventional. Chỉ `git add` đúng file thuộc thay đổi, không `git add -A`; không commit secrets, đường dẫn máy cá nhân, file tạm. Không `--no-verify`, không amend commit đã push.
-- **Tự đối chiếu trước khi merge**: với mỗi nhánh ứng viên, chạy `git rev-list --count <chính>..<nhánh>` (ahead/behind), `git cherry <chính> <nhánh>` (commit chưa có theo nội dung) và `git diff --stat $(git merge-base …)`. Nhánh 0 commit riêng thì coi là đã ghép. Nhánh cũ tụt xa (hàng trăm commit) hoặc viết lại phần mà nhánh chính đã tiến hoá thì KHÔNG merge, báo người dùng và để họ quyết.
-- **Tự merge (cục bộ)**: chỉ merge nhánh đã đối chiếu và có commit riêng hợp lệ, bằng `git merge --no-ff`. Xung đột chỉ ở file nối-thêm như `docs/PROGRESS.md`/`docs/ASSUMPTIONS.md` thì giữ cả hai phía; xung đột ở mã thì dừng và báo. Sau mỗi lần merge có đổi mã phải chạy lại gate (lint, format, typecheck, test, build; thêm `cargo clippy --all-targets -- -D warnings` và `cargo test --locked` nếu đụng `src-tauri`). Gate đỏ thì không coi là xong, báo đúng kết quả.
-- **Dọn nhánh**: chỉ xoá nhánh đã nằm trọn trong nhánh chính (`git branch --merged`) và worktree sạch (`git status --porcelain` rỗng). Nhánh chưa ghép, nhánh có commit riêng, nhánh mặc định của GitHub thì không xoá. Xoá nhánh trên origin chỉ khi commit của nó đã có trên origin của nhánh chính.
-- **KHÔNG tự làm**: `git push` (nhất là `--force`), tạo PR, đổi thứ tự phase, đóng phase, xoá nhánh chưa ghép, `git reset --hard`/`checkout --` trên việc chưa commit. Những việc này vẫn cần người dùng yêu cầu.
-- Mỗi lần tự động xong ghi lại trong `docs/PROGRESS.md` (lệnh đã chạy, kết quả thật); không ghi kết quả CI chưa đọc.
+## Quy trình
+
+- Trước khi coi là xong: `pnpm lint && pnpm format && pnpm typecheck && pnpm test && pnpm build`; nếu đụng `src-tauri` thêm `cargo clippy --all-targets -- -D warnings` và `cargo test --locked`.
 - Báo cáo trung thực: test fail thì nói fail, bước bỏ qua thì nói bỏ qua.
-- Yêu cầu có nhiều cách hiểu khác nhau: nêu giả định và các lựa chọn, không chọn ngầm. Nếu chỉ có một cách hợp lý thì cứ làm.
-- Mỗi dòng thay đổi phải truy được về yêu cầu. Dead code có sẵn thì báo, không xóa; chỉ dọn phần do chính thay đổi của mình làm thừa.
-- Việc nhiều bước: nêu tiêu chí kiểm chứng cho từng bước (test nào, lệnh nào) trước khi làm.
-- Được phép chạy nhiều tác vụ song song bằng `/subtask` (phiên con) khi cần thiết. Chỉ giao những phần độc lập, không chung file; mỗi phiên con làm trong worktree riêng, ghi rõ tiêu chí xong trong brief. Phiên con không push, không tạo PR, không ghép nhánh; phiên chính kiểm lại diff và kết quả rồi mới ghép khi người dùng yêu cầu.
-- **Lệnh `/plan` (plan mode) bắt buộc dùng `AskUserQuestion`** trước khi chốt kế hoạch, để chắc chắn người dùng muốn gì: hỏi phạm vi, lựa chọn thiết kế và ràng buộc còn mơ hồ. Không tự chọn ngầm rồi trình kế hoạch. Chỉ bỏ qua khi yêu cầu chỉ có một cách hiểu hợp lý; khi đó nêu rõ trong kế hoạch là không có gì cần hỏi.
+- Commit nhỏ, message conventional, chỉ `git add` đúng file thuộc thay đổi. Không `--no-verify`, không amend commit đã push.
+- Được tự commit và tự merge cục bộ (`git merge --no-ff`) sau khi gate xanh. Xung đột ở mã thì dừng và báo.
+- KHÔNG tự làm: `git push`, tạo PR, xoá nhánh chưa ghép, `git reset --hard`/`checkout --` trên việc chưa commit.
+- Sau mỗi đợt làm việc cập nhật `docs/HANDOFF.md` (trạng thái hiện tại, kết quả gate thật) và `docs/TODO.md` (xoá việc xong, thêm việc mới). Không viết nhật ký; `git log` là nhật ký.
+- Yêu cầu có nhiều cách hiểu: nêu giả định và các lựa chọn, không chọn ngầm. Mỗi dòng thay đổi phải truy được về yêu cầu.
+- `/plan` (plan mode) bắt buộc dùng `AskUserQuestion` trước khi chốt kế hoạch, trừ khi yêu cầu chỉ có một cách hiểu hợp lý (khi đó ghi rõ trong kế hoạch là không có gì cần hỏi).
 
 ## Gọi Codex để tìm kiếm thông tin
 
@@ -58,7 +70,7 @@ Multi-Agent Desktop Platform (Windows-first, local-first). Kiến trúc đầy �
 **Trước khi dùng**
 
 - Kiểm tra license. Chỉ được lấy code/đoạn văn bản khi license cho phép (MIT, Apache-2.0, BSD, ISC…) và giữ nguyên notice/attribution. Repo không có license, GPL/AGPL/SSPL/“source-available”, hoặc license không rõ → chỉ đọc để hiểu ý tưởng, **không sao chép**; tự viết lại độc lập.
-- Ưu tiên nguồn đáng tin: repo/tài liệu chính thức của nhà cung cấp (Anthropic, OpenAI, Google, Tauri, A2A, MCP, Ollama…), dự án có nhiều người bảo trì, release gần đây. Cảnh báo với repo ít sao, mới tạo, một tác giả, có dấu hiệu typosquatting.
+- Ưu tiên nguồn đáng tin: repo/tài liệu chính thức của nhà cung cấp (Anthropic, OpenAI, Tauri…), dự án có nhiều người bảo trì, release gần đây. Cảnh báo với repo ít sao, mới tạo, một tác giả, có dấu hiệu typosquatting.
 - Ghi lại mỗi nguồn đã dùng trong `docs/REFERENCES.md`: URL, commit SHA hoặc tag, license, ngày xem, mục đích, có sao chép code hay không.
 
 **Khi đọc**

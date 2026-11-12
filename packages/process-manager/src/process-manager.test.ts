@@ -147,7 +147,9 @@ describe("cancel kills the whole process tree", () => {
       args: ["-e", "setTimeout(()=>{}, 60000)"],
       signal: ac.signal,
     });
-    setTimeout(() => ac.abort(), 200);
+    // Abort only once the child really exists, instead of after a fixed delay.
+    expect(await waitUntil(() => rp.pid !== undefined)).toBe(true);
+    ac.abort();
     const r = await rp.done;
     expect(r.outcome).toBe("cancelled");
   }, 30000);

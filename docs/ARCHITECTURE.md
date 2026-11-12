@@ -1,6 +1,6 @@
 # ARCHITECTURE — Agent Workspace
 
-Windows-first, local-first desktop platform. Trạng thái theo `docs/TODO.md` (Phase 0–2 đã đóng, Phase 7 đang làm); file này mô tả cấu trúc hiện tại, không phải lộ trình.
+Công cụ desktop cá nhân, Windows, chạy cục bộ (ADR-010). File này mô tả cấu trúc hiện tại.
 
 ## Layers
 
@@ -27,4 +27,4 @@ Workspace packages expose `types` → `src/index.ts` (so typecheck/tests need no
 
 ## Chưa có
 
-Policy engine đầy đủ (Phase 4), Live Terminal (`node-pty`, Phase 5), installer (Phase 5), ACP/MCP/Skills (Phase 8), Supervisor/Parallel Workers (Phase 9). Chi tiết: `docs/ROADMAP.md`.
+Sandbox hệ điều hành, cổng quyền theo từng lệnh, installer. Xem `docs/ROADMAP.md` mục "Đã loại khỏi phạm vi".

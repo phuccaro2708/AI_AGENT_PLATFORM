@@ -1,6 +1,11 @@
 import type { AgentCapability } from "@agent-studio/contracts";
 import type { AdapterInfo } from "./api";
 
+/** Picker value meaning "let the capability router choose" (no agent id is ever called this). */
+export const AUTO_AGENT = "auto";
+/** Reviewer picker value meaning "no review": the agent works alone, straight in the project folder. */
+export const NO_REVIEWER = "";
+
 /**
  * What an agent lacks for a given job. Same shape as `CapabilityGap` in the orchestrator's
  * `capability-router.ts`; the UI computes it from `agents.list` (id, available, capabilities),
@@ -16,7 +21,7 @@ export interface CapabilityGap {
  * What each screen needs from the agent it lets you pick. UI-level requirement, not a backend rule:
  * - single agent: the task log is rendered live, so `streaming`;
  * - Peer Review: both roles work in a worktree with `permissions` set (workspace-write / read-only)
- *   and run tools, so `tool_execution`. The `agy` adapter refuses tasks with `permissions` set.
+ *   and run tools, so `tool_execution`.
  */
 export const AGENT_TASK_REQUIRES: readonly AgentCapability[] = ["streaming"];
 export const PEER_REVIEW_REQUIRES: readonly AgentCapability[] = ["tool_execution"];
@@ -62,4 +67,31 @@ export function capabilityBlocker(
   if (!agent) return null;
   const gap = gapOf(agent, required);
   return gap.missing.length === 0 ? null : describeGap({ ...gap, available: true });
+}
+
+/**
+ * Why the one composer cannot start yet; null when Run may be pressed. Without a reviewer it starts a
+ * single task (the router may pick the agent); with one it starts a Peer Review where `agentId` implements,
+ * so both roles must be concrete, installed agents that run tools.
+ */
+export function startBlocker(o: {
+  hasProject: boolean;
+  adapters: readonly AdapterInfo[];
+  agentId: string;
+  reviewerId: string;
+  prompt: string;
+}): string | null {
+  if (!o.hasProject) return "Choose a project first";
+  const empty = o.prompt.trim() === "" ? "Describe the task" : null;
+  const peer = o.reviewerId !== NO_REVIEWER;
+  // The sidecar's router checks availability and capabilities for Auto and explains any gap.
+  if (o.agentId === AUTO_AGENT) return peer ? "Pick an agent to pair with a reviewer" : empty;
+  for (const id of peer ? [o.agentId, o.reviewerId] : [o.agentId]) {
+    const a = o.adapters.find((x) => x.id === id);
+    if (!a) return "Pick an agent";
+    if (!a.available) return `${a.id} was not found on this machine`;
+    const gap = capabilityBlocker(a, peer ? PEER_REVIEW_REQUIRES : AGENT_TASK_REQUIRES);
+    if (gap) return gap;
+  }
+  return empty;
 }

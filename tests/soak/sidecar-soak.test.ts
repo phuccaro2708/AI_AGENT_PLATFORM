@@ -1,6 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -8,6 +16,7 @@ import type { AgentEvent } from "@agent-studio/contracts";
 import type { AgentAdapter, AgentTask } from "@agent-studio/agent-core";
 import { createLogger } from "@agent-studio/shared-utils";
 import { SidecarService } from "@agent-studio/orchestrator";
+import { acquireSidecarLock } from "../../services/orchestrator/src/sidecar-lock.js";
 
 /**
  * P4-10 soak skeleton. Runs SOAK_ROUNDS (default 100) workflows one after another through the real SidecarService
@@ -195,9 +204,19 @@ describe("soak: many workflows through SidecarService with fake adapters", () =>
       git(repoRoot, "add", ".");
       git(repoRoot, "commit", "-q", "-m", "init");
 
+      // The single-instance lock (ADR-006) is held for the whole soak, as sidecar-main does.
+      const dbPath = join(dir, "data", "soak.db");
+      const lock = await acquireSidecarLock(dbPath, { timeoutMs: 0 });
+      await expect(
+        acquireSidecarLock(dbPath, { timeoutMs: 0 }),
+        "a second sidecar on the same database is refused while the soak holds the lock",
+      ).rejects.toThrow();
+      const rssSamples: number[] = [];
+      const sampleRss = () => rssSamples.push(process.memoryUsage().rss);
+
       svc = new SidecarService(
         {
-          dbPath: join(dir, "data", "soak.db"),
+          dbPath,
           extraAdapters: [plain, tool, impl, rev],
           worktreesDir: join(dir, "wt"),
           schedulerIntervalMs: 10,
@@ -223,6 +242,7 @@ describe("soak: many workflows through SidecarService with fake adapters", () =>
       let expectedReconcile = 0;
       let warm: number | undefined;
       let warmTimers: number | undefined;
+      let warmRss: number | undefined;
       // The spy must actually see the sidecar's intervals, otherwise the leak check below proves nothing.
       const liveOpen = timers.intervals();
       expect(liveOpen, "spy sees the sidecar's intervals").toBeGreaterThan(liveBefore);
@@ -332,8 +352,10 @@ describe("soak: many workflows through SidecarService with fake adapters", () =>
           slowest.ms = ms;
           slowest.round = i;
         }
+        sampleRss();
         if (i === Math.min(19, ROUNDS - 1)) {
           warm = leakSensitive(handles());
+          warmRss = process.memoryUsage().rss;
           warmTimers = timers.intervals();
         }
       }
@@ -342,6 +364,50 @@ describe("soak: many workflows through SidecarService with fake adapters", () =>
       // ---- totals ----
       expect(count("SELECT COUNT(*) c FROM tasks WHERE state='completed'")).toBe(expectedCompleted);
       expect(plain.calls + tool.calls + impl.calls + rev.calls).toBe(expectedTasks);
+
+      // ---- worktrees: DB rows, directories on disk and `git worktree list` must agree; none left half-made ----
+      const wtStates = sql
+        .prepare("SELECT state, COUNT(*) c FROM worktrees GROUP BY state ORDER BY state")
+        .all() as { state: string; c: number }[];
+      const wtRows = sql.prepare("SELECT path, state FROM worktrees").all() as {
+        path: string;
+        state: string;
+      }[];
+      const gitListed = git(repoRoot, "worktree", "list", "--porcelain")
+        .split(NL)
+        .filter((l) => l.startsWith("worktree "))
+        .map((l) => realpathSync.native(l.slice("worktree ".length)).toLowerCase());
+      const onDisk = (p: string) => existsSync(p);
+      for (const w of wtRows) {
+        const live = onDisk(w.path);
+        const listed = gitListed.includes(
+          (live ? realpathSync.native(w.path) : w.path).toLowerCase(),
+        );
+        if (w.state === "active") {
+          expect(live, `active worktree ${w.path} exists on disk`).toBe(true);
+          expect(listed, `active worktree ${w.path} is known to git`).toBe(true);
+        } else {
+          expect(w.state, `worktree ${w.path} state`).toBe("removed");
+          expect(live, `removed worktree ${w.path} is gone from disk`).toBe(false);
+          expect(listed, `removed worktree ${w.path} is gone from git`).toBe(false);
+        }
+      }
+      const activeRows = wtRows.filter((w) => w.state === "active").length;
+      // no directory under the worktrees folder without a DB row (an orphan nobody would clean)
+      const wtRoot = join(dir, "wt");
+      const dirsOnDisk = existsSync(wtRoot)
+        ? readdirSync(wtRoot, { recursive: true, withFileTypes: true })
+            .filter((e) => e.isDirectory() && existsSync(join(e.parentPath, e.name, ".git")))
+            .map((e) => join(e.parentPath, e.name).toLowerCase())
+        : [];
+      const knownPaths = new Set(wtRows.map((w) => w.path.toLowerCase()));
+      expect(
+        dirsOnDisk.filter((d) => !knownPaths.has(d)),
+        "worktree directories on disk with no database row",
+      ).toEqual([]);
+      expect(gitListed.length, "git sees the main checkout plus the active worktrees").toBe(
+        1 + activeRows,
+      );
 
       // ---- leaks: handles/timers must not grow with the number of rounds ----
       await svc.idle();
@@ -355,9 +421,14 @@ describe("soak: many workflows through SidecarService with fake adapters", () =>
         `live intervals after ${ROUNDS} rounds vs after warm-up:
 ${timers.where()}`,
       ).toBeLessThanOrEqual(warmTimers ?? endTimers);
+      const rssEnd = process.memoryUsage().rss;
+      const rssPeak = Math.max(...rssSamples);
       const client = svc.db.$client;
       svc.close();
       svc = undefined;
+      await lock.release();
+      // after close()+release() the next sidecar can start on the same database: nothing keeps the lock
+      await (await acquireSidecarLock(dbPath, { timeoutMs: 0 })).release();
       // the longest self-ending timer in the product is process-manager's 1 s stdio grace timer
       await new Promise((res) => setTimeout(res, 1300));
       const closed = leakSensitive(handles());
@@ -375,6 +446,18 @@ ${timers.where()}`,
       expect(closedTimeouts, "pending timeouts 1.3 s after close()").toBe(timeoutsBefore);
       expect(client.open, "database connection closed").toBe(false);
 
+      // RSS: a 100-round run with fake adapters must not keep growing. Bound is loose on purpose (V8 does not
+      // return memory eagerly): at most 150 MB above the warm-up sample, which a per-round leak of ~1.5 MB would hit.
+      const MB = 1024 * 1024;
+      expect(
+        (rssEnd - (warmRss ?? rssEnd)) / MB,
+        `RSS growth between round 20 and round ${ROUNDS}`,
+      ).toBeLessThan(150);
+
+      console.info(
+        `[soak] rss warm=${((warmRss ?? 0) / MB).toFixed(0)}MB end=${(rssEnd / MB).toFixed(0)}MB peak=${(rssPeak / MB).toFixed(0)}MB ` +
+          `worktrees=${wtStates.map((s) => `${s.state}:${s.c}`).join(",")} gitListed=${gitListed.length} dirsOnDisk=${dirsOnDisk.length}`,
+      );
       console.info(
         `[soak] rounds=${ROUNDS} tasks=${expectedTasks} completed=${expectedCompleted} ` +
           `needs_reconciliation=${expectedReconcile} elapsed=${elapsed}ms ` +

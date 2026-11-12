@@ -80,6 +80,7 @@ impl Sidecar {
         db: &Path,
         log: &Path,
         secrets: Vec<(String, String)>,
+        job_wrap: Option<&Path>,
         on_event: impl Fn(Value) + Send + 'static,
     ) -> Result<Self, String> {
         let node = dir.join(if cfg!(windows) { "node.exe" } else { "node" });
@@ -91,6 +92,11 @@ impl Sidecar {
             .arg(dir.join("better_sqlite3.node"))
             .arg("--migrations")
             .arg(dir.join("drizzle"));
+        // Only the location of `agent-job-wrap`: the sidecar still needs its own opt-in
+        // (`AGENT_STUDIO_JOB_WRAP=1`) before it wraps any CLI in it.
+        if let Some(path) = job_wrap {
+            cmd.arg("--job-wrap").arg(path);
+        }
         // Secrets travel in the child's environment only; the sidecar removes them from it on start.
         cmd.envs(secrets);
         Self::spawn_command(cmd, log, on_event)

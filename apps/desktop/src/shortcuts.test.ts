@@ -14,22 +14,24 @@ const ev = (key: string, o: Partial<Parameters<typeof matchShortcut>[0]> = {}) =
 
 describe("matchShortcut", () => {
   it("maps the basic shortcuts", () => {
-    expect(matchShortcut(ev("1"))).toBe("agent");
-    expect(matchShortcut(ev("2"))).toBe("multi");
     expect(matchShortcut(ev("h"))).toBe("history");
     expect(matchShortcut(ev("H"))).toBe("history");
     expect(matchShortcut(ev(","))).toBe("settings");
     expect(matchShortcut(ev("N", { shiftKey: true }))).toBe("new");
   });
   it("needs Ctrl or Meta and ignores other keys", () => {
-    expect(matchShortcut(ev("1", { ctrlKey: false }))).toBeNull();
-    expect(matchShortcut(ev("1", { ctrlKey: false, metaKey: true }))).toBe("agent");
+    expect(matchShortcut(ev("h", { ctrlKey: false }))).toBeNull();
+    expect(matchShortcut(ev("h", { ctrlKey: false, metaKey: true }))).toBe("history");
     expect(matchShortcut(ev("x"))).toBeNull();
-    expect(matchShortcut(ev("1", { shiftKey: true }))).toBeNull();
+    expect(matchShortcut(ev("h", { shiftKey: true }))).toBeNull();
+  });
+  it("no longer has mode shortcuts (one composer, reviewer optional)", () => {
+    expect(matchShortcut(ev("1"))).toBeNull();
+    expect(matchShortcut(ev("2"))).toBeNull();
   });
   it("ignores handled, composing and Alt events", () => {
-    expect(matchShortcut(ev("1", { defaultPrevented: true }))).toBeNull();
-    expect(matchShortcut(ev("1", { isComposing: true }))).toBeNull();
-    expect(matchShortcut(ev("1", { altKey: true }))).toBeNull();
+    expect(matchShortcut(ev("h", { defaultPrevented: true }))).toBeNull();
+    expect(matchShortcut(ev("h", { isComposing: true }))).toBeNull();
+    expect(matchShortcut(ev("h", { altKey: true }))).toBeNull();
   });
 });

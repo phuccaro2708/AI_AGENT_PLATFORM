@@ -1,11 +1,45 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import { StringDecoder } from "node:string_decoder";
-import { killTree } from "./kill-tree.js";
+import { killTree, type KillResult } from "./kill-tree.js";
+import { trackLivePid } from "./live-pids.js";
 import { assertExecutableAllowed, filterEnv, type SpawnManifest } from "./manifest.js";
+import { sampleTreeBytes, type TreeMemorySampler } from "./tree-memory.js";
 import { UnsupportedShimError, resolveExecutable, unwrapNpmShim } from "./resolve.js";
+
+/**
+ * P4-4 (b): run the child inside `agent-job-wrap` (a Windows Job Object with kill-on-close). The wrapper is
+ * started as `<path> [--mem-limit-mb N] [--job-mem-limit-mb N] [--timeout-secs N] -- <resolved program> <args…>`; the manifest check
+ * and executable resolution still apply to the CLI, not to the wrapper. Lifetime and per-process memory only; not a sandbox.
+ */
+export interface JobWrapOptions {
+  /** Absolute path of the `agent-job-wrap` binary. A relative or missing path is a `spawn_error` (fail closed). */
+  path: string;
+  /** `--mem-limit-mb`: commit cap of EACH process in the job (not the tree total). Positive integer. */
+  memLimitMb?: number;
+  /**
+   * `--job-mem-limit-mb`: cap on the SUM of committed memory of the whole process tree
+   * (`JOB_OBJECT_LIMIT_JOB_MEMORY`). The allocation that would pass the total fails; Windows does
+   * not kill the process itself. Positive integer.
+   */
+  jobMemLimitMb?: number;
+  /** `--timeout-secs`: the wrapper kills the tree and exits 124 after this long. Positive integer. */
+  timeoutSecs?: number;
+}
 
 export interface RunOptions {
   command: string;
+  /** Run the resolved program through `agent-job-wrap` (see `JobWrapOptions`). */
+  jobWrap?: JobWrapOptions;
+  /**
+   * Kill the whole process tree (outcome `memory_limit`) when its resident memory exceeds this many MB.
+   * Sampled every `memoryPollMs` (default 1000), so it is a watchdog and not a hard cap. Positive integer.
+   */
+  treeMemoryLimitMb?: number;
+  memoryPollMs?: number;
+  /** Replaces the real sampler (tests). */
+  memorySampler?: TreeMemorySampler;
   args?: readonly string[];
   cwd?: string;
   /** Full environment for the child. Defaults to the parent's; with a `manifest` only declared names get through. */
@@ -25,9 +59,11 @@ export interface RunOptions {
   maxCapture?: number;
   /** After the process exits, how long to wait for stdio to close before destroying streams. Default 1000. */
   stdioCloseGraceMs?: number;
+  /** Test seam: replaces `killTree` (e.g. to simulate a refused kill). */
+  killImpl?: (pid: number) => Promise<KillResult>;
 }
 
-export type RunOutcome = "exited" | "timeout" | "cancelled" | "spawn_error";
+export type RunOutcome = "exited" | "timeout" | "cancelled" | "spawn_error" | "memory_limit";
 
 export interface RunResult {
   outcome: RunOutcome;
@@ -39,12 +75,37 @@ export interface RunResult {
   stdoutTruncated: boolean;
   stderrTruncated: boolean;
   error?: string;
+  /** Why the run was ended by the host (`memory_limit`: measured size and limit). */
+  detail?: string;
+  /** Set when the host tried to end the process (timeout, cancel, memory limit) and `killTree` reported `failed`: the process may still be running. */
+  killError?: string;
 }
 
 export interface RunningProcess {
   pid: number | undefined;
   done: Promise<RunResult>;
   cancel(): Promise<void>;
+}
+
+const MAX_SAMPLE_FAILURES = 5;
+
+/** Validates the wrapper settings and returns its leading flags. Throws, so the caller reports `spawn_error`. */
+export function jobWrapArgs(w: JobWrapOptions): string[] {
+  if (!isAbsolute(w.path) || !existsSync(w.path)) {
+    throw new Error("agent-job-wrap: path must be an existing absolute path");
+  }
+  const flags: string[] = [];
+  for (const [flag, n] of [
+    ["--mem-limit-mb", w.memLimitMb],
+    ["--job-mem-limit-mb", w.jobMemLimitMb],
+    ["--timeout-secs", w.timeoutSecs],
+  ] as const) {
+    if (n === undefined) continue;
+    if (!Number.isInteger(n) || n <= 0)
+      throw new Error(`agent-job-wrap: ${flag} must be a positive integer`);
+    flags.push(flag, String(n));
+  }
+  return flags;
 }
 
 /**
@@ -97,8 +158,24 @@ export function startProcess(opts: RunOptions): RunningProcess {
     return failed("spawn_error", err instanceof Error ? err.message : String(err));
   }
 
+  const mem = opts.treeMemoryLimitMb;
+  if (mem !== undefined && (!Number.isInteger(mem) || mem <= 0)) {
+    return failed("spawn_error", "treeMemoryLimitMb must be a positive integer");
+  }
+
+  let spawnFile = file;
+  let spawnArgs: string[] = [...prefix, ...(opts.args ?? [])];
+  if (opts.jobWrap) {
+    try {
+      spawnArgs = [...jobWrapArgs(opts.jobWrap), "--", file, ...spawnArgs];
+      spawnFile = opts.jobWrap.path;
+    } catch (err) {
+      return failed("spawn_error", err instanceof Error ? err.message : String(err));
+    }
+  }
+
   const posix = process.platform !== "win32";
-  const child = spawn(file, [...prefix, ...(opts.args ?? [])], {
+  const child = spawn(spawnFile, spawnArgs, {
     shell: false,
     windowsHide: true,
     detached: posix, // own process group so the whole tree can be signalled
@@ -133,12 +210,19 @@ export function startProcess(opts: RunOptions): RunningProcess {
     child.stdin.end(opts.stdin);
   }
 
+  const untrack = child.pid === undefined ? undefined : trackLivePid(child.pid);
   let outcome: RunOutcome = "exited";
   let killing: Promise<void> | undefined;
+  let killError: string | undefined;
   const terminate = (why: RunOutcome): Promise<void> => {
     if (killing) return killing;
     outcome = why;
-    killing = child.pid === undefined ? Promise.resolve() : killTree(child.pid);
+    killing =
+      child.pid === undefined
+        ? Promise.resolve()
+        : (opts.killImpl ?? killTree)(child.pid).then((r) => {
+            if (r.status === "failed") killError = r.detail ?? "the process could not be killed";
+          });
     return killing;
   };
 
@@ -149,12 +233,52 @@ export function startProcess(opts: RunOptions): RunningProcess {
   const onAbort = () => void terminate("cancelled");
   opts.signal?.addEventListener("abort", onAbort, { once: true });
 
+  // P4-4 (b): RAM of the whole tree. Polling, so a fast allocator can overshoot before it is killed.
+  let detail: string | undefined;
+  let stopWatch: (() => void) | undefined;
+  if (opts.treeMemoryLimitMb !== undefined && child.pid !== undefined) {
+    const limit = opts.treeMemoryLimitMb * 1024 * 1024;
+    const sample = opts.memorySampler ?? sampleTreeBytes;
+    const rootPid = child.pid;
+    let busy = false;
+    let failures = 0;
+    const tick = async (): Promise<void> => {
+      if (busy || killing) return;
+      busy = true;
+      try {
+        const bytes = await sample(rootPid);
+        // The sample may return after the child exited (its pid can already belong to another process):
+        // an exited child, or one already being terminated, must never be killed from a stale result.
+        if (child.exitCode !== null || child.signalCode !== null || killing) return;
+        failures = 0;
+        if (bytes > limit) {
+          detail = `process tree uses ${Math.round(bytes / 1048576)} MB, limit ${opts.treeMemoryLimitMb} MB`;
+          void terminate("memory_limit");
+        }
+      } catch {
+        if (child.exitCode !== null || child.signalCode !== null || killing) return;
+        // Cannot measure: after MAX_SAMPLE_FAILURES in a row the limit is treated as exceeded (fail closed).
+        if (++failures >= MAX_SAMPLE_FAILURES) {
+          detail = "cannot measure the memory of the process tree";
+          void terminate("memory_limit");
+        }
+      } finally {
+        busy = false;
+      }
+    };
+    const interval = setInterval(() => void tick(), opts.memoryPollMs ?? 1000);
+    interval.unref();
+    stopWatch = () => clearInterval(interval);
+  }
+
   const done = new Promise<RunResult>((resolve) => {
     let settled = false;
     const finish = (exitCode: number | null, signal: NodeJS.Signals | null, error?: string) => {
       if (settled) return;
       settled = true;
+      untrack?.();
       if (timer) clearTimeout(timer);
+      stopWatch?.();
       opts.signal?.removeEventListener("abort", onAbort);
       const tailOut = outDec.end();
       const tailErr = errDec.end();
@@ -170,6 +294,8 @@ export function startProcess(opts: RunOptions): RunningProcess {
         stdoutTruncated: outTrunc,
         stderrTruncated: errTrunc,
         ...(error === undefined ? {} : { error }),
+        ...(detail === undefined ? {} : { detail }),
+        ...(killError === undefined ? {} : { killError }),
       });
     };
     child.on("error", (e) => finish(null, null, e.message));

@@ -3,6 +3,7 @@ import {
   SidecarRequest,
   type AgentCapability,
   type SidecarEvent,
+  type TaskPermissions,
   type TaskState,
   type SidecarResponse,
 } from "@agent-studio/contracts";
@@ -14,10 +15,8 @@ import {
   type SecretRedactor,
 } from "./secrets.js";
 import { checkAgentSettings, type AgentLaunchSettings } from "./agent-settings.js";
-import { evaluate } from "@agent-studio/policy-engine";
 import { ClaudeAdapter } from "@agent-studio/adapter-claude";
 import { CodexAdapter } from "@agent-studio/adapter-codex";
-import { AntigravityAdapter } from "@agent-studio/adapter-antigravity";
 import {
   probeClaude,
   probeCodex,
@@ -26,23 +25,18 @@ import {
   type ProbeOptions,
   type ProbeResult,
 } from "@agent-studio/cli-probe";
-import {
-  DEFAULT_THRESHOLDS,
-  ResourceMonitor,
-  type ResourceSource,
-} from "@agent-studio/resource-monitor";
 import { exportDiagnostics, verifyDiagnostics } from "@agent-studio/diagnostics";
 import { createLogger, type Logger } from "@agent-studio/shared-utils";
 import { openDatabase, runMigrations, Repo, type StudioDb } from "@agent-studio/storage";
+import type { JobWrapOptions } from "@agent-studio/process-manager";
 import { dirname, join } from "node:path";
 import { ApprovalService } from "./approvals.js";
 import { ArtifactRegistry } from "./artifacts.js";
 import { ContextBoard } from "./context-board.js";
 import { describeRouteFailure, selectAgent, snapshotAdapters } from "./capability-router.js";
-import { Orchestrator } from "./orchestrator.js";
+import { Orchestrator, type RunResult } from "./orchestrator.js";
 import { Scheduler } from "./scheduler.js";
 import { checkProjectRoot, duplicateOf } from "./project-policy.js";
-import { PolicyGate } from "./policy-gate.js";
 import {
   auditNote,
   buildEvidence,
@@ -73,39 +67,26 @@ export interface SidecarOptions {
   schedulerIntervalMs?: number;
   /** Interval of the approval expiry sweep (default 5 s). */
   approvalSweepMs?: number;
-  /**
-   * Where CPU/RAM readings come from. When given, a {@link ResourceMonitor} (default thresholds) samples it
-   * and the scheduler starts fewer tasks under load; when absent there is no monitor and the scheduler runs
-   * at its fixed concurrency. The real process passes `NodeResourceSource` (sidecar-main); tests pass a fake
-   * or nothing, so they never read the real machine.
-   */
-  resourceSource?: ResourceSource;
-  /** How often the resource monitor samples. Default 1000. */
-  resourceSampleMs?: number;
-  /** Tasks the scheduler runs at once at most (the resource monitor can only lower it). Default 2. */
+  /** Tasks the scheduler runs at once at most. Default 2. */
   schedulerConcurrency?: number;
-  /** Test seam: replaces the Policy Engine's `evaluate` in the pre-run gate (the real one never throws). */
-  policyEvaluate?: typeof evaluate;
   /**
-   * Test seam: also check the program `extraAdapters` report in `describeLaunch`. Off by default because those
-   * adapters come from the embedding code, not from user settings; their folder is always checked.
+   * P4-4 (b): start the `claude` and `codex` CLIs inside `agent-job-wrap` (Windows Job Object, kill on close).
+   * Unset here = off. `sidecar-main` sets it by default when the installed binary is found (`job-wrap-config.ts`;
+   * `AGENT_STUDIO_JOB_WRAP=0` turns it off; missing binary = warning and no wrap).
    */
-  policyCheckExtraLaunch?: boolean;
-  /** How often a gate waiting for an approval looks at the task. Default 200 ms. */
-  policyPollMs?: number;
+  jobWrap?: JobWrapOptions;
+  /**
+   * Opt-in (P4-4 (b)): kill the `claude`/`codex` process tree when its total resident memory passes this many MB
+   * (host-side polling watchdog; the Job Object caps are per process). OFF by default (it only polls); set here,
+   * or via `AGENT_STUDIO_CLI_TREE_MEM_MB=<positive MB>` in `sidecar-main`, to opt in.
+   */
+  cliTreeMemoryLimitMb?: number;
   /** Parent folder of diagnostics bundles. Default: `diagnostics` next to the database. */
   diagnosticsDir?: string;
   /** Folder and file stem of the sidecar's log file (the native side redirects stderr there). Default: next to the database, `sidecar`. */
   logDir?: string;
   logBaseName?: string;
 }
-
-/** The program each built-in agent is launched as unless the user stored another (probed) command. */
-const DEFAULT_COMMANDS: Readonly<Record<string, string>> = {
-  claude: "claude",
-  codex: "codex",
-  agy: "agy",
-};
 
 const ok = (id: number, result: unknown) => ({
   response: { id, result } as SidecarResponse,
@@ -131,12 +112,6 @@ const REQUIRED_CAPABILITIES = {
   codex: ["execSubcommand", "execJson"],
 } as const;
 
-/**
- * CLIs that have an adapter but no settings-aware probe yet: scanned like any other candidate
- * (generic help-based probe), yet allowed to run tasks. Their launch settings are not configurable.
- */
-const SCAN_ONLY_ADAPTERS: ReadonlySet<string> = new Set(["agy"]);
-
 /** Same requirement the UI applies to a single-agent task (`AGENT_TASK_REQUIRES`): a live log. */
 const AUTO_AGENT_REQUIRES: readonly AgentCapability[] = ["streaming"];
 
@@ -146,7 +121,6 @@ export class SidecarService {
   private readonly registry = new AdapterRegistry();
   private readonly orchestrator: Orchestrator;
   private readonly scheduler: Scheduler;
-  private readonly resourceMonitor: ResourceMonitor | undefined;
   private readonly engine: PeerReviewEngine;
   private readonly approvals: ApprovalService;
   private readonly artifacts: ArtifactRegistry;
@@ -156,11 +130,8 @@ export class SidecarService {
   private readonly secrets: ProviderSecrets;
   private readonly redactor: SecretRedactor;
   private readonly probes: Record<"claude" | "codex", (o?: ProbeOptions) => Promise<ProbeResult>>;
-  /** Tasks currently executing in this process. */
-  private readonly active = new Map<string, { abort: AbortController; done: Promise<void> }>();
-  /** Pre-run policy check and post-run scope check around every agent (P4-1 a + b). */
-  private readonly gate: PolicyGate;
-  private gateWorkspaces: ProjectWorkspaces | undefined;
+  /** Callers of `runThroughScheduler` waiting for their task to settle. */
+  private readonly settleWaiters = new Map<string, (r: RunResult | undefined) => void>();
 
   private get rootPolicy() {
     return {
@@ -191,15 +162,20 @@ export class SidecarService {
     // Variables the user (stored settings) or the native side (secrets) named on purpose may reach the child;
     // the rest of this process's environment is cut down by the adapter's own manifest (P4-3).
     const envAllow = [...Object.keys(s?.env ?? {}), ...Object.keys(secret)];
-    const o =
-      s || Object.keys(secret).length > 0
+    const o = {
+      ...(s || Object.keys(secret).length > 0
         ? {
             ...(s ? { command: s.command, extraArgs: s.args } : {}),
             env: this.childEnv(provider, s?.env ?? {}),
             envAllow,
           }
-        : {};
-    return this.gate.wrap(provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o));
+        : {}),
+      ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
+      ...(this.opts.cliTreeMemoryLimitMb === undefined
+        ? {}
+        : { treeMemoryLimitMb: this.opts.cliTreeMemoryLimitMb }),
+    };
+    return provider === "claude" ? new ClaudeAdapter(o) : new CodexAdapter(o);
   }
 
   /**
@@ -208,7 +184,7 @@ export class SidecarService {
    * and their probe stored. Only `supported` CLIs may be picked to run tasks.
    */
   private async scanAll() {
-    const supported = (id: string) => id in this.probes || SCAN_ONLY_ADAPTERS.has(id);
+    const supported = (id: string) => id in this.probes;
     const scanned = new Map(
       (
         await (this.opts.scan ?? scanClis)({
@@ -312,34 +288,10 @@ export class SidecarService {
       );
     }
     this.recoveredTasks = recovered.length;
-    this.gate = new PolicyGate({
-      repo: this.repo,
-      log,
-      approvals: () => this.approvals,
-      workspaces: () => {
-        if (!this.gateWorkspaces) throw new Error("workspaces are not ready");
-        return this.gateWorkspaces;
-      },
-      allowedCommands: (agentId) => {
-        const stored =
-          agentId === "claude" || agentId === "codex"
-            ? this.repo.getAgentSettings(agentId)?.command
-            : undefined;
-        const base = DEFAULT_COMMANDS[agentId];
-        return [...(base ? [base] : []), ...(stored ? [stored] : [])];
-      },
-      redact: (t) => this.redactor.text(t),
-      ...(opts.policyEvaluate ? { evaluate: opts.policyEvaluate } : {}),
-      ...(opts.policyPollMs !== undefined ? { pollMs: opts.policyPollMs } : {}),
-    });
     this.registry.register(new StubAdapter());
     this.registry.register(this.buildCliAdapter("claude", this.repo.getAgentSettings("claude")));
     this.registry.register(this.buildCliAdapter("codex", this.repo.getAgentSettings("codex")));
-    this.registry.register(this.gate.wrap(new AntigravityAdapter()));
-    for (const a of opts.extraAdapters ?? [])
-      this.registry.register(
-        this.gate.wrap(a, { checkLaunch: opts.policyCheckExtraLaunch === true }),
-      );
+    for (const a of opts.extraAdapters ?? []) this.registry.register(a);
     this.orchestrator = new Orchestrator(this.registry, this.repo, log, {
       redactor: this.redactor,
       onMessage: (message) =>
@@ -357,31 +309,27 @@ export class SidecarService {
       this.repo,
       opts.worktreesDir ?? join(dirname(opts.dbPath), "worktrees"),
     );
-    this.gateWorkspaces = workspaces;
     this.engine = new PeerReviewEngine({
       repo: this.repo,
       orchestrator: this.orchestrator,
       board: new ContextBoard(this.repo),
       workspaces,
     });
-    if (opts.resourceSource) {
-      this.resourceMonitor = new ResourceMonitor({
-        source: opts.resourceSource,
-        thresholds: DEFAULT_THRESHOLDS,
-      });
-      this.resourceMonitor.start(opts.resourceSampleMs);
-    }
     this.scheduler = new Scheduler({
       repo: this.repo,
       orchestrator: this.orchestrator,
-      ...(opts.schedulerConcurrency !== undefined
-        ? { concurrency: opts.schedulerConcurrency }
-        : {}),
-      ...(this.resourceMonitor ? { admission: this.resourceMonitor } : {}),
-      onSettled: (id, result) => this.engine.onSettled(id, result),
+      concurrency: opts.schedulerConcurrency ?? 2,
+      onStarted: (id) => opts.onEvent?.({ event: "task.state", taskId: id, state: "running" }),
+      onSettled: (id, result) => {
+        const waiter = this.settleWaiters.get(id);
+        this.settleWaiters.delete(id);
+        waiter?.(result);
+        return this.engine.onSettled(id, result);
+      },
     });
     // Workflows left `running` by a previous exit need the scheduler again (it starts lazily otherwise).
-    if (this.repo.listWorkflowIdsByState("running").length > 0) {
+    // Single tasks held by admission stay `queued` in a `pending` workflow, so they need it too.
+    if (this.repo.listWorkflowIdsByState("running").length > 0 || this.queuedCount() > 0) {
       this.scheduler.start(opts.schedulerIntervalMs);
     }
     void this.engine
@@ -484,6 +432,132 @@ export class SidecarService {
     return next;
   }
 
+  /**
+   * Text for the native confirmation dialog (T12). Everything shown comes from validated parameters and the
+   * stored state, masked by the redactor and shortened; a request that could not succeed (unknown or already
+   * answered approval, unknown task) throws, so the shell shows no dialog for it.
+   */
+  private async describeForConfirmation(
+    req: SidecarRequest,
+  ): Promise<{ title: string; message: string }> {
+    // Free text may be shortened, but never silently: the dialog says how much is not shown.
+    const clip = (t: string, n: number) =>
+      t.length > n ? `${t.slice(0, n)} [\u2026 ${t.length - n} more characters NOT shown]` : t;
+    const text = (t: string, n: number) => clip(this.redactor.text(t), n);
+    // For what decides WHICH program runs, a shortened view could hide the dangerous part: refuse instead.
+    const whole = (what: string, t: string, n: number) => {
+      if (t.length > n)
+        throw new Error(`${what} is too long to confirm safely (over ${n} characters)`);
+      return this.redactor.text(t);
+    };
+    switch (req.method) {
+      case "approvals.resolve": {
+        const a = this.repo.getApproval(req.params.approvalId);
+        if (!a) throw new Error(`Unknown approval: ${req.params.approvalId}`);
+        if (a.state !== "pending") throw new Error(`Approval is already ${a.state}: ${a.id}`);
+        const verb = req.params.decision === "approved" ? "APPROVE" : "DENY";
+        return {
+          title: `${verb} a task's request?`,
+          message:
+            `Decision: ${verb}\nTask: ${a.taskId}\nScope: ${req.params.scope}\n` +
+            `Request: ${text(a.requestJson, 1200)}\n` +
+            (req.params.note ? `Note: ${text(req.params.note, 300)}\n` : "") +
+            "\nThe agent will act on this answer.",
+        };
+      }
+      case "tasks.resolveReconciliation": {
+        const state = this.repo.getTaskState(req.params.taskId);
+        if (state === undefined) throw new Error(`Unknown task: ${req.params.taskId}`);
+        const rerun = req.params.decision === "requeue" ? "\nThe task will run again." : "";
+        return {
+          title: "Settle a task with unknown side effects?",
+          message:
+            `Task: ${req.params.taskId} (now ${state})\nDecision: ${req.params.decision}\n` +
+            `Note: ${text(req.params.note, 600)}${rerun}\n\nOnly confirm if you checked what the task changed.`,
+        };
+      }
+      case "recovery.resolve": {
+        const report = await this.recoveryReport(req.params.taskId);
+        if (!report) throw new Error(`Unknown task: ${req.params.taskId}`);
+        const decision = planResolution(report, req.params.action, req.params.confirmUnverified);
+        const e = report.evidence;
+        return {
+          title: "Recover a stopped task?",
+          message:
+            `Task: ${report.taskId} (${report.state}, attempt ${report.attempt})\n` +
+            `Action: ${req.params.action} (stored as: ${decision})\n` +
+            `Evidence: ${report.classification}; tool calls ${e.toolCalls}, unfinished ${e.unfinishedToolCalls}, ` +
+            `worktree ${!e.hasWorktree ? "none" : e.worktreeChanged === null ? "unreadable" : e.worktreeChanged ? "changed" : "clean"}\n` +
+            `Checked by the person: ${req.params.confirmUnverified ? "yes" : "no"}\n` +
+            `Note: ${text(req.params.note, 600)}`,
+        };
+      }
+      case "agents.setSettings": {
+        const { provider, settings } = req.params;
+        if (settings === null) {
+          return {
+            title: `Reset the ${provider} CLI settings?`,
+            message: `The ${provider} agent goes back to its default program and arguments.`,
+          };
+        }
+        const envNames = Object.keys(settings.env);
+        return {
+          title: `Change the program the ${provider} agent runs?`,
+          message:
+            `Provider: ${provider}\nProgram: ${whole("The program", settings.command, 400)}\n` +
+            `Arguments: ${whole("The arguments", JSON.stringify(settings.args), 600)}\n` +
+            `Environment variables set: ${envNames.length === 0 ? "none" : whole("The environment variable names", envNames.join(", "), 300)}\n` +
+            "\nTasks for this agent will launch this program.",
+        };
+      }
+      case "agents.probe": {
+        const { provider, settings } = req.params;
+        const envNames = Object.keys(settings.env);
+        return {
+          title: `Run this program to probe the ${provider} agent?`,
+          message:
+            `Provider: ${provider}\nProgram: ${whole("The program", settings.command, 400)}\n` +
+            `Arguments: ${whole("The arguments", JSON.stringify(settings.args), 600)}\n` +
+            `Environment variables set: ${envNames.length === 0 ? "none" : whole("The environment variable names", envNames.join(", "), 300)}\n` +
+            `\nThe program will be RUN now (version/help check) with the ${provider} secrets in its environment.`,
+        };
+      }
+      default:
+        throw new Error(`No confirmation is defined for ${req.method}`);
+    }
+  }
+
+  /**
+   * Every single-task path goes through the scheduler, so its concurrency ceiling applies. The task is queued
+   * first; when no slot is free it
+   * stays `queued` and the scheduler timer starts it once the load drops. Returns the task id at once and
+   * `settled`, which resolves with the result when the task has run to its end.
+   */
+  private async runThroughScheduler(opts: {
+    workflowId: string;
+    agentId: string;
+    prompt: string;
+    cwd: string;
+    permissions?: TaskPermissions;
+  }): Promise<{ taskId: string; settled: Promise<RunResult | undefined> }> {
+    // `enqueue` stores the prompt as the task's `task.request` (and the UI receives it), so a secret the
+    // user typed is masked here, exactly as the Peer Review goal is; the agent then runs the masked prompt.
+    const taskId = this.orchestrator.enqueue({ ...opts, prompt: this.redactor.text(opts.prompt) });
+    const settled = new Promise<RunResult | undefined>((resolve) =>
+      this.settleWaiters.set(taskId, resolve),
+    );
+    this.scheduler.start(this.opts.schedulerIntervalMs);
+    await this.scheduler.tick();
+    return { taskId, settled };
+  }
+
+  private queuedCount(): number {
+    return this.db.$client
+      .prepare("select count(*) from tasks where state = 'queued'")
+      .pluck()
+      .get() as number;
+  }
+
   private spikeWorkflow(): string {
     this.spikeWorkflowId ??= this.repo.createWorkflow(
       this.repo.createProject(`spike-${process.pid}`, `spike://${process.pid}-${Date.now()}`),
@@ -521,20 +595,33 @@ export class SidecarService {
           };
         }
         case "runStub": {
-          const r = await this.orchestrator.runTask({
+          const { taskId, settled } = await this.runThroughScheduler({
             workflowId: this.spikeWorkflow(),
             agentId: "stub",
             prompt: req.params.prompt,
             cwd: process.cwd(),
           });
+          // IPC requests are served one at a time (sidecar-main), so a task that admission is holding back must
+          // not be awaited here: it would block `tasks.cancel` and everything behind it. It stays queued.
+          if (this.repo.getTaskState(taskId) === "queued") {
+            this.settleWaiters.delete(taskId);
+            return ok(req.id, {
+              taskId,
+              finalState: "queued",
+              eventCount: 0,
+              messageCount: this.repo.listMessages(taskId).length,
+            });
+          }
+          const r = await settled;
+          const finalState = r?.finalState ?? this.repo.getTaskState(taskId) ?? "failed";
           return {
             response: {
               id: req.id,
               result: {
-                taskId: r.taskId,
-                finalState: r.finalState,
-                eventCount: r.events.length,
-                messageCount: this.repo.listMessages(r.taskId).length,
+                taskId,
+                finalState,
+                eventCount: r?.events.length ?? 0,
+                messageCount: this.repo.listMessages(taskId).length,
               },
             },
             shutdown: false,
@@ -572,16 +659,9 @@ export class SidecarService {
           const wanted = req.params.providers ?? ["claude", "codex"];
           const results = [];
           for (const p of wanted) {
-            const r = await this.probes[p]();
-            this.repo.saveAgentProbe({
-              provider: r.provider,
-              status: r.status,
-              ...(r.path !== undefined ? { path: r.path } : {}),
-              ...(r.version !== undefined ? { version: r.version } : {}),
-              capabilities: r.capabilities,
-              ...(r.error !== undefined ? { error: r.error } : {}),
-              probedAt: r.probedAt,
-            });
+            // Same probe as the one that will launch tasks: stored command/env when set, else PATH.
+            const r = await this.probeStored(p);
+            this.saveProbe(r);
             results.push(r);
           }
           return ok(req.id, { results });
@@ -596,7 +676,17 @@ export class SidecarService {
               "select count(*) as n from tasks where state in ('queued','running','waiting_approval')",
             )
             .get() as { n: number };
-          return ok(req.id, { count: Math.max(row.n, this.active.size) });
+          return ok(req.id, { count: row.n });
+        }
+        case "confirm.describe": {
+          // The inner call must be exactly what the real call would accept; anything else is refused.
+          const inner = SidecarRequest.safeParse({
+            id: 0,
+            method: req.params.method,
+            params: req.params.params,
+          });
+          if (!inner.success) return fail(req.id, `invalid ${req.params.method} request`);
+          return ok(req.id, await this.describeForConfirmation(inner.data));
         }
         case "agents.getSettings":
           return ok(req.id, { settings: this.repo.getAgentSettings(req.params.provider) ?? null });
@@ -672,7 +762,7 @@ export class SidecarService {
             // No agent named: pick by declared capability, never by name. The stub is an internal
             // fixture and is not a candidate. A named agent is honoured as before (the UI gates it).
             const route = selectAgent(await snapshotAdapters(this.registry), AUTO_AGENT_REQUIRES, {
-              exclude: ["stub", ...(req.params.excludeAgents ?? [])],
+              exclude: ["stub"],
             });
             if (!route.ok) return fail(req.id, describeRouteFailure(route, AUTO_AGENT_REQUIRES));
             agentId = route.agentId;
@@ -682,37 +772,21 @@ export class SidecarService {
           const bad = this.rootProblem(root.rootPath);
           if (bad) return fail(req.id, bad);
           // Runs in the background so `tasks.cancel` and other requests are served meanwhile.
-          const ac = new AbortController();
-          let taskId = "";
-          const run = this.orchestrator
-            .runTask({
-              workflowId: req.params.workflowId,
-              agentId: agentId,
-              prompt: req.params.prompt,
-              cwd: root.rootPath,
-              signal: ac.signal,
-              onCreated: (id) => {
-                taskId = id;
-                this.active.set(id, { abort: ac, done: Promise.resolve() });
-              },
-            })
-            .catch((err: unknown) =>
-              this.log.error({ err: this.redactor.text(String(err)) }, "background task failed"),
-            )
-            .finally(() => this.active.delete(taskId));
-          const entry = this.active.get(taskId);
-          if (entry) entry.done = run.then(() => undefined);
+          const { taskId } = await this.runThroughScheduler({
+            workflowId: req.params.workflowId,
+            agentId,
+            prompt: req.params.prompt,
+            cwd: root.rootPath,
+            // The user's choice (2026-11-11): a single task may edit the project folder itself. There is no
+            // worktree here, so the agent's edits land directly in the user's files; the CLI enforces the limit.
+            permissions: "workspace-write",
+          });
           return ok(req.id, { taskId });
         }
         case "tasks.cancel": {
           const state = this.repo.getTaskState(req.params.taskId);
           if (state === undefined) return fail(req.id, `Unknown task: ${req.params.taskId}`);
           if (this.scheduler.cancel(req.params.taskId)) {
-            return ok(req.id, { requested: true, state });
-          }
-          const live = this.active.get(req.params.taskId);
-          if (live) {
-            live.abort.abort(); // the adapter reports "cancelled"; the orchestrator settles the state
             return ok(req.id, { requested: true, state });
           }
           if (state === "queued") {
@@ -850,14 +924,14 @@ export class SidecarService {
 
   /** Resolves when every background task has settled (tests, graceful shutdown). */
   async idle(): Promise<void> {
-    await Promise.all([...this.active.values()].map((a) => a.done));
+    await this.scheduler.idle();
   }
 
   close(): void {
     this.approvals.stopTimer();
     this.scheduler.stop();
-    this.resourceMonitor?.stop();
-    for (const a of this.active.values()) a.abort.abort();
+    for (const resolve of this.settleWaiters.values()) resolve(undefined);
+    this.settleWaiters.clear();
     if (this.db.$client.open) this.db.$client.close();
   }
 }

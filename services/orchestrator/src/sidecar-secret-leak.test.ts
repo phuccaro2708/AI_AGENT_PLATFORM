@@ -13,7 +13,7 @@ import { createLogger } from "@agent-studio/shared-utils";
 import { SidecarService } from "./sidecar.js";
 
 /**
- * P4-6 (docs/PHASE_PLANS.md): no registered secret in the DB, the log, IPC responses or pushed events.
+ * No registered secret in the DB, the log, IPC responses or pushed events.
  * Complements sidecar-redaction.test.ts: secrets whose JSON-escaped form DIFFERS from the raw form (quote,
  * backslash, non-ASCII), every event field an agent controls (text, tool_call name/args keys and values,
  * tool_result, usage, error, malformed events, thrown errors), the secret in the user's own prompt, and every

@@ -7,6 +7,7 @@ import {
   BASE_ENV_ALLOWLIST,
   extendManifest,
   type SpawnManifest,
+  type JobWrapOptions,
   type RunningProcess,
 } from "@agent-studio/process-manager";
 import { createCodexParser } from "./parse.js";
@@ -47,6 +48,10 @@ export interface CodexAdapterOptions {
   env?: Record<string, string | undefined>;
   /** Variable names (besides the manifest's) that the host declares on purpose: stored settings, secrets. */
   envAllow?: readonly string[];
+  /** Run the CLI inside `agent-job-wrap` (P4-4 (b)): kill-on-close tree and per-process memory cap. Off by default. */
+  jobWrap?: JobWrapOptions;
+  /** Kill the CLI's whole process tree when its resident memory passes this many MB (P4-4 (b)). Off by default. */
+  treeMemoryLimitMb?: number;
 }
 
 /**
@@ -141,6 +146,10 @@ export class CodexAdapter implements AgentAdapter {
       command: this.opts.command ?? "codex",
       args: this.buildArgs(task),
       manifest: this.manifest,
+      ...(this.opts.jobWrap ? { jobWrap: this.opts.jobWrap } : {}),
+      ...(this.opts.treeMemoryLimitMb === undefined
+        ? {}
+        : { treeMemoryLimitMb: this.opts.treeMemoryLimitMb }),
       cwd: task.cwd,
       ...(this.opts.env ? { env: this.opts.env } : {}),
       stdin: task.prompt,
@@ -167,13 +176,28 @@ export class CodexAdapter implements AgentAdapter {
       }
       const result = await proc.done;
       if (task.signal.aborted && !final) {
-        yield { type: "error", message: "cancelled" };
+        yield {
+          type: "error",
+          message: result.killError
+            ? `cancelled; the process could not be stopped (${result.killError}) and may still be running`
+            : "cancelled",
+        };
       } else if (final) {
         yield final;
       } else if (result.outcome === "spawn_error") {
         yield { type: "error", message: `could not start codex: ${result.error ?? "unknown"}` };
+      } else if (result.outcome === "memory_limit") {
+        yield {
+          type: "error",
+          message: `codex stopped: ${result.detail ?? "memory limit exceeded"}`,
+        };
       } else if (result.outcome === "cancelled") {
-        yield { type: "error", message: "cancelled" };
+        yield {
+          type: "error",
+          message: result.killError
+            ? `cancelled; the process could not be stopped (${result.killError}) and may still be running`
+            : "cancelled",
+        };
       } else {
         const detail = parser.lastError() ?? result.stderr.trim().slice(-300);
         yield {

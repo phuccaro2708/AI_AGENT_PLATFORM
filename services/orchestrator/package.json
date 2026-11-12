@@ -18,15 +18,12 @@
   "dependencies": {
     "@agent-studio/adapter-claude": "workspace:*",
     "@agent-studio/adapter-codex": "workspace:*",
-    "@agent-studio/adapter-antigravity": "workspace:*",
     "@agent-studio/agent-core": "workspace:*",
     "@agent-studio/cli-probe": "workspace:*",
     "@agent-studio/diagnostics": "workspace:*",
     "@agent-studio/contracts": "workspace:*",
     "@agent-studio/git-worktrees": "workspace:*",
-    "@agent-studio/policy-engine": "workspace:*",
     "@agent-studio/process-manager": "workspace:*",
-    "@agent-studio/resource-monitor": "workspace:*",
     "@agent-studio/shared-utils": "workspace:*",
     "@agent-studio/storage": "workspace:*",
     "zod": "4.6.7"

@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline";
-import { NodeResourceSource } from "@agent-studio/resource-monitor";
 import { createLogger } from "@agent-studio/shared-utils";
 import { createEventWriter } from "./event-writer.js";
+import { resolveJobWrap, resolveTreeMemoryLimitMb } from "./job-wrap-config.js";
 import { createSecretRedactor, redactingDestination, takeSecretsFromEnv } from "./secrets.js";
 import { acquireSidecarLock, SidecarLockError } from "./sidecar-lock.js";
 import { SidecarService } from "./sidecar.js";
@@ -47,14 +47,18 @@ try {
   process.stdout.write(line, () => process.exit(err instanceof SidecarLockError ? EXIT_LOCKED : 1));
   await new Promise<never>(() => undefined); // never construct the service; the callback above exits
 }
+// P4-4 (b): wrapper ON by default when the installed binary is found, else a warning and no wrap. RAM watchdog stays OFF unless opted in.
+const jobWrap = resolveJobWrap(arg("job-wrap"), process.env, log);
+const cliTreeMemoryLimitMb = resolveTreeMemoryLimitMb(process.env, log);
 const service = new SidecarService(
   {
     dbPath,
     secrets,
     onEvent: events.emit,
-    resourceSource: new NodeResourceSource(),
     ...(nativeBinding ? { nativeBinding } : {}),
     ...(migrationsFolder ? { migrationsFolder } : {}),
+    ...(jobWrap ? { jobWrap } : {}),
+    ...(cliTreeMemoryLimitMb === undefined ? {} : { cliTreeMemoryLimitMb }),
   },
   log,
 );

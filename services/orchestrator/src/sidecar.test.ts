@@ -160,7 +160,9 @@ describe("D1 IPC", () => {
     const seqs = mine.flatMap((e) => (e.event === "task.message" ? [e.sequence] : []));
     expect(seqs.length).toBeGreaterThan(2);
     expect(seqs).toEqual(seqs.map((_, i) => i)); // contiguous from 0
-    expect(mine.at(0)).toMatchObject({ event: "task.state", state: "running" });
+    // A single task is queued first (task.request, sequence 0) and then claimed by the scheduler.
+    expect(mine.at(0)).toMatchObject({ event: "task.message", sequence: 0 });
+    expect(mine.find((e) => e.event === "task.state")).toMatchObject({ state: "running" });
     expect(mine.at(-1)).toMatchObject({ event: "task.state", state: "completed" });
     // Same data the log view returns: events are a live view of persisted messages.
     const logged = (await call(svc, "logs.query", { taskId: s?.taskId })).result?.messages;
@@ -277,11 +279,7 @@ describe("D1 IPC", () => {
     const caps = await call(svc, "agents.capabilities", { provider: "claude" });
     expect(caps.result?.probe).toMatchObject({ status: "ok", capabilities: { print: true } });
     const list = await call(svc, "agents.list");
-    expect(list.result?.adapters.map((a: { id: string }) => a.id)).toEqual([
-      "claude",
-      "codex",
-      "agy",
-    ]);
+    expect(list.result?.adapters.map((a: { id: string }) => a.id)).toEqual(["claude", "codex"]);
     expect(list.result?.cli).toHaveLength(2);
     expect(
       (await call(svc, "agents.capabilities", { provider: "claude" })).result?.probe.version,
@@ -345,15 +343,12 @@ describe("D1 IPC", () => {
     const byId = new Map(r.result?.clis.map((c: { id: string }) => [c.id, c]));
     expect(byId.get("claude")).toMatchObject({ supported: true, usable: true });
     expect(byId.get("codex")).toMatchObject({ supported: true, usable: false });
-    expect(byId.get("agy")).toMatchObject({ supported: true, usable: true, version: "1.4.8" });
+    expect(byId.get("agy")).toMatchObject({ supported: false, usable: true, version: "1.4.8" });
     expect(byId.get("copilot")).toMatchObject({ supported: false, usable: false });
     expect(byId.has("ollama")).toBe(false); // the scan seam returned nothing for it
-    // a CLI without an adapter (copilot) cannot be started as an agent; agy has one since Phase 3
+    // a CLI without an adapter (copilot) cannot be started as an agent; agy is only detected, never run
     const start = await call(svc, "agents.capabilities", { provider: "claude" });
     expect(start.result?.probe).toMatchObject({ status: "ok" });
-    expect(
-      (await call(svc, "agents.list")).result?.adapters.map((a: { id: string }) => a.id),
-    ).toContain("agy");
     // stored like any other probe
     expect(
       (await call(svc, "agents.list")).result?.cli.map((c: { provider: string }) => c.provider),

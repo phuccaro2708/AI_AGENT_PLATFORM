@@ -1,6 +1,8 @@
 import type { AgentMessage, TaskState } from "@agent-studio/contracts";
-import { AUTO_AGENT } from "./autoRoute";
 import { callSidecar as call } from "./sidecar";
+
+import { AUTO_AGENT } from "./capabilityGap";
+export { AUTO_AGENT };
 
 export interface Project {
   id: string;
@@ -158,18 +160,12 @@ export const api = {
   saveAgentSettings: (provider: Provider, settings: AgentLaunchSettings | null) =>
     call<SettingsOutcome>("agents.setSettings", { provider, settings }),
   /** One workflow per task for now; the sidecar runs it in the project's root. */
-  async startTask(
-    projectId: string,
-    agentId: string,
-    prompt: string,
-    /** Used only for `AUTO_AGENT`: ids the router must not pick. */
-    excludeAgents: string[] = [],
-  ): Promise<string> {
+  async startTask(projectId: string, agentId: string, prompt: string): Promise<string> {
     const { workflowId } = await call<{ workflowId: string }>("workflows.create", { projectId });
     const auto = agentId === AUTO_AGENT;
     const { taskId } = await call<{ taskId: string }>("workflows.start", {
       workflowId,
-      ...(auto ? { excludeAgents } : { agentId }),
+      ...(auto ? {} : { agentId }),
       prompt,
     });
     return taskId;

@@ -195,6 +195,22 @@ export const SidecarRequest = z.discriminatedUnion("method", [
   // Internal: asked by the native side before it restarts the sidecar. Not in the UI allowlist.
   z.object({ id: z.number().int(), method: z.literal("system.activeTasks") }),
   z.object({ id: z.number().int(), method: z.literal("projects.list") }),
+  // Internal: asked by the native shell before it forwards a sensitive decision. Returns the text of the native
+  // confirmation dialog, built here from the stored state, never from the webview. Not in the UI allowlist.
+  z.object({
+    id: z.number().int(),
+    method: z.literal("confirm.describe"),
+    params: z.object({
+      method: z.enum([
+        "approvals.resolve",
+        "recovery.resolve",
+        "tasks.resolveReconciliation",
+        "agents.setSettings",
+        "agents.probe",
+      ]),
+      params: z.unknown(),
+    }),
+  }),
   z.object({
     id: z.number().int(),
     method: z.literal("workflows.create"),
@@ -207,8 +223,6 @@ export const SidecarRequest = z.discriminatedUnion("method", [
       workflowId: z.string().min(1),
       /** Omitted: the capability router picks an available agent that can stream (see sidecar.ts). */
       agentId: z.string().min(1).optional(),
-      /** Only with automatic routing: agent ids the router must not pick (the user's opt-outs, e.g. `agy`). */
-      excludeAgents: z.array(z.string().min(1)).max(32).optional(),
       prompt: z.string().min(1).max(100_000),
     }),
   }),

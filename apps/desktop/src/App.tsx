@@ -14,7 +14,7 @@ import { PeerReviewView } from "./PeerReviewView";
 import { runSelftestIfRequested } from "./selftest";
 import { onSidecarEvent } from "./sidecar";
 import { NewProjectDialog } from "./NewProjectDialog";
-import { Sidebar, type Mode, type Session } from "./Sidebar";
+import { Sidebar, type Session } from "./Sidebar";
 import { SettingsView } from "./SettingsView";
 import { useNickname } from "./profile";
 import { composePrompt, usePresets } from "./presets";
@@ -23,7 +23,6 @@ import { useTheme } from "./theme";
 import { useRuns } from "./useRuns";
 
 export function App() {
-  const [mode, setMode] = useState<Mode>("agent");
   const [settings, setSettings] = useState(false);
   const [history, setHistory] = useState(false);
   const { nickname, setNickname } = useNickname();
@@ -110,6 +109,7 @@ export function App() {
     return api.startTask(projectId, agentId, composePrompt(preset, text)).then(
       (id) => {
         setTasks((t) => [{ id, title: text.slice(0, 60), prompt: text, agentId, projectId }, ...t]);
+        setSelectedRun(null);
         setSelectedTask(id);
         setError(null);
         return true;
@@ -130,6 +130,7 @@ export function App() {
           saveRuns(next);
           return next;
         });
+        setSelectedTask(null);
         setSelectedRun(workflowId);
         setError(null);
         return true;
@@ -151,27 +152,27 @@ export function App() {
       agentId: t.agentId ?? "?",
       projectId: r.projectId,
     }));
-  const openTasks = mode === "agent" ? (task ? [task] : []) : run ? toRefs(run) : [];
+  const openTasks = run ? toRefs(run) : task ? [task] : [];
   const title = settings
     ? "Settings"
     : history
       ? "History"
-      : mode === "agent"
-        ? (task?.title ?? "New session")
-        : (run?.goal.slice(0, 60) ?? "New Peer Review");
+      : run
+        ? run.goal.slice(0, 60)
+        : (task?.title ?? "New session");
 
   const sessions: Session[] = [
     ...tasks.map((t) => ({
       id: t.id,
       projectId: t.projectId,
-      mode: "agent" as const,
+      kind: "task" as const,
       label: `${t.agentId}: ${t.title}`,
       taskIds: [t.id],
     })),
     ...runs.map((r) => ({
       id: r.workflowId,
       projectId: r.projectId,
-      mode: "multi" as const,
+      kind: "review" as const,
       label: r.goal.slice(0, 40),
       taskIds: (snaps[r.workflowId]?.tasks ?? []).map((t) => t.id),
     })),
@@ -179,10 +180,9 @@ export function App() {
   const openSession = (s: Session) => {
     setSettings(false);
     setHistory(false);
-    setMode(s.mode);
     setProjectId(s.projectId);
-    if (s.mode === "agent") setSelectedTask(s.id);
-    else setSelectedRun(s.id);
+    setSelectedTask(s.kind === "task" ? s.id : null);
+    setSelectedRun(s.kind === "review" ? s.id : null);
   };
   const newSession = (pid?: string) => {
     setSettings(false);
@@ -191,25 +191,15 @@ export function App() {
     setSelectedTask(null);
     setSelectedRun(null);
   };
-  const switchMode = (m: Mode) => {
-    setSettings(false);
-    setHistory(false);
-    setMode(m);
-    if (m === "agent") setSelectedTask(null);
-    else setSelectedRun(null);
-  };
-
-  const shortcutRef = useRef({ switchMode, newSession });
-  shortcutRef.current = { switchMode, newSession };
+  const shortcutRef = useRef({ newSession });
+  shortcutRef.current = { newSession };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const a = matchShortcut(e);
       if (!a) return;
       e.preventDefault();
-      const { switchMode: sm, newSession: ns } = shortcutRef.current;
-      if (a === "agent") sm("agent");
-      else if (a === "multi") sm("multi");
-      else if (a === "new") ns();
+      const { newSession: ns } = shortcutRef.current;
+      if (a === "new") ns();
       else if (a === "history") {
         setSettings(false);
         setHistory((v) => !v);
@@ -236,14 +226,12 @@ export function App() {
         }}
       />
       <Sidebar
-        mode={mode}
-        onMode={switchMode}
         projects={projects}
         projectId={projectId}
         onProject={setProjectId}
         sessions={sessions}
         states={states}
-        selected={mode === "agent" ? selectedTask : selectedRun}
+        selected={run?.workflowId ?? selectedTask}
         onSession={openSession}
         onNewProject={() => setNewProject(true)}
         onNewSession={newSession}
@@ -275,7 +263,15 @@ export function App() {
             />
           ) : history ? (
             <HistoryView projects={projects} adapters={adapters} onError={fail} />
-          ) : mode === "agent" ? (
+          ) : run ? (
+            <PeerReviewView
+              run={run}
+              snapshot={snaps[run.workflowId]}
+              approvals={approvals}
+              onResolved={() => void refreshRuns()}
+              onError={fail}
+            />
+          ) : (
             <AgentView
               projects={projects}
               projectId={projectId}
@@ -287,23 +283,10 @@ export function App() {
               onDetect={detect}
               task={task}
               onStart={startAgentTask}
+              onStartPeer={startRun}
               presets={presetStore.all}
               presetId={presetId}
               onPreset={setPresetId}
-              onError={fail}
-            />
-          ) : (
-            <PeerReviewView
-              projects={projects}
-              projectId={projectId}
-              onProject={setProjectId}
-              onNewProject={() => setNewProject(true)}
-              adapters={adapters}
-              run={run}
-              snapshot={run ? snaps[run.workflowId] : undefined}
-              approvals={approvals}
-              onStart={startRun}
-              onResolved={() => void refreshRuns()}
               onError={fail}
             />
           )}
@@ -318,7 +301,7 @@ export function App() {
           onDetect={detect}
           agentId={agentId}
           chosen={run ? [run.implementer, run.reviewer] : []}
-          multi={mode === "multi"}
+          multi={run !== null}
           tasks={openTasks}
           states={states}
           onError={fail}

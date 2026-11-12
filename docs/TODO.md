@@ -4,8 +4,9 @@ Việc còn mở, xếp theo thứ tự nên làm. Xong việc nào thì xoá d�
 
 ## Cần làm trước
 
-- [ ] Chạy app thật (`pnpm --filter @agent-studio/desktop tauri dev`) sau đợt gỡ 2026-11-11 và giao một task cho `claude`, một task cho `codex`.
+- [ ] Chạy app thật (`pnpm --filter @agent-studio/desktop tauri dev`) sau đợt gỡ 2026-11-11 và giao một task cho `claude`, một task cho `codex`, rồi một lượt có reviewer từ ô soạn gộp.
 - [ ] Kiểm với CLI thật: task đơn giờ chạy `workspace-write` ngay trong thư mục dự án (không có worktree). Xác nhận `claude` và `codex` sửa được file và không ghi ra ngoài thư mục đó.
+- [ ] Chạy `scripts/batch-review.mjs` với một task nhỏ bằng CLI thật (vòng worktree → commit → review chưa chạy lần nào).
 - [ ] Điều tra test Rust `job_wrap::timeout_kills_the_tree_and_exits_124` (đỏ 2026-11-11) và hai test Job Object phía Node từng đỏ rồi tự xanh.
 
 ## Phần đã thành thừa, có thể gỡ tiếp

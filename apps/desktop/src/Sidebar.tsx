@@ -3,12 +3,11 @@ import type { TaskState } from "@agent-studio/contracts";
 import type { Project } from "./api";
 import { initials } from "./profile";
 
-export type Mode = "agent" | "multi";
-
 export interface Session {
   id: string;
   projectId: string;
-  mode: Mode;
+  /** A single task, or a run with a reviewer (Peer Review). */
+  kind: "task" | "review";
   label: string;
   /** Task ids whose state is shown as a dot (one for agent tasks, several for a run). */
   taskIds: string[];
@@ -22,8 +21,6 @@ const dotClass = (states: (TaskState | undefined)[]) => {
 };
 
 export function Sidebar({
-  mode,
-  onMode,
   projects,
   projectId,
   onProject,
@@ -39,8 +36,6 @@ export function Sidebar({
   onHistory,
   historyOpen,
 }: {
-  mode: Mode;
-  onMode: (m: Mode) => void;
   projects: Project[];
   projectId: string;
   onProject: (id: string) => void;
@@ -62,10 +57,6 @@ export function Sidebar({
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<string | null>(null);
   const q = query.trim().toLowerCase();
-  const nav = [
-    ["agent", "Agent", "Work with one agent on your machine"],
-    ["multi", "Peer Review", "One agent builds, another reviews"],
-  ] as const;
   return (
     <aside className="sidebar">
       <button className="nav-item new-session" onClick={() => onNewSession()}>
@@ -79,20 +70,6 @@ export function Sidebar({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      <nav className="nav" role="tablist" aria-label="Mode">
-        {nav.map(([m, label, hint]) => (
-          <button
-            key={m}
-            role="tab"
-            aria-selected={mode === m}
-            className={mode === m ? "nav-item active" : "nav-item"}
-            title={hint}
-            onClick={() => onMode(m)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
       <button
         className={historyOpen ? "nav-item active" : "nav-item"}
         onClick={onHistory}
@@ -161,9 +138,7 @@ export function Sidebar({
                   mine.map((s) => (
                     <div key={s.id} className="session-row">
                       <button
-                        className={
-                          s.id === selected && s.mode === mode ? "session active" : "session"
-                        }
+                        className={s.id === selected ? "session active" : "session"}
                         onClick={() => onSession(s)}
                       >
                         <span
@@ -171,7 +146,7 @@ export function Sidebar({
                           aria-hidden="true"
                         />
                         <span className="session-label">{s.label}</span>
-                        {s.mode === "multi" && <span className="tag">team</span>}
+                        {s.kind === "review" && <span className="tag">review</span>}
                       </button>
                       <button
                         className="icon-btn more"

@@ -117,11 +117,6 @@ body {
   background: var(--surface);
   border-right: 1px solid var(--line);
 }
-.nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
 .nav-item,
 .group,
 .session,

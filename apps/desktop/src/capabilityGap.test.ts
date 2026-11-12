@@ -4,10 +4,13 @@ import { describeCapabilityGap as orchestratorDescribe } from "../../../services
 import type { AdapterInfo } from "./api";
 import {
   AGENT_TASK_REQUIRES,
+  AUTO_AGENT,
+  NO_REVIEWER,
   PEER_REVIEW_REQUIRES,
   capabilityBlocker,
   describeGap,
   gapOf,
+  startBlocker,
 } from "./capabilityGap";
 
 const agy: AdapterInfo = {
@@ -80,5 +83,49 @@ describe("capabilityBlocker", () => {
 
   it("is null when no agent is selected", () => {
     expect(capabilityBlocker(undefined, PEER_REVIEW_REQUIRES)).toBeNull();
+  });
+});
+
+describe("startBlocker (one composer, reviewer optional)", () => {
+  const codex: AdapterInfo = {
+    id: "codex",
+    available: true,
+    capabilities: ["streaming", "tool_execution"],
+  };
+  const gone: AdapterInfo = {
+    id: "gone",
+    available: false,
+    capabilities: ["streaming", "tool_execution"],
+  };
+  const adapters = [claude, codex, agy, gone];
+  const base = {
+    hasProject: true,
+    adapters,
+    agentId: "claude",
+    reviewerId: NO_REVIEWER,
+    prompt: "do it",
+  };
+
+  it("asks for a project, then for text", () => {
+    expect(startBlocker({ ...base, hasProject: false })).toBe("Choose a project first");
+    expect(startBlocker({ ...base, prompt: "  " })).toBe("Describe the task");
+    expect(startBlocker(base)).toBeNull();
+  });
+  it("without a reviewer: Auto is allowed and only streaming is required", () => {
+    expect(startBlocker({ ...base, agentId: AUTO_AGENT })).toBeNull();
+    expect(startBlocker({ ...base, agentId: "agy" })).toBeNull();
+    expect(startBlocker({ ...base, agentId: "gone" })).toBe("gone was not found on this machine");
+    expect(startBlocker({ ...base, agentId: "nope" })).toBe("Pick an agent");
+  });
+  it("with a reviewer: both roles must be concrete, installed and able to run tools", () => {
+    expect(startBlocker({ ...base, reviewerId: "codex" })).toBeNull();
+    expect(startBlocker({ ...base, agentId: AUTO_AGENT, reviewerId: "codex" })).toBe(
+      "Pick an agent to pair with a reviewer",
+    );
+    expect(startBlocker({ ...base, reviewerId: "gone" })).toBe(
+      "gone was not found on this machine",
+    );
+    expect(startBlocker({ ...base, reviewerId: "agy" })).toMatch(/^agy không hỗ trợ/);
+    expect(startBlocker({ ...base, agentId: "agy", reviewerId: "codex" })).toMatch(/^agy/);
   });
 });

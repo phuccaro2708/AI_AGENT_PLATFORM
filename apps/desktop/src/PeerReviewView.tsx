@@ -1,8 +1,5 @@
 import { useEffect, useState } from "react";
-import { draftAfterStart } from "./draft";
-import { api, type AdapterInfo, type Approval, type Project, type WorkflowTask } from "./api";
-import { PEER_REVIEW_REQUIRES, capabilityBlocker, gapOf } from "./capabilityGap";
-import { Composer, StartSteps } from "./Composer";
+import { api, type Approval, type WorkflowTask } from "./api";
 import { Badge, msg, TaskLogView } from "./components";
 import { whenText } from "./history";
 import { RecoveryPanel } from "./RecoveryPanel";
@@ -19,143 +16,22 @@ import {
 import type { Snapshot } from "./useRuns";
 
 /**
- * Mode 2: Peer Review. One agent implements in its own git worktree, a second one reviews it
- * read-only, and a request for changes loops back. The sidecar chooses cwd, worktree and
- * permissions; a worktree is not a sandbox, and role permissions are CLI flags plus a post-run check.
+ * An open Peer Review run (started from the composer with a reviewer). One agent implements in its
+ * own git worktree, a second one reviews it read-only, and a request for changes loops back. The
+ * sidecar chooses cwd, worktree and permissions; a worktree is not a sandbox.
  */
-export function PeerReviewView({
-  projects,
-  projectId,
-  onProject,
-  onNewProject,
-  adapters,
-  run,
-  snapshot,
-  approvals,
-  onStart,
-  onResolved,
-  onError,
-}: {
-  projects: Project[];
-  projectId: string;
-  onProject: (id: string) => void;
-  onNewProject: () => void;
-  adapters: AdapterInfo[];
-  run: PeerRun | null;
+export function PeerReviewView(props: {
+  run: PeerRun;
   snapshot: Snapshot | undefined;
   approvals: Approval[];
-  /** Resolves `false` when the backend refused the run: the goal is then kept. */
-  onStart: (
-    implementer: string,
-    reviewer: string,
-    goal: string,
-  ) => void | boolean | Promise<void | boolean>;
   onResolved: () => void;
   onError: (m: string) => void;
 }) {
-  const [goal, setGoal] = useState("");
-  const [implementer, setImplementer] = useState("");
-  const [reviewer, setReviewer] = useState("");
-  const project = projects.find((p) => p.id === projectId);
-  const usable = adapters.filter((a) => a.available);
-  // Defaults prefer agents that meet the requirement; any agent can still be picked by hand.
-  const fit = usable.filter((a) => gapOf(a, PEER_REVIEW_REQUIRES).missing.length === 0);
-  const defaults = fit.length > 0 ? fit : usable;
-  const impl = implementer || defaults[0]?.id || "";
-  const rev = reviewer || defaults[1]?.id || defaults[0]?.id || "";
-  const blocker = !project
-    ? "Choose a project first"
-    : impl === "" || rev === ""
-      ? "No agent is available"
-      : (capabilityBlocker(
-          adapters.find((a) => a.id === impl),
-          PEER_REVIEW_REQUIRES,
-        ) ??
-        capabilityBlocker(
-          adapters.find((a) => a.id === rev),
-          PEER_REVIEW_REQUIRES,
-        ) ??
-        (goal.trim() === "" ? "Describe the goal" : null));
-
-  if (run) {
-    return (
-      <div className="chat">
-        <div className="chat-body">
-          <RunView
-            run={run}
-            snapshot={snapshot}
-            approvals={approvals}
-            onResolved={onResolved}
-            onError={onError}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  const pick = (label: string, value: string, set: (v: string) => void) => (
-    <label className="picker">
-      <span className="muted small">{label}</span>
-      <select aria-label={label} value={value} onChange={(e) => set(e.target.value)}>
-        {adapters.map((a) => (
-          <option key={a.id} value={a.id} disabled={!a.available}>
-            {a.id}
-            {a.available ? "" : " (not found)"}
-            {capabilityBlocker(a, PEER_REVIEW_REQUIRES) ? " (thiếu capability)" : ""}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-
   return (
     <div className="chat">
       <div className="chat-body">
-        <StartSteps
-          title="Start a Peer Review"
-          steps={[
-            {
-              label: "Choose a project (it must be a git repository)",
-              done: project !== undefined,
-              action: { label: "Choose project", run: onNewProject },
-            },
-            { label: "Pick who implements and who reviews", done: usable.length > 0 },
-            { label: "Describe the goal, then run it", done: false },
-          ]}
-        />
-        <p className="muted small">
-          The implementer works in its own git worktree, the reviewer inspects the result read-only
-          and answers approve or request changes (up to 2 rounds). A worktree keeps your checkout
-          clean but is not a security sandbox. Nothing is merged for you.
-        </p>
+        <RunView {...props} />
       </div>
-      <Composer
-        projects={projects}
-        projectId={projectId}
-        onProject={onProject}
-        onNewProject={onNewProject}
-        agents={
-          <>
-            {pick("Implementer", impl, setImplementer)}
-            {pick("Reviewer", rev, setReviewer)}
-          </>
-        }
-        value={goal}
-        onChange={setGoal}
-        label="Goal"
-        placeholder={
-          project
-            ? `What should be built or changed in ${project.name}?`
-            : "Choose a project to begin"
-        }
-        submitLabel="Start review"
-        blocker={blocker}
-        onSubmit={(text) => {
-          void Promise.resolve(onStart(impl, rev, text)).then((ok) => {
-            setGoal((cur) => draftAfterStart(cur, text, ok));
-          });
-        }}
-      />
     </div>
   );
 }

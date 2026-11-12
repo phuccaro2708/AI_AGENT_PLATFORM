@@ -1,8 +1,8 @@
 import type { AgentMessage, TaskState } from "@agent-studio/contracts";
 import { callSidecar as call } from "./sidecar";
 
-/** Picker value meaning "let the capability router choose" (no agent id is ever called this). */
-export const AUTO_AGENT = "auto";
+import { AUTO_AGENT } from "./capabilityGap";
+export { AUTO_AGENT };
 
 export interface Project {
   id: string;

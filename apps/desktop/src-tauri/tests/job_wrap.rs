@@ -86,7 +86,18 @@ fn killing_the_wrapper_kills_the_whole_tree() {
 
 #[test]
 fn timeout_kills_the_tree_and_exits_124() {
-    let (mut wrapper, cmd_pid, ping_pid) = start_tree(&["--timeout-secs", "3"]);
+    // The timeout counts from the wrapper's start, and `start_tree` must find cmd and ping first:
+    // each lookup is a PowerShell/CIM query of about one second on an idle machine. With 3 s the
+    // tree was sometimes killed before ping was found (seen 2026-11-11 under parallel load), so
+    // leave enough room for the lookups and check it was not used up.
+    const TIMEOUT_SECS: u64 = 20;
+    let started = Instant::now();
+    let (mut wrapper, cmd_pid, ping_pid) =
+        start_tree(&["--timeout-secs", &TIMEOUT_SECS.to_string()]);
+    assert!(
+        started.elapsed() < Duration::from_secs(TIMEOUT_SECS),
+        "finding the tree took longer than the timeout; the test proves nothing"
+    );
     let status = loop {
         if let Some(s) = wrapper.try_wait().unwrap() {
             break s;

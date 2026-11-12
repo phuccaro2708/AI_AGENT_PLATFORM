@@ -98,8 +98,18 @@ describe("startProcess with jobWrap", () => {
       ac.abort();
       const r = await p;
       expect(r.outcome).toBe("cancelled");
-      await new Promise((r2) => setTimeout(r2, 500));
-      expect(() => process.kill(gcPid, 0)).toThrow(); // grandchild is gone
+      // Closing the job ends the tree asynchronously; a fixed 500 ms wait was too short under load. Poll instead.
+      const alive = () => {
+        try {
+          process.kill(gcPid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const until = Date.now() + 10_000;
+      while (alive() && Date.now() < until) await new Promise((r2) => setTimeout(r2, 100));
+      expect(alive()).toBe(false); // grandchild is gone
     },
   );
 

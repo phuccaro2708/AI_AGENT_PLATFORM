@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -58,7 +58,7 @@ const agentOf = async (taskId: unknown) =>
   )?.agentId;
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "as-route-"));
+  dir = realpathSync.native(mkdtempSync(join(tmpdir(), "as-route-"))); // long form, as the sidecar stores it (CI temp is 8.3)
   // Hermetic: the built-in claude/codex adapters look their CLI up on PATH. With an empty
   // PATH none is "available", so these tests can never start a real CLI on a developer machine.
   vi.stubEnv("PATH", dir);

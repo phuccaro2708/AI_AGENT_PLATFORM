@@ -29,9 +29,10 @@ describe("treeBytes / parseProcessRows", () => {
 });
 
 describe("sampleTreeBytes (real process table)", () => {
+  // Above the sampler's own 15 s budget: `Get-CimInstance` on a cold CI runner took over 5 s.
   it("sees this very process with a plausible size", async () => {
     expect(await sampleTreeBytes(process.pid)).toBeGreaterThan(10 * MB);
-  });
+  }, 20_000);
 });
 
 describe("treeMemoryLimitMb", () => {

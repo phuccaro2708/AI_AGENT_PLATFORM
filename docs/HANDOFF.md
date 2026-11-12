@@ -4,7 +4,7 @@ Cập nhật 2026-11-12. File này chỉ ghi trạng thái hiện tại; lịch 
 
 ## Trạng thái
 
-- Nhánh làm việc: `simplify/2026-11-11`, tách từ `claude/loving-lovelace-32lh71` tại `4edc7a5`. Đợt 2026-11-12 đẩy lên và mở PR về `claude/loving-lovelace-32lh71`.
+- Nhánh làm việc: `simplify/2026-11-11`, tách từ `claude/loving-lovelace-32lh71` tại `4edc7a5`. Đợt 2026-11-12 đẩy lên và mở PR #4 về `claude/loving-lovelace-32lh71`; chưa merge. CI tại `85ced13` (đọc 2026-11-12): TypeScript (ubuntu, windows), Rust, spike Windows đạt; job Security còn pending.
 - Nhánh chính cũ được giữ nguyên để so sánh và lấy lại mã khi cần.
 - Đợt này đã gỡ: tài liệu kế hoạch/báo cáo phase, CI kiểm đồng bộ tài liệu, cổng tuổi dependency, Antigravity, Ollama, resource monitor, cổng quyền tự viết (PolicyGate, `policy-engine`, cổng MCP của Claude, adapter `codex app-server`). Quyết định: `docs/DECISIONS.md` ADR-010.
 - 2026-11-12: gộp hai chế độ Agent và Peer Review thành một ô soạn. Ô `Review` để `None` thì chạy task đơn (sửa thẳng thư mục dự án); chọn một reviewer thì chạy Peer Review (worktree). Đã bỏ thanh chuyển chế độ và Ctrl+1/Ctrl+2. Logic chặn nút Run nằm ở `startBlocker` (`apps/desktop/src/capabilityGap.ts`).
@@ -14,7 +14,7 @@ Cập nhật 2026-11-12. File này chỉ ghi trạng thái hiện tại; lịch 
 ## Kết quả kiểm tra tại HEAD (máy Windows này, 2026-11-12)
 
 - `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm build`: đạt.
-- `pnpm test`: 665 đạt, 1 bỏ qua, 0 đỏ, 0 `it.fails`.
+- `pnpm test` tại `85ced13`: 666 đạt, 1 bỏ qua, 0 đỏ, 0 `it.fails`.
 - `cargo clippy --all-targets -- -D warnings`: đạt. `cargo test --locked`: đạt hết; nhóm `job_wrap` chạy 5 lần liền đều xanh sau khi sửa đua thời gian (mỗi lần tra CIM mất khoảng 1 s, đua với timeout 3 s cũ).
 - `pnpm audit`: không có mức high/critical (2 moderate dev-only). `cargo audit`: 2 cảnh báo đã cho phép.
 - Ô soạn gộp đã kiểm trên bản xem trước Vite (preview sidecar giả): chọn reviewer thì nút thành "Run with review", ẩn Preset, khoá Auto; không lỗi console. Chưa bấm chạy thật.

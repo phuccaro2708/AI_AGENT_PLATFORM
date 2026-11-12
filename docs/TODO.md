@@ -15,7 +15,9 @@ Việc còn mở, xếp theo thứ tự nên làm. Xong việc nào thì xoá d�
 - [ ] `packages/process-manager/src/live-pids.ts` (`liveChildPids`) không còn ai gọi.
 - [ ] `ClaudeAdapter`: tuỳ chọn `taskArgs` và `safeMode` chỉ phục vụ cổng đã gỡ; `describeLaunch` trong `agent-core` cũng vậy.
 - [ ] `tests/contracts/fixtures/agy`: chỉ còn `help.txt`, `version.txt` được dùng (test quét CLI).
-- [ ] `docs/ASSUMPTIONS.md` (706 dòng): các mục về agy, Ollama, VRAM, cổng quyền (P4-1, d3–d14) mô tả mã đã gỡ.
+- [ ] `docs/ASSUMPTIONS.md` (716 dòng): các mục về agy, Ollama, VRAM, cổng quyền (P4-1, d3–d14) mô tả mã đã gỡ; còn trỏ tới file đã xoá (`PHASE_PLANS.md`, `PROGRESS`, `NEXT_PLAN.md`).
+- [ ] `docs/PROTOCOL.md`, `DATABASE.md`, `SECURITY.md`, `ARCHITECTURE.md` còn nhắc "Phase n", approvals, `waiting_approval` (ví dụ `PROTOCOL.md` dòng cuối: "path/approval policy ... (Phase 4)"). Sửa cùng lúc với việc gỡ approvals.
+- [ ] Worktree cũ còn trên máy: `.claude/worktrees/p4-close-prep` (còn `policy-engine`, `it.fails`), `roadmap-review-phases-416476`, `winapp-agentroom-check-f81031`. Người dùng quyết định dọn hay giữ.
 - [ ] Chú thích trong mã còn nhắc "Phase n", "Policy Engine", "ADR-006".
 - [ ] `scripts/secret-scan.py` cùng danh sách ngoại lệ: xem có còn đáng giữ cho công cụ cá nhân.
 - [ ] Đổi tên `tests/contracts` (chỉ chứa fixtures) để khỏi nhầm với `tests/contract`.

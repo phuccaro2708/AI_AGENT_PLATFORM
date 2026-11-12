@@ -48,10 +48,50 @@ describe("capEventStrings", () => {
     expect(chars(out)).toBeLessThan(1100);
   });
 
+  it("keeps the event's own fields when a nested part is made of many short strings", () => {
+    const ev = {
+      type: "tool_call",
+      name: "Write",
+      args: {
+        parts: [...Array<string>(11_000).fill("x".repeat(100)), ...Array<string>(100).fill("x")],
+      },
+      callId: "call-123",
+    };
+    const out = capEventStrings(ev);
+    expect(Object.keys(out)).toEqual(["type", "name", "args", "callId"]);
+    expect(out).toMatchObject({ type: "tool_call", name: "Write", callId: "call-123" });
+    expect(Object.keys(out.args)).toEqual(["parts"]);
+    expect(out.args.parts.reduce((n, s) => n + s.length, 0)).toBeLessThanOrEqual(1_048_576);
+  });
+
   it("still holds the bound when the payload is made of many short strings", () => {
     const ev = { parts: Array.from({ length: 50 }, () => "s".repeat(100)) };
     const out = capEventStrings(ev, 1000);
     expect(out.parts.reduce((n, s) => n + s.length, 0)).toBeLessThanOrEqual(1000);
+  });
+
+  it("never exceeds the limit (keys and values together) over many random shapes", () => {
+    let seed = 7;
+    const rnd = (n: number) => ((seed = (seed * 1103515245 + 12345) % 2 ** 31), seed % n);
+    const str = () => "q".repeat([1, 10, 200, 300, 5000][rnd(5)]!);
+    const gen = (d: number): unknown => {
+      const r = rnd(4);
+      if (d > 3 || r === 0) return str();
+      if (r === 1) return Array.from({ length: rnd(30) }, () => gen(d + 1));
+      return Object.fromEntries(Array.from({ length: rnd(30) }, (_, i) => [str() + i, gen(d + 1)]));
+    };
+    const strings = (v: unknown): number =>
+      typeof v === "string"
+        ? v.length
+        : Array.isArray(v)
+          ? v.reduce<number>((n, x) => n + strings(x), 0)
+          : v && typeof v === "object"
+            ? Object.entries(v).reduce<number>((n, [k, x]) => n + k.length + strings(x), 0)
+            : 0;
+    for (let i = 0; i < 200; i++) {
+      const max = 500 + rnd(20_000);
+      expect(strings(capEventStrings({ type: "t", body: gen(0) }, max))).toBeLessThanOrEqual(max);
+    }
   });
 
   it("keeps numbers, booleans and null, and the shape of the event", () => {

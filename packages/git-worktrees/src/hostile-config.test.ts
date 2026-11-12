@@ -39,7 +39,10 @@ beforeEach(() => {
   // Armed only after the clean setup commit.
   const m = fwd(marks);
   for (const h of ["post-checkout", "reference-transaction", "post-index-change", "pre-commit"]) {
-    writeFileSync(join(hooks, h), `#!/bin/sh\necho ran >> "${m}/hook-${h}"\nexit 0\n`);
+    // Executable bit: git on Linux/macOS ignores a hook file that cannot be executed.
+    writeFileSync(join(hooks, h), `#!/bin/sh\necho ran >> "${m}/hook-${h}"\nexit 0\n`, {
+      mode: 0o755,
+    });
   }
   git(repo, "config", "core.hooksPath", fwd(hooks));
   git(repo, "config", "core.fsmonitor", `echo ran >> "${m}/fsmonitor"; true`);

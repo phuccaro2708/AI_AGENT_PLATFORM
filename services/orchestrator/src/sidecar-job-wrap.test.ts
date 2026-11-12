@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { Writable } from "node:stream";
 import { createLogger } from "@agent-studio/shared-utils";
 import { SidecarService } from "./sidecar.js";
@@ -39,8 +39,18 @@ const call = async <T = Record<string, unknown>>(method: string, params?: unknow
 beforeEach(() => {
   dir = realpathSync.native(mkdtempSync(join(tmpdir(), "as-jw-")));
   mkdirSync(join(dir, "data"));
+  // Stand-in `claude`/`codex` first on PATH, so the run gets past the executable lookup on machines (CI) without
+  // the real CLIs. They are never meant to run: an empty `.exe` cannot start on Windows, the script only exits 1.
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  for (const name of ["claude", "codex"]) {
+    if (process.platform === "win32") writeFileSync(join(bin, `${name}.exe`), "");
+    else writeFileSync(join(bin, name), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+  }
+  vi.stubEnv("PATH", bin + delimiter + (process.env["PATH"] ?? ""));
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   svc?.close();
   svc = undefined;
   rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });

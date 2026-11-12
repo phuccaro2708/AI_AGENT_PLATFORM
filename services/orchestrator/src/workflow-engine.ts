@@ -181,8 +181,11 @@ export class PeerReviewEngine {
       const request = this.repo
         .listMessages(tasks[index - 1]!.id)
         .find((m) => m.type === "review.request");
-      const artifacts = (request?.payload as { artifacts?: unknown } | undefined)?.artifacts;
-      if (Array.isArray(artifacts)) step.snapshot = JSON.stringify(artifacts);
+      const p = request?.payload as { artifacts?: unknown; gone?: unknown } | undefined;
+      // `gone` is absent in requests written before it existed: compare as "nothing gone".
+      if (Array.isArray(p?.artifacts)) {
+        step.snapshot = snapshotKey(p.artifacts, Array.isArray(p.gone) ? p.gone : []);
+      }
     }
     return step;
   }
@@ -224,7 +227,7 @@ export class PeerReviewEngine {
     const wt = this.repo.getWorktreeForTask(taskId) ?? this.worktreeOfWorkflow(step.workflowId);
     if (!wt) throw new Error("implementer finished but has no worktree");
 
-    const files = await this.snapshotFiles(wt.path);
+    const { files, gone } = await this.snapshotFiles(wt.path);
     const escaping = files.filter((f) => f.escapes);
     if (escaping.length > 0) {
       // Fail closed: nothing is registered or shown to the reviewer.
@@ -254,6 +257,7 @@ export class PeerReviewEngine {
     this.record(step.workflowId, taskId, "review.request", IMPLEMENTER, REVIEWER, {
       summary,
       artifacts: files,
+      gone,
     });
 
     const role = this.roleInstructions(step.workflowId, REVIEWER);
@@ -270,7 +274,7 @@ export class PeerReviewEngine {
       kind: "review",
       workflowId: step.workflowId,
       round: step.round,
-      snapshot: JSON.stringify(files),
+      snapshot: snapshotKey(files, gone),
     });
   }
 
@@ -278,7 +282,8 @@ export class PeerReviewEngine {
     const wt = this.worktreeOfWorkflow(step.workflowId);
     if (!wt) throw new Error("reviewer finished but the workflow has no worktree");
 
-    const after = JSON.stringify(await this.snapshotFiles(wt.path));
+    const now = await this.snapshotFiles(wt.path);
+    const after = snapshotKey(now.files, now.gone);
     if (after !== step.snapshot) {
       this.board.add({
         workflowId: step.workflowId,
@@ -322,20 +327,28 @@ export class PeerReviewEngine {
     return this.repo.listWorktrees(workflowId)[0];
   }
 
-  /** Every changed file with its content hash; deleted files have nothing to hash and are skipped. */
-  private async snapshotFiles(
-    path: string,
-  ): Promise<{ path: string; sha256: string; escapes?: true }[]> {
+  /**
+   * Every changed file with its content hash (`files`, the artifacts), plus the changed paths that have nothing
+   * to hash (`gone`: deleted, or a directory). `gone` is not an artifact but is part of the before/after
+   * comparison, so a reviewer that deletes a tracked file is still caught.
+   */
+  private async snapshotFiles(path: string): Promise<{
+    files: { path: string; sha256: string; escapes?: true }[];
+    gone: string[];
+  }> {
     const status = await this.workspaces.status(path);
-    const out: { path: string; sha256: string; escapes?: true }[] = [];
+    const files: { path: string; sha256: string; escapes?: true }[] = [];
+    const gone: string[] = [];
     for (const f of status.files) {
       const d = digestInsideWorktree(path, f.path);
-      if (d.kind === "ok") out.push({ path: f.path, sha256: d.sha256 });
+      if (d.kind === "ok") files.push({ path: f.path, sha256: d.sha256 });
       // A link leaving the worktree is never read; the marker keeps a change of the link itself visible.
-      else if (d.kind === "escapes") out.push({ path: f.path, sha256: d.marker, escapes: true });
-      // else: deleted or a directory: not an artifact
+      else if (d.kind === "escapes") files.push({ path: f.path, sha256: d.marker, escapes: true });
+      else gone.push(f.path);
     }
-    return out.sort((a, b) => a.path.localeCompare(b.path));
+    files.sort((a, b) => a.path.localeCompare(b.path));
+    gone.sort((a, b) => a.localeCompare(b));
+    return { files, gone };
   }
 
   private record(
@@ -401,4 +414,9 @@ function parseVerdict(result: RunResult) {
     }
   }
   return undefined;
+}
+
+/** What the reviewer must leave unchanged: the hashed files and the paths with nothing to hash. */
+function snapshotKey(files: unknown[], gone: unknown[]): string {
+  return JSON.stringify({ files, gone });
 }

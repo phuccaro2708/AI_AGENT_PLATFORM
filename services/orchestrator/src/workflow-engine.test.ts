@@ -55,6 +55,8 @@ let impl: Scripted;
 let rev: Scripted;
 let engine: PeerReviewEngine;
 let scheduler: Scheduler;
+/** Paths the fake git reports as deleted tracked files (code " D"); nothing exists on disk for them. */
+let deletedTracked: string[] = [];
 
 /** Stands in for GitWorktrees: a plain directory per task; every file in it counts as changed. */
 const workspaces: Workspaces = {
@@ -65,6 +67,7 @@ const workspaces: Workspaces = {
   },
   async status(path) {
     const files = existsSync(path) ? readdirSync(path).map((p) => ({ path: p, code: "??" })) : [];
+    for (const p of deletedTracked) files.push({ path: p, code: " D" });
     return { dirty: files.length > 0, files };
   },
 };
@@ -109,6 +112,7 @@ async function drive() {
 }
 
 beforeEach(() => {
+  deletedTracked = [];
   dir = mkdtempSync(join(tmpdir(), "agent-studio-wfe-"));
   workspaceRoot = join(dir, "wt");
   db = openDatabase(join(dir, "test.db"));
@@ -218,6 +222,18 @@ describe("PeerReviewEngine", () => {
     expect(
       notes.some((n) => n.source === "verified" && /read-only reviewer/i.test(n.content)),
     ).toBe(true);
+  });
+
+  it("detects a read-only reviewer that deleted a tracked file", async () => {
+    setup(implOk, () => {
+      deletedTracked = ["tracked.txt"]; // gone from disk: nothing to hash, only git sees it
+      return verdict("approve");
+    });
+    engine.start({ workflowId: wf, goal: "g" });
+    await drive();
+    expect(repo.getWorkflowState(wf)).toBe("failed");
+    const notes = repo.listContextItems(wf, ["decision"]);
+    expect(notes.some((n) => /read-only reviewer/i.test(n.content))).toBe(true);
   });
 
   it("fails closed when the implementer leaves a symlink to a file outside the worktree", async () => {

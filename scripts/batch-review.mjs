@@ -135,6 +135,12 @@ async function runTask(task, opt, stamp, claude, codex) {
       round.note = "reviewer changed files; worktree left as-is for you to inspect";
       break;
     }
+    // A run that reported errors (crash, timeout, failed turn) may still have printed a verdict: do not trust it.
+    if (rv.errors?.length) {
+      result.status = "needs_human";
+      round.note = "reviewer run reported errors; verdict not trusted";
+      break;
+    }
     round.verdict = parseVerdict(rv.text);
     if (round.verdict === "approve") {
       result.status = "approved";

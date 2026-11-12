@@ -163,6 +163,11 @@ ACCEPTED_HISTORY = {
     ("9394e634", "services/orchestrator/src/sidecar-confirm.test.ts", "Secret Keyword", 14),
     ("2377ce9d", "services/orchestrator/src/sidecar-confirm.test.ts", "Secret Keyword", 14),
     ("c7c6dfc9", "services/orchestrator/src/sidecar-confirm.test.ts", "Secret Keyword", 14),
+    # Real-Ollama contract test (2026-11-08, file removed since): line 72 is the made-up code
+    # "ZX-4417-KESTREL" the test writes to a temp file for the model to read back. Reviewed by hand.
+    ("986c3019", "tests/contract/real-ollama-switch-tools.test.ts", "Secret Keyword", 72),
+    ("1d7f352f", "tests/contract/real-ollama-switch-tools.test.ts", "Secret Keyword", 72),
+    ("92b87600", "tests/contract/real-ollama-switch-tools.test.ts", "Secret Keyword", 72),
 }
 
 # Reviewed by hand, valid at any commit: exact (file, type, line). Line 28 of the Phase 0 spike

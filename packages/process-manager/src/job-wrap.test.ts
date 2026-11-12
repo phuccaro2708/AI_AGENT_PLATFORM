@@ -111,6 +111,7 @@ describe("startProcess with jobWrap", () => {
       while (alive() && Date.now() < until) await new Promise((r2) => setTimeout(r2, 100));
       expect(alive()).toBe(false); // grandchild is gone
     },
+    40_000, // up to 10 s to see the grandchild, the cancel itself, then up to 10 s for it to die
   );
 
   // R4: parent and child each commit 250 MB. A job-wide cap below the total refuses the child's

@@ -57,10 +57,18 @@ export function capEventStrings<T>(payload: T, max = MAX_EVENT_CHARS): T {
     if (typeof v === "string") return fit(v, depth);
     if (Array.isArray(v)) return v.map((x) => walk(x, depth + 1));
     if (v !== null && typeof v === "object") {
+      const entries = Object.entries(v);
+      // At the top, the event's own keys and string fields (`callId`, `name`, `content`…) are budgeted before
+      // anything nested, so a big nested part cannot empty them whatever their length. Key order is kept.
+      const keys = entries.map(([k]) => fit(k, depth));
+      const flat =
+        depth === 0 ? entries.map(([, x]) => (typeof x === "string" ? fit(x, 0) : x)) : null;
       return Object.fromEntries(
-        Object.entries(v).map(([k, x]) => [
-          fit(k, depth),
-          walk(x, typeof x === "string" ? depth : depth + 1),
+        entries.map(([, x], i) => [
+          keys[i],
+          flat && typeof x === "string"
+            ? flat[i]
+            : walk(x, typeof x === "string" ? depth : depth + 1),
         ]),
       );
     }

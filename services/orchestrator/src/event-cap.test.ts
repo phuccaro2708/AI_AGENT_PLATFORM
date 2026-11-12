@@ -64,6 +64,17 @@ describe("capEventStrings", () => {
     expect(out.args.parts.reduce((n, s) => n + s.length, 0)).toBeLessThanOrEqual(1_048_576);
   });
 
+  it("keeps a top-level callId longer than a short field when the nested part is huge", () => {
+    const ev = {
+      type: "tool_call",
+      name: "Write",
+      args: { parts: Array<string>(11_000).fill("x".repeat(100)) },
+      callId: "c".repeat(257),
+    };
+    const out = capEventStrings(ev);
+    expect(out.callId).toBe("c".repeat(257));
+  });
+
   it("still holds the bound when the payload is made of many short strings", () => {
     const ev = { parts: Array.from({ length: 50 }, () => "s".repeat(100)) };
     const out = capEventStrings(ev, 1000);

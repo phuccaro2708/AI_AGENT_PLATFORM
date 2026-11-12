@@ -357,21 +357,15 @@ describe("hostile project roots", () => {
   describe.skipIf(!WIN || !existsSync(adminShare(sysDir)) || !existsSync(adminShare(homeDir)))(
     "administrative-share (UNC) spellings",
     () => {
-      it(
-        "an administrative-share (UNC) spelling of a system folder is refused",
-        () => {
-          const ctx = { dbPath: join(dir, "data", "s.db"), worktreesDir: join(dir, "wt") };
-          expect(checkProjectRoot(adminShare(sysDir), ctx).ok).toBe(false);
-        },
-      );
-      it(
-        "the same spelling of the home folder is refused (via projects.create)",
-        async () => {
-          open([]);
-          const r = await rpc("projects.create", { name: "x", rootPath: adminShare(homeDir) });
-          expect(r.error).toBeDefined();
-        },
-      );
+      it("an administrative-share (UNC) spelling of a system folder is refused", () => {
+        const ctx = { dbPath: join(dir, "data", "s.db"), worktreesDir: join(dir, "wt") };
+        expect(checkProjectRoot(adminShare(sysDir), ctx).ok).toBe(false);
+      });
+      it("the same spelling of the home folder is refused (via projects.create)", async () => {
+        open([]);
+        const r = await rpc("projects.create", { name: "x", rootPath: adminShare(homeDir) });
+        expect(r.error).toBeDefined();
+      });
     },
   );
 
@@ -520,21 +514,17 @@ describe("malicious agent output", () => {
     expect(messages.length).toBeGreaterThanOrEqual(1000);
   }, 60_000);
 
-  // The orchestrator stores every agent event whole. Nothing caps a single event, so one misbehaving agent can put
-  // an arbitrary amount of data into the database (and into every `logs.query` response). 1 MiB is an example limit.
-  it.fails(
-    "PRODUCT GAP (orchestrator): a single 3 MB agent event is stored whole; there is no per-event size cap",
-    async () => {
-      open([new Scripted("bad", () => [text("B".repeat(3_000_000)), done])]);
-      const { workflowId } = await newWorkflow(plainProject());
-      await call("workflows.start", { workflowId, agentId: "bad", prompt: "go" });
-      await svc!.idle();
-      const [task] = await tasksOf(workflowId);
-      const stored = (await messagesOf(task!.id)).find((m) => m.payload["type"] === "text");
-      expect(String(stored?.payload["content"]).length).toBeLessThanOrEqual(1_048_576);
-    },
-    60_000,
-  );
+  // One misbehaving agent must not put an arbitrary amount of data into the database (and into every
+  // `logs.query` response): the orchestrator caps each stored event at MAX_EVENT_CHARS (1 MiB).
+  it("a single 3 MB agent event is cut to the per-event size cap before it is stored", async () => {
+    open([new Scripted("bad", () => [text("B".repeat(3_000_000)), done])]);
+    const { workflowId } = await newWorkflow(plainProject());
+    await call("workflows.start", { workflowId, agentId: "bad", prompt: "go" });
+    await svc!.idle();
+    const [task] = await tasksOf(workflowId);
+    const stored = (await messagesOf(task!.id)).find((m) => m.payload["type"] === "text");
+    expect(String(stored?.payload["content"]).length).toBeLessThanOrEqual(1_048_576);
+  }, 60_000);
 
   it("an agent cannot resolve an approval by saying so: only approvals.resolve over IPC does", async () => {
     const attacker = new Scripted("bad", () => [

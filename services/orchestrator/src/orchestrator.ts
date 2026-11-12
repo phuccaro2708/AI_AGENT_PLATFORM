@@ -8,6 +8,7 @@ import type { AdapterRegistry } from "@agent-studio/agent-core";
 import type { Logger } from "@agent-studio/shared-utils";
 import { newId } from "@agent-studio/shared-utils";
 import type { Repo } from "@agent-studio/storage";
+import { capEventStrings } from "./event-cap.js";
 import { classifyOutcome, type FinalState } from "./outcome.js";
 import type { SecretRedactor } from "./secrets.js";
 
@@ -223,8 +224,9 @@ export class Orchestrator {
         fromAgent: ctx.agentId,
         toAgent: "orchestrator",
         type,
-        // The single point where agent output becomes a stored message: mask before it is written.
-        payload: this.hooks.redactor ? this.hooks.redactor.deep(payload) : payload,
+        // The single point where agent output becomes a stored message: mask before it is written, then
+        // cap its size so one agent cannot fill the database (the in-memory `events` keep the full text).
+        payload: capEventStrings(this.hooks.redactor ? this.hooks.redactor.deep(payload) : payload),
         createdAt: new Date().toISOString(),
       };
       // Sequence comes from the DB so a requeued task continues its log instead of colliding.

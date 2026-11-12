@@ -49,6 +49,8 @@ On restart, tasks that were `running`/`waiting_approval` become `needs_reconcili
 
 ## Not implemented yet (do not assume)
 
+- Codex does not stay in its folder on this machine. Measured 2026-11-12 (ASSUMPTIONS, "Phạm vi ghi của task đơn"): with `codex exec -s workspace-write` a single task wrote a file outside its project folder when asked to; `claude` with the same request refused. Give a task that must not touch other folders to `claude`, or review what `codex` changed.
+
 - Any approval per command or per file. The former Policy Engine, the Claude `--permission-prompt-tool` gate and the Codex `app-server` adapter were removed (ADR-010); the code is on branch `claude/loving-lovelace-32lh71`.
 - Per-task Job Object wrapper: `agent-job-wrap` and a whole-tree RAM watchdog are wired into the claude/codex adapters; the wrapper is ON by default in the sidecar when its binary is found, the RAM watchdog is OFF (opt-in) (installer itself not built; checked with real claude/codex, see ASSUMPTIONS d9). OS sandbox / AppContainer: not implemented.
 - Git worktrees are branch isolation, **not** a security sandbox. See ADR-002.

@@ -287,7 +287,7 @@ describe("hostile project roots", () => {
     ];
     for (const rootPath of spellings) {
       const r = await rpc("projects.create", { name: "x", rootPath });
-      expect(r.error?.message, rootPath).toMatch(/database|already|unusable|absolute|exist/);
+      expect(r.error?.message, rootPath).toMatch(/database|already|unusable|absolute|exist|UNC/);
     }
     // a junction (Windows, no privilege) or symlink (POSIX) from a harmless-looking folder to the data folder
     const link = join(app, "innocent");
@@ -342,9 +342,14 @@ describe("hostile project roots", () => {
     },
   );
 
-  // Reproduced 2026-11-05 on Windows 11: `\\localhost\C$\Windows` and `\\localhost\C$\Users\<me>` are ACCEPTED because
-  // the string no longer starts with `C:\`, so neither the system-folder nor the home-folder comparison matches. It needs the
-  // administrative share (enabled by default for admins). Fix idea: reject UNC roots (as policy-engine's canonicalize does).
+  // Found 2026-11-05 on Windows 11: `\\localhost\C$\Windows` and `\\localhost\C$\Users\<me>` were accepted because the
+  // string does not start with `C:\`, so the system-folder and home-folder comparisons missed it. project-policy now
+  // refuses every UNC root. The admin-share cases need the administrative share (enabled by default for admins).
+  it.skipIf(!WIN)("a `\\\\?\\` spelling of a local folder is refused like any UNC root", () => {
+    const ctx = { dbPath: join(dir, "data", "s.db"), worktreesDir: join(dir, "wt") };
+    const r = checkProjectRoot("\\\\?\\" + (process.env["SystemRoot"] ?? "C:\\Windows"), ctx);
+    expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/UNC/) });
+  });
   const adminShare = (p: string) => "\\\\localhost\\" + p[0] + "$" + p.slice(2);
   const sysDir = process.env["SystemRoot"] ?? "C:\\Windows";
   const homeDir = process.env["USERPROFILE"] ?? "";
@@ -352,15 +357,15 @@ describe("hostile project roots", () => {
   describe.skipIf(!WIN || !existsSync(adminShare(sysDir)) || !existsSync(adminShare(homeDir)))(
     "administrative-share (UNC) spellings",
     () => {
-      it.fails(
-        "PRODUCT BUG (project-policy): an administrative-share (UNC) spelling bypasses the system-folder rule",
+      it(
+        "an administrative-share (UNC) spelling of a system folder is refused",
         () => {
           const ctx = { dbPath: join(dir, "data", "s.db"), worktreesDir: join(dir, "wt") };
           expect(checkProjectRoot(adminShare(sysDir), ctx).ok).toBe(false);
         },
       );
-      it.fails(
-        "PRODUCT BUG (project-policy): the same bypass for the home folder (and via projects.create)",
+      it(
+        "the same spelling of the home folder is refused (via projects.create)",
         async () => {
           open([]);
           const r = await rpc("projects.create", { name: "x", rootPath: adminShare(homeDir) });
